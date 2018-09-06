@@ -409,6 +409,25 @@ int mbox_reset_cold(void)
 	return 0;
 }
 
+int mbox_rsu_get_spt_offset(u32 *resp_buf, u32 resp_buf_len)
+{
+	return mbox_send_cmd(MBOX_ID_UBOOT, MBOX_GET_SUBPARTITION_TABLE,
+			     MBOX_CMD_DIRECT, 0, NULL, 0, (u32 *)&resp_buf_len,
+			     (u32 *)resp_buf);
+}
+
+int mbox_rsu_status(u32 *resp_buf, u32 resp_buf_len)
+{
+	return mbox_send_cmd(MBOX_ID_UBOOT, MBOX_RSU_STATUS, MBOX_CMD_DIRECT, 0,
+			     NULL, 0, (u32 *)&resp_buf_len, (u32 *)resp_buf);
+}
+
+int mbox_rsu_update(u32 *flash_offset)
+{
+	return mbox_send_cmd(MBOX_ID_UBOOT, MBOX_RSU_UPDATE, MBOX_CMD_DIRECT, 2,
+			     (u32 *)flash_offset, 0, 0, NULL);
+}
+
 /* Accepted commands: CONFIG_STATUS or RECONFIG_STATUS */
 static __always_inline int mbox_get_fpga_config_status_common(u32 cmd)
 {

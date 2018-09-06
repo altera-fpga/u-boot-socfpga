@@ -128,6 +128,9 @@ enum ALT_SDM_MBOX_RESP_CODE {
 #define MBOX_QSPI_CLOSE		51
 #define MBOX_QSPI_DIRECT	59
 #define MBOX_REBOOT_HPS		71
+#define MBOX_GET_SUBPARTITION_TABLE	90
+#define MBOX_RSU_STATUS			91
+#define MBOX_RSU_UPDATE			92
 #define MBOX_HPS_STAGE_NOTIFY		93
 
 /* Mailbox registers */
@@ -402,6 +405,9 @@ int mbox_qspi_close(void);
 int mbox_qspi_open(void);
 
 int mbox_reset_cold(void);
+int mbox_rsu_get_spt_offset(u32 *resp_buf, u32 resp_buf_len);
+int mbox_rsu_status(u32 *resp_buf, u32 resp_buf_len);
+int mbox_rsu_update(u32 *flash_offset);
 int mbox_hps_stage_notify(u32 execution_stage);
 int mbox_get_fpga_config_status(u32 cmd);
 int mbox_get_fpga_config_status_psci(u32 cmd);
