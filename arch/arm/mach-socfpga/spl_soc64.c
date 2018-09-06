@@ -140,4 +140,6 @@ void spl_perform_arch_fixups(struct spl_image_info *spl_image)
 		printf("HPS SMMU secure settings init failed: %d\n", ret);
 		hang();
 	}
+
+	mbox_hps_stage_notify(HPS_EXECUTION_STATE_SSBL);
 }

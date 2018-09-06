@@ -390,6 +390,7 @@ enum MBOX_CFGSTAT_MINOR_ERR_CODE {
 #define RCF_PIN_STATUS_NSTATUS				BIT(31)
 
 #define HPS_EXECUTION_STATE_FSBL	0
+#define HPS_EXECUTION_STATE_SSBL	1
 
 int mbox_send_cmd(u8 id, u32 cmd, u8 is_indirect, u32 len, u32 *arg, u8 urgent,
 		  u32 *resp_buf_len, u32 *resp_buf);
