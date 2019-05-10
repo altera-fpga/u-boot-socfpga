@@ -43,14 +43,4 @@ struct socfpga_rsu_s10_spt {
 	struct socfpga_rsu_s10_spt_slot spt_slot[127];
 };
 
-/* RSU status */
-struct socfpga_rsu_s10_status {
-	u32 current_image[2];
-	u32 last_failing_image[2];
-	u32 state;
-	u32 version;
-	u32 error_location;
-	u32 error_details;
-};
-
 #endif /* _RSU_S10_H_ */

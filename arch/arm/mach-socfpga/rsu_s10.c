@@ -7,6 +7,7 @@
 #include <common.h>
 #include <linux/errno.h>
 #include <asm/arch/mailbox_s10.h>
+#include <asm/arch/rsu.h>
 #include <asm/arch/rsu_s10.h>
 #include <command.h>
 #include <spi.h>
@@ -20,19 +21,19 @@ u32 rsu_spt0_offset = 0, rsu_spt1_offset = 0;
 
 static int rsu_print_status(void)
 {
-	struct socfpga_rsu_s10_status rsu_status;
+	struct rsu_status_info status_info;
 
-	if (mbox_rsu_status((u32 *)&rsu_status, sizeof(rsu_status) / 4)) {
+	if (mbox_rsu_status((u32 *)&status_info, sizeof(status_info))) {
 		puts("RSU: Firmware or flash content not supporting RSU\n");
 		return -ENOTSUPP;
 	}
 	puts("RSU: Remote System Update Status\n");
-	printf("Current Image\t: 0x%08x\n", rsu_status.current_image[0]);
-	printf("Last Fail Image\t: 0x%08x\n", rsu_status.last_failing_image[0]);
-	printf("State\t\t: 0x%08x\n", rsu_status.state);
-	printf("Version\t\t: 0x%08x\n", rsu_status.version);
-	printf("Error locaton\t: 0x%08x\n", rsu_status.error_location);
-	printf("Error details\t: 0x%08x\n", rsu_status.error_details);
+	printf("Current Image\t: 0x%08llx\n", status_info.current_image);
+	printf("Last Fail Image\t: 0x%08llx\n", status_info.fail_image);
+	printf("State\t\t: 0x%08x\n", status_info.state);
+	printf("Version\t\t: 0x%08x\n", status_info.version);
+	printf("Error location\t: 0x%08x\n", status_info.error_location);
+	printf("Error details\t: 0x%08x\n", status_info.error_details);
 
 	return 0;
 }
@@ -79,19 +80,22 @@ static u32 rsu_spt_slot_find_cpb(void)
 	return 0;
 }
 
-int rsu_spt_cpb_list(void)
+int rsu_spt_cpb_list(int argc, char * const argv[])
 {
 	u32 spt_offset[4];
 	u32 cpb_offset;
 	int err;
 	struct spi_flash *flash;
 
+	if (argc != 1)
+		return CMD_RET_USAGE;
+
 	/* print the RSU status */
 	err = rsu_print_status();
 	if (err)
 		return err;
 
-	/* retrieve the sub-partition table (spt) offset from SDM */
+	/* retrieve the sub-partition table (spt) offset from firmware */
 	if (mbox_rsu_get_spt_offset(spt_offset, 4)) {
 		puts("RSU: Error from mbox_rsu_get_spt_offset\n");
 		return -ECOMM;
@@ -165,8 +169,8 @@ int rsu_update(int argc, char * const argv[])
 
 	addr = simple_strtoul(argv[1], &endp, 16);
 
-	flash_offset[0] = addr & 0xFFFFFFFF;
-	flash_offset[1] = (addr >> 32) & 0xFFFFFFFF;
+	flash_offset[0] = lower_32_bits(addr);
+	flash_offset[1] = upper_32_bits(addr);
 
 	printf("RSU: RSU update to 0x%08x%08x\n",
 	       flash_offset[1], flash_offset[0]);
@@ -185,7 +189,7 @@ int rsu_dtb(int argc, char * const argv[])
 	int err;
 
 	/* Extracting RSU info from bitstream */
-	err = rsu_spt_cpb_list();
+	err = rsu_spt_cpb_list(argc, argv);
 	if (err == -ENOTSUPP)
 		return 0;
 	else if ((err == -ECOMM) || (err == -ENODEV) || (err == -EIO))
@@ -273,10 +277,457 @@ int rsu_dtb(int argc, char * const argv[])
 	return fdt_setprop(working_fdt, nodeoffset, "reg", reg, sizeof(reg));
 }
 
+static int slot_count(int argc, char * const argv[])
+{
+	int count;
+
+	if (argc != 1)
+		return CMD_RET_USAGE;
+
+	if (rsu_init(NULL))
+		return CMD_RET_FAILURE;
+
+	count = rsu_slot_count();
+	rsu_exit();
+
+	if (count < 0)
+		return CMD_RET_FAILURE;
+
+	printf("Number of slots = %d.\n", count);
+
+	return CMD_RET_SUCCESS;
+}
+
+static int slot_by_name(int argc, char * const argv[])
+{
+	char *name = argv[1];
+	int slot;
+
+	if (argc != 2)
+		return CMD_RET_USAGE;
+
+	if (rsu_init(NULL))
+		return CMD_RET_FAILURE;
+
+	slot = rsu_slot_by_name(name);
+	rsu_exit();
+
+	if (slot < 0)
+		return CMD_RET_FAILURE;
+
+	printf("Slot name '%s' is %d.\n", name, slot);
+	return CMD_RET_SUCCESS;
+}
+
+static int slot_get_info(int argc, char * const argv[])
+{
+	int slot;
+	char *endp;
+	struct rsu_slot_info info;
+	int ret;
+
+	if (argc != 2)
+		return CMD_RET_USAGE;
+
+	if (rsu_init(NULL))
+		return CMD_RET_FAILURE;
+
+	slot = dectoul(argv[1], &endp);
+	ret = rsu_slot_get_info(slot, &info);
+	rsu_exit();
+
+	if (ret)
+		return CMD_RET_FAILURE;
+
+	printf("NAME: %s\n", info.name);
+	printf("OFFSET: 0x%016llX\n", info.offset);
+	printf("SIZE: 0x%08X\n", info.size);
+	if (info.priority)
+		printf("PRIORITY: %i\n", info.priority);
+	else
+		printf("PRIORITY: [disabled]\n");
+
+	return CMD_RET_SUCCESS;
+}
+
+static int slot_size(int argc, char * const argv[])
+{
+	int slot;
+	char *endp;
+	int size;
+
+	if (argc != 2)
+		return CMD_RET_USAGE;
+
+	if (rsu_init(NULL))
+		return CMD_RET_FAILURE;
+
+	slot = dectoul(argv[1], &endp);
+	size = rsu_slot_size(slot);
+	rsu_exit();
+
+	if (size < 0)
+		return CMD_RET_FAILURE;
+
+	printf("Slot %d size = %d.\n", slot, size);
+	return CMD_RET_SUCCESS;
+}
+
+static int slot_priority(int argc, char * const argv[])
+{
+	int slot;
+	char *endp;
+	int priority;
+
+	if (argc != 2)
+		return CMD_RET_USAGE;
+
+	if (rsu_init(NULL))
+		return CMD_RET_FAILURE;
+
+	slot = dectoul(argv[1], &endp);
+	priority = rsu_slot_priority(slot);
+	rsu_exit();
+
+	if (priority < 0)
+		return CMD_RET_FAILURE;
+
+	printf("Slot %d priority = %d.\n", slot, priority);
+	return CMD_RET_SUCCESS;
+}
+
+static int slot_erase(int argc, char * const argv[])
+{
+	int slot;
+	char *endp;
+	int ret;
+
+	if (argc != 2)
+		return CMD_RET_USAGE;
+
+	if (rsu_init(NULL))
+		return CMD_RET_FAILURE;
+
+	slot = dectoul(argv[1], &endp);
+	ret = rsu_slot_erase(slot);
+	rsu_exit();
+
+	if (ret)
+		return CMD_RET_FAILURE;
+
+	printf("Slot %d erased.\n", slot);
+	return CMD_RET_SUCCESS;
+}
+
+static int slot_program_buf(int argc, char * const argv[])
+{
+	int slot;
+	char *endp;
+	u64 address;
+	int size;
+	int ret;
+	int addr_lo;
+	int addr_hi;
+
+	if (argc != 4)
+		return CMD_RET_USAGE;
+
+	if (rsu_init(NULL))
+		return CMD_RET_FAILURE;
+
+	slot = dectoul(argv[1], &endp);
+	address = simple_strtoul(argv[2], &endp, 16);
+	size = simple_strtoul(argv[3], &endp, 16);
+
+	ret = rsu_slot_program_buf(slot, (void *)address, size);
+	rsu_exit();
+
+	if (ret)
+		return CMD_RET_FAILURE;
+
+	addr_hi = upper_32_bits(address);
+	addr_lo = lower_32_bits(address);
+	printf("Slot %d was programmed with buffer=0x%08x%08x size=%d.\n",
+	       slot, addr_hi, addr_lo, size);
+
+	return CMD_RET_SUCCESS;
+}
+
+static int slot_program_buf_raw(int argc, char * const argv[])
+{
+	int slot;
+	char *endp;
+	u64 address;
+	int size;
+	int ret;
+	int addr_lo;
+	int addr_hi;
+
+	if (argc != 4)
+		return CMD_RET_USAGE;
+
+	if (rsu_init(NULL))
+		return CMD_RET_FAILURE;
+
+	slot = dectoul(argv[1], &endp);
+	address = simple_strtoul(argv[2], &endp, 16);
+	size = simple_strtoul(argv[3], &endp, 16);
+
+	ret = rsu_slot_program_buf_raw(slot, (void *)address, size);
+	rsu_exit();
+
+	if (ret)
+		return CMD_RET_FAILURE;
+
+	addr_hi = upper_32_bits(address);
+	addr_lo = lower_32_bits(address);
+	printf("Slot %d was programmed with raw buffer=0x%08x%08x size=%d.\n",
+	       slot, addr_hi, addr_lo, size);
+
+	return CMD_RET_SUCCESS;
+}
+
+static int slot_verify_buf(int argc, char * const argv[])
+{
+	int slot;
+	char *endp;
+	u64 address;
+	int size;
+	int ret;
+	int addr_lo;
+	int addr_hi;
+
+	if (argc != 4)
+		return CMD_RET_USAGE;
+
+	if (rsu_init(NULL))
+		return CMD_RET_FAILURE;
+
+	slot = dectoul(argv[1], &endp);
+	address = simple_strtoul(argv[2], &endp, 16);
+	size = simple_strtoul(argv[3], &endp, 16);
+
+	ret = rsu_slot_verify_buf(slot, (void *)address, size);
+	rsu_exit();
+
+	if (ret)
+		return CMD_RET_FAILURE;
+
+	addr_hi = upper_32_bits(address);
+	addr_lo = lower_32_bits(address);
+	printf("Slot %d was verified with buffer=0x%08x%08x size=%d.\n",
+	       slot, addr_hi, addr_lo, size);
+
+	return CMD_RET_SUCCESS;
+}
+
+static int slot_verify_buf_raw(int argc, char * const argv[])
+{
+	int slot;
+	char *endp;
+	u64 address;
+	int size;
+	int ret;
+	int addr_lo;
+	int addr_hi;
+
+	if (argc != 4)
+		return CMD_RET_USAGE;
+
+	if (rsu_init(NULL))
+		return CMD_RET_FAILURE;
+
+	slot = dectoul(argv[1], &endp);
+	address = simple_strtoul(argv[2], &endp, 16);
+	size = simple_strtoul(argv[3], &endp, 16);
+
+	ret = rsu_slot_verify_buf_raw(slot, (void *)address, size);
+	rsu_exit();
+
+	if (ret)
+		return CMD_RET_FAILURE;
+
+	addr_hi = upper_32_bits(address);
+	addr_lo = lower_32_bits(address);
+	printf("Slot %d was verified with raw buffer=0x%08x%08x size=%d.\n",
+	       slot, addr_hi, addr_lo, size);
+
+	return CMD_RET_SUCCESS;
+}
+
+static int slot_enable(int argc, char * const argv[])
+{
+	int slot;
+	char *endp;
+	int ret;
+
+	if (argc != 2)
+		return CMD_RET_USAGE;
+
+	if (rsu_init(NULL))
+		return CMD_RET_FAILURE;
+
+	slot = dectoul(argv[1], &endp);
+	ret = rsu_slot_enable(slot);
+	rsu_exit();
+
+	if (ret < 0)
+		return CMD_RET_FAILURE;
+
+	printf("Slot %d enabled.\n", slot);
+	return CMD_RET_SUCCESS;
+}
+
+static int slot_disable(int argc, char * const argv[])
+{
+	int slot;
+	char *endp;
+	int ret;
+
+	if (argc != 2)
+		return CMD_RET_USAGE;
+
+	if (rsu_init(NULL))
+		return CMD_RET_FAILURE;
+
+	slot = dectoul(argv[1], &endp);
+	ret = rsu_slot_disable(slot);
+	rsu_exit();
+
+	if (ret < 0)
+		return CMD_RET_FAILURE;
+
+	printf("Slot %d disabled.\n", slot);
+	return CMD_RET_SUCCESS;
+}
+
+static int slot_load(int argc, char * const argv[])
+{
+	int slot;
+	char *endp;
+	int ret;
+
+	if (argc != 2)
+		return CMD_RET_USAGE;
+
+	if (rsu_init(NULL))
+		return CMD_RET_FAILURE;
+
+	slot = dectoul(argv[1], &endp);
+	ret = rsu_slot_load(slot);
+	rsu_exit();
+
+	if (ret < 0)
+		return CMD_RET_FAILURE;
+
+	printf("Slot %d loading.\n", slot);
+	return CMD_RET_SUCCESS;
+}
+
+static int slot_load_factory(int argc, char * const argv[])
+{
+	int ret;
+
+	if (argc != 1)
+		return CMD_RET_USAGE;
+
+	if (rsu_init(NULL))
+		return CMD_RET_FAILURE;
+
+	ret = rsu_slot_load_factory();
+	rsu_exit();
+
+	if (ret < 0)
+		return CMD_RET_FAILURE;
+
+	printf("Factory loading.\n");
+	return CMD_RET_SUCCESS;
+}
+
+static int slot_rename(int argc, char * const argv[])
+{
+	int slot;
+	char *endp;
+	char *name;
+	int ret;
+
+	if (argc != 3)
+		return CMD_RET_USAGE;
+
+	if (rsu_init(NULL))
+		return CMD_RET_FAILURE;
+
+	slot = dectoul(argv[1], &endp);
+	name = argv[2];
+
+	ret = rsu_slot_rename(slot, name);
+	rsu_exit();
+
+	if (ret < 0)
+		return CMD_RET_FAILURE;
+
+	printf("Slot %d renamed to %s.\n", slot, name);
+	return CMD_RET_SUCCESS;
+}
+
+static int status_log(int argc, char * const argv[])
+{
+	struct rsu_status_info info;
+	int ret;
+
+	if (argc != 1)
+		return CMD_RET_USAGE;
+
+	if (rsu_init(NULL))
+		return CMD_RET_FAILURE;
+
+	ret = rsu_status_log(&info);
+	rsu_exit();
+
+	if (ret < 0)
+		return CMD_RET_FAILURE;
+
+	printf("Current Image\t: 0x%08llx\n", info.current_image);
+	printf("Last Fail Image\t: 0x%08llx\n", info.fail_image);
+	printf("State\t\t: 0x%08x\n", info.state);
+	printf("Version\t\t: 0x%08x\n", info.version);
+	printf("Error location\t: 0x%08x\n", info.error_location);
+	printf("Error details\t: 0x%08x\n", info.error_details);
+
+	return CMD_RET_SUCCESS;
+}
+
+struct func_t {
+	const char *cmd_string;
+	int (*func_ptr)(int cmd_argc, char * const cmd_argv[]);
+};
+
+static const struct func_t rsu_func_t[] = {
+	{"dtb", rsu_dtb},
+	{"list", rsu_spt_cpb_list},
+	{"slot_by_name", slot_by_name},
+	{"slot_count", slot_count},
+	{"slot_disable", slot_disable},
+	{"slot_enable", slot_enable},
+	{"slot_erase", slot_erase},
+	{"slot_get_info", slot_get_info},
+	{"slot_load", slot_load},
+	{"slot_load_factory", slot_load_factory},
+	{"slot_priority", slot_priority},
+	{"slot_program_buf", slot_program_buf},
+	{"slot_program_buf_raw", slot_program_buf_raw},
+	{"slot_rename", slot_rename},
+	{"slot_size", slot_size},
+	{"slot_verify_buf", slot_verify_buf},
+	{"slot_verify_buf_raw", slot_verify_buf_raw},
+	{"status_log", status_log},
+	{"update", rsu_update}
+};
+
 int do_rsu(struct cmd_tbl *cmdtp, int flag, int argc, char * const argv[])
 {
 	const char *cmd;
-	int ret;
+	int i;
 
 	if (argc < 2)
 		return CMD_RET_USAGE;
@@ -285,26 +736,35 @@ int do_rsu(struct cmd_tbl *cmdtp, int flag, int argc, char * const argv[])
 	--argc;
 	++argv;
 
-	if (strcmp(cmd, "list") == 0)
-		ret = rsu_spt_cpb_list();
-	else if (strcmp(cmd, "update") == 0)
-		ret = rsu_update(argc, argv);
-	else if (strcmp(cmd, "dtb") == 0)
-		ret = rsu_dtb(argc, argv);
-	else if (strcmp(cmd, "dtb") == 0)
-		ret = rsu_dtb(argc, argv);
-	else
-		return CMD_RET_USAGE;
+	for (i = 0; i < ARRAY_SIZE(rsu_func_t); i++) {
+		if (!strcmp(cmd, rsu_func_t[i].cmd_string))
+			return rsu_func_t[i].func_ptr(argc, argv);
+	}
 
-	return ret;
+	return CMD_RET_USAGE;
 }
 
 U_BOOT_CMD(
-	rsu, 3, 1, do_rsu,
+	rsu, 5, 1, do_rsu,
 	"SoCFPGA Stratix10 SoC Remote System Update",
-	"list  - List down the available bitstreams in flash\n"
-	"update <flash_offset> - Initiate SDM to load bitstream as specified\n"
-	"		       by flash_offset\n"
 	"dtb   - Update Linux DTB qspi-boot parition offset with spt0 value\n"
+	"list  - List down the available bitstreams in flash\n"
+	"slot_by_name <name> - find slot by name and display the slot number\n"
+	"slot_count - display the slot count\n"
+	"slot_disable <slot> - remove slot from CPB\n"
+	"slot_enable <slot> - make slot the highest priority\n"
+	"slot_erase <slot> - erase slot\n"
+	"slot_get_info <slot> - display slot information\n"
+	"slot_load <slot> - load slot immediately\n"
+	"slot_load_factory - load factory immediately\n"
+	"slot_priority <slot> - display slot priority\n"
+	"slot_program_buf <slot> <buffer> <size> - program buffer into slot, and make it highest priority\n"
+	"slot_program_buf_raw <slot> <buffer> <size> - program raw buffer into slot\n"
+	"slot_rename <slot> <name> - rename slot\n"
+	"slot_size <slot> - display slot size\n"
+	"slot_verify_buf <slot> <buffer> <size> - verify slot contents against buffer\n"
+	"slot_verify_buf_raw <slot> <buffer> <size> - verify slot contents against raw buffer\n"
+	"status_log - display RSU status\n"
+	"update <flash_offset> - Initiate firmware to load bitstream as specified by flash_offset\n"
 	""
 );
