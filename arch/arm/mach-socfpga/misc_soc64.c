@@ -138,3 +138,8 @@ void do_bridge_reset(int enable, unsigned int mask)
 
 	socfpga_bridges_reset(enable, mask);
 }
+
+void arch_preboot_os(void)
+{
+	mbox_hps_stage_notify(HPS_EXECUTION_STATE_OS);
+}
