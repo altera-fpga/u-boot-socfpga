@@ -41,6 +41,7 @@ obj-y	+= wrap_handoff_soc64.o
 obj-y	+= wrap_pll_config_soc64.o
 ifndef CONFIG_SPL_BUILD
 obj-$(CONFIG_ARMV8_PSCI) += psci.o
+obj-$(CONFIG_ARMV8_PSCI) += smc_fpga_reconfig_s10.o
 endif
 endif
 
