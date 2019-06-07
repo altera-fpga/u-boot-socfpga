@@ -697,6 +697,23 @@ static int status_log(int argc, char * const argv[])
 	return CMD_RET_SUCCESS;
 }
 
+static int rsu_notify(int argc, char * const argv[])
+{
+	u32 stage;
+	char *endp;
+	int ret;
+
+	if (argc != 2)
+		return CMD_RET_USAGE;
+
+	stage = simple_strtoul(argv[1], &endp, 16);
+	ret = mbox_hps_stage_notify(stage);
+	if (ret)
+		return CMD_RET_FAILURE;
+
+	return CMD_RET_SUCCESS;
+}
+
 struct func_t {
 	const char *cmd_string;
 	int (*func_ptr)(int cmd_argc, char * const cmd_argv[]);
@@ -721,7 +738,8 @@ static const struct func_t rsu_func_t[] = {
 	{"slot_verify_buf", slot_verify_buf},
 	{"slot_verify_buf_raw", slot_verify_buf_raw},
 	{"status_log", status_log},
-	{"update", rsu_update}
+	{"update", rsu_update},
+	{"notify", rsu_notify}
 };
 
 int do_rsu(struct cmd_tbl *cmdtp, int flag, int argc, char * const argv[])
@@ -766,5 +784,6 @@ U_BOOT_CMD(
 	"slot_verify_buf_raw <slot> <buffer> <size> - verify slot contents against raw buffer\n"
 	"status_log - display RSU status\n"
 	"update <flash_offset> - Initiate firmware to load bitstream as specified by flash_offset\n"
+	"notify <value> - Let SDM know the current state of HPS software\n"
 	""
 );

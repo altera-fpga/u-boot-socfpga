@@ -413,6 +413,7 @@ int mbox_rsu_status_psci(u32 *resp_buf, u32 resp_buf_len);
 int mbox_rsu_update(u32 *flash_offset);
 int mbox_rsu_update_psci(u32 *flash_offset);
 int mbox_hps_stage_notify(u32 execution_stage);
+int mbox_hps_stage_notify_psci(u32 execution_stage);
 int mbox_get_fpga_config_status(u32 cmd);
 int mbox_get_fpga_config_status_psci(u32 cmd);
 #endif /* _MAILBOX_S10_H_ */

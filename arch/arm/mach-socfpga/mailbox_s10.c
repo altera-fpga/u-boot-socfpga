@@ -480,6 +480,12 @@ static __always_inline int mbox_get_fpga_config_status_common(u32 cmd)
 	return MBOX_CFGSTAT_STATE_CONFIG;
 }
 
+int  __secure mbox_hps_stage_notify_psci(u32 execution_stage)
+{
+	return mbox_send_cmd_psci(MBOX_ID_UBOOT, MBOX_HPS_STAGE_NOTIFY,
+			     MBOX_CMD_DIRECT, 1, &execution_stage, 0, 0, NULL);
+}
+
 int mbox_get_fpga_config_status(u32 cmd)
 {
 	return mbox_get_fpga_config_status_common(cmd);
