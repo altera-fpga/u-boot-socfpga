@@ -8,11 +8,26 @@
 
 #include <asm/arch/rsu_ll.h>
 
-#define IMAGE_BLOCK_SZ	0x1000	/* Size of a bitstream data block */
-#define IMAGE_PTR_BLOCK 0x1000	/* Offset to the PTR BLOCK */
-#define IMAGE_PTR_START	0x1F00	/* Offset to main image pointers */
-#define IMAGE_PTR_CRC	0x1FFC	/* Offset to CRC for PTR BLOCK */
-#define IMAGE_PTR_END   0x1FFF  /* End of PTR BLOCK */
+/*
+ * A bitstream is a recurrent data structure composed of sections. Each section
+ * consists of 4KB blocks. The first block in a section is called the main
+ * descriptor and the first 32bit value in that descriptor identifies the
+ * section typpe, with 0x62294895 denoting a CMF section.
+ * The second block in a section is called a signature block. The last 256 bytes
+ * of the signature block are called the main image pointer, and contains up to
+ * four pointers to other sections in the bitstream. The entire signature block,
+ * including the main pointer area is protected by a 32-bit CRC.
+ *
+ * The slot size is used to determine if the bitstream was generated using a
+ * slot offset address of zero. The main image pointers of all the CMF sections
+ * identified in the bitstream are updated when programming into a slot if all
+ * of the pointers are less than the slot size.
+ */
+
+#define IMAGE_BLOCK_SZ      0x1000      /* Bitstream block size */
+#define SIG_BLOCK_PTR_OFFS  0x0F00      /* Signature block pointer offset */
+#define SIG_BLOCK_CRC_OFFS  0x0FFC      /* Signature block CRC offset */
+#define CMF_MAGIC           0x62294895  /* Magic identifier for CMF sections */
 
 /* log level */
 enum rsu_log_level {

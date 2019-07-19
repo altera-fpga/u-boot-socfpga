@@ -271,6 +271,23 @@ int rsu_slot_program_buf(int slot, void *buf, int size)
 }
 
 /**
+ * rsu_slot_program_factory_update_buf() - program a slot using factory update
+ *                                         data from a buffer
+ * @slot: slot number
+ * @buf: pointer to data buffer
+ * @size: bytes to read from buffer
+ *
+ * This function is used to program a slot using factory update data from a
+ * buffer and then enter the slot into CPB.
+ *
+ * Returns 0 on success, or error code
+ */
+int rsu_slot_program_factory_update_buf(int slot, void *buf, int size)
+{
+	return rsu_slot_program_buf(slot, buf, size);
+}
+
+/**
  * rsu_slot_program_buf_raw() - program a slot from raw buffer data
  * @slot: slot number
  * @buf: pointer to data buffer
