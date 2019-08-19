@@ -65,9 +65,32 @@ static void __secure smc_socfpga_rsu_notify_psci(unsigned long function_id,
 	SMC_RET_REG_MEM(r);
 }
 
+static void __secure smc_socfpga_rsu_retry_counter_psci(
+					    unsigned long function_id)
+{
+	SMC_ALLOC_REG_MEM(r);
+	u32 rsu_status[9];
+
+	SMC_INIT_REG_MEM(r);
+
+	rsu_status[8] = 0;
+	if (mbox_rsu_status_psci((u32 *)rsu_status, sizeof(rsu_status) / 4)) {
+		SMC_ASSIGN_REG_MEM(r, SMC_ARG0, INTEL_SIP_SMC_RSU_ERROR);
+		SMC_RET_REG_MEM(r);
+		return;
+	}
+
+	SMC_ASSIGN_REG_MEM(r, SMC_ARG0, INTEL_SIP_SMC_STATUS_OK);
+	SMC_ASSIGN_REG_MEM(r, SMC_ARG1, rsu_status[8]);
+
+	SMC_RET_REG_MEM(r);
+}
+
 DECLARE_SECURE_SVC(rsu_status_psci, INTEL_SIP_SMC_RSU_STATUS,
 		   smc_socfpga_rsu_status_psci);
 DECLARE_SECURE_SVC(rsu_update_psci, INTEL_SIP_SMC_RSU_UPDATE,
 		   smc_socfpga_rsu_update_psci);
 DECLARE_SECURE_SVC(rsu_notify_psci, INTEL_SIP_SMC_RSU_NOTIFY,
 		   smc_socfpga_rsu_notify_psci);
+DECLARE_SECURE_SVC(rsu_retry_counter_psci, INTEL_SIP_SMC_RSU_RETRY_COUNTER,
+		   smc_socfpga_rsu_retry_counter_psci);

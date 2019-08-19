@@ -24,6 +24,11 @@
 #define EWRPROT		13
 #define EARGS		14
 
+/* RSU Notify Bitmasks */
+#define RSU_NOTIFY_IGNORE_STAGE         (1 << 18)
+#define RSU_NOTIFY_CLEAR_ERROR_STATUS   (1 << 17)
+#define RSU_NOTIFY_RESET_RETRY_COUNTER  (1 << 16)
+
 /**
  * struct rsu_status_info - firmware status log info structure
  * @current_image:address of image currently running in flash
@@ -32,6 +37,7 @@
  * @version: the version number of RSU firmware
  * @error_location: the error offset inside the failed image
  * @error_details: error code
+ * @retry_counter: current image retry counter
  *
  * This structure is used to capture firmware status log information
  */
@@ -42,6 +48,7 @@ struct rsu_status_info {
 	u32 version;
 	u32 error_location;
 	u32 error_details;
+	u32 retry_counter;
 };
 
 /**

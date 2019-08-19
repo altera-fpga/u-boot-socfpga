@@ -34,6 +34,8 @@ static int rsu_print_status(void)
 	printf("Version\t\t: 0x%08x\n", status_info.version);
 	printf("Error location\t: 0x%08x\n", status_info.error_location);
 	printf("Error details\t: 0x%08x\n", status_info.error_details);
+	if (status_info.version)
+		printf("Retry counter\t: 0x%08x\n", status_info.retry_counter);
 
 	return 0;
 }
@@ -693,6 +695,8 @@ static int status_log(int argc, char * const argv[])
 	printf("Version\t\t: 0x%08x\n", info.version);
 	printf("Error location\t: 0x%08x\n", info.error_location);
 	printf("Error details\t: 0x%08x\n", info.error_details);
+	if (info.version)
+		printf("Retry counter\t: 0x%08x\n", info.retry_counter);
 
 	return CMD_RET_SUCCESS;
 }
@@ -706,8 +710,34 @@ static int rsu_notify(int argc, char * const argv[])
 	if (argc != 2)
 		return CMD_RET_USAGE;
 
-	stage = simple_strtoul(argv[1], &endp, 16);
+	stage = simple_strtoul(argv[1], &endp, 16) & GENMASK(0, 15);
 	ret = mbox_hps_stage_notify(stage);
+	if (ret)
+		return CMD_RET_FAILURE;
+
+	return CMD_RET_SUCCESS;
+}
+
+static int clear_error_status(int argc, char * const argv[])
+{
+	int arg;
+	int ret;
+
+	arg = RSU_NOTIFY_IGNORE_STAGE | RSU_NOTIFY_CLEAR_ERROR_STATUS;
+	ret = mbox_hps_stage_notify(arg);
+	if (ret)
+		return CMD_RET_FAILURE;
+
+	return CMD_RET_SUCCESS;
+}
+
+static int reset_retry_counter(int argc, char * const argv[])
+{
+	int arg;
+	int ret;
+
+	arg = RSU_NOTIFY_IGNORE_STAGE | RSU_NOTIFY_RESET_RETRY_COUNTER;
+	ret = mbox_hps_stage_notify(arg);
 	if (ret)
 		return CMD_RET_FAILURE;
 
@@ -739,7 +769,9 @@ static const struct func_t rsu_func_t[] = {
 	{"slot_verify_buf_raw", slot_verify_buf_raw},
 	{"status_log", status_log},
 	{"update", rsu_update},
-	{"notify", rsu_notify}
+	{"notify", rsu_notify},
+	{"clear_error_status", clear_error_status},
+	{"reset_retry_counter", reset_retry_counter}
 };
 
 int do_rsu(struct cmd_tbl *cmdtp, int flag, int argc, char * const argv[])
@@ -785,5 +817,7 @@ U_BOOT_CMD(
 	"status_log - display RSU status\n"
 	"update <flash_offset> - Initiate firmware to load bitstream as specified by flash_offset\n"
 	"notify <value> - Let SDM know the current state of HPS software\n"
+	"clear_error_status - clear the RSU error status\n"
+	"reset_retry_counter - reset the RSU retry counter\n"
 	""
 );
