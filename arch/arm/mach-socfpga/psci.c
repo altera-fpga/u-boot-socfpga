@@ -74,6 +74,26 @@ void __secure psci_cpu_on_64_mpidr(void)
 	: "x0", "x1", "x2", "memory", "cc");
 }
 
+void __secure psci_cpu_off(u32 function_id)
+{
+	asm volatile(
+		"	str	xzr, [%0]	\n"
+		"	str	xzr, [%1]	\n"
+		"	ldr	x1, [%2]	\n"
+		"	mrs	x2, spsr_el3	\n"
+		"	bic	x2, x2, #0x0f	\n"
+		"	mov	x3, #0x09	\n"
+		"	orr	x2, x2, x3	\n"
+		"	msr	spsr_el3, x2	\n"
+		/* Switch to EL2 when return from exception */
+		"	msr	elr_el3, x1	\n"
+		"	eret			\n"
+	: : "r"(&psci_cpu_on_64_cpuid),
+	"r"(&psci_cpu_on_64_entry_point),
+	"r"(psci_cpu_on_64_mpidr)
+	: "x0", "x1", "x2", "x3", "memory", "cc");
+}
+
 int __secure psci_cpu_on_64(u32 function_id, u64 cpuid, u64 entry_point)
 {
 	/* Releases all secondary CPUs to jump into psci_cpu_on_64_mpidr */
