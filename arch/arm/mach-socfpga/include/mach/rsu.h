@@ -240,4 +240,31 @@ int rsu_slot_rename(int slot, char *name);
  * Return 0 on success, or error code
  */
 int rsu_status_log(struct rsu_status_info *info);
+
+/**
+ * rsu_notify() - report HPS software execution stage as a 16bit number
+ * @stage: software execution stage
+ *
+ * Returns: 0 on success, or error code
+ */
+int rsu_notify(int stage);
+
+/**
+ * rsu_clear_error_status() - clear errors from the current RSU status log
+ *
+ * Returns: 0 on success, or error code
+ */
+int rsu_clear_error_status(void);
+
+/**
+ * rsu_reset_retry_counter() - reset the retry counter
+ *
+ * This function is used to request the retry counter to be set to zero, so that
+ * the currently running image may be tried again after the next watchdog
+ * timeout.
+ *
+ * Returns: 0 on success, or error code
+ */
+int rsu_reset_retry_counter(void);
+
 #endif

@@ -962,6 +962,22 @@ static int status_log(struct rsu_status_info *info)
 	return 0;
 }
 
+/**
+ * notify_fw() - call the firmware notify command
+ * @value: the notification value
+ *
+ * Return: 0 for success, or error code
+ */
+static int notify_fw(u32 value)
+{
+	rsu_log(RSU_DEBUG, "RSU_DEBUG: notified with 0x%08x.\n", value);
+
+	if (mbox_hps_stage_notify(value))
+		return -ELOWLEVEL;
+
+	return 0;
+}
+
 static void ll_exit(void)
 {
 	if (flash) {
@@ -990,7 +1006,8 @@ static struct rsu_ll_intf qspi_ll_intf = {
 	.data.erase = data_erase,
 
 	.fw_ops.load = image_load,
-	.fw_ops.status = status_log
+	.fw_ops.status = status_log,
+	.fw_ops.notify = notify_fw
 };
 
 int rsu_ll_qspi_init(struct rsu_ll_intf **intf)

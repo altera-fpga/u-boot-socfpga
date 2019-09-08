@@ -27,6 +27,7 @@
  * @data.erase: erase date from flash device
  * @fw_ops.load: inform firmware to load image
  * @fw_ops.status: get status from firmware
+ * @fw_ops.notify: send notify command to firmware
  */
 struct rsu_ll_intf {
 	void (*exit)(void);
@@ -56,6 +57,7 @@ struct rsu_ll_intf {
 	struct {
 		int (*load)(u64 offset);
 		int (*status)(struct rsu_status_info *info);
+		int (*notify)(u32 value);
 	} fw_ops;
 };
 

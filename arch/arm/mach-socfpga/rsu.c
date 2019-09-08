@@ -5,6 +5,7 @@
  */
 
 #include <common.h>
+#include <linux/bitops.h>
 #include <linux/errno.h>
 #include <asm/arch/rsu.h>
 #include <asm/arch/rsu_misc.h>
@@ -562,4 +563,74 @@ int rsu_status_log(struct rsu_status_info *info)
 		return -EINTF;
 
 	return ll_intf->fw_ops.status(info);
+}
+
+/**
+ * rsu_notify() - report HPS software execution stage as a 16bit number
+ * @stage: software execution stage
+ *
+ * Returns: 0 on success, or error code
+ */
+int rsu_notify(int stage)
+{
+	u32 arg;
+
+	if (!ll_intf)
+		return -EINTF;
+
+	arg = stage & GENMASK(15, 0);
+	return ll_intf->fw_ops.notify(arg);
+}
+
+/**
+ * rsu_clear_error_status() - clear errors from the current RSU status log
+ *
+ * Returns: 0 on success, or error code
+ */
+int rsu_clear_error_status(void)
+{
+	struct rsu_status_info info;
+	u32 arg;
+	int ret;
+
+	if (!ll_intf)
+		return -EINTF;
+
+	ret = rsu_status_log(&info);
+	if (ret < 0)
+		return ret;
+
+	if (!info.version)
+		return -ELOWLEVEL;
+
+	arg = RSU_NOTIFY_IGNORE_STAGE | RSU_NOTIFY_CLEAR_ERROR_STATUS;
+	return ll_intf->fw_ops.notify(arg);
+}
+
+/**
+ * rsu_reset_retry_counter() - reset the retry counter
+ *
+ * This function is used to request the retry counter to be reset, so that the
+ * currently running image may be tried again after the next watchdog timeout.
+ *
+ * Returns: 0 on success, or error code
+ */
+int rsu_reset_retry_counter(void)
+{
+	struct rsu_status_info info;
+	u32 arg;
+	int ret;
+
+	if (!ll_intf)
+		return -EINTF;
+
+	ret = rsu_status_log(&info);
+	if (ret < 0)
+		return ret;
+
+	if (!info.version)
+		return -ELOWLEVEL;
+
+	arg = RSU_NOTIFY_IGNORE_STAGE | RSU_NOTIFY_RESET_RETRY_COUNTER;
+	return ll_intf->fw_ops.notify(arg);
 }
