@@ -5,11 +5,21 @@
  */
 
 #include <common.h>
+#include <asm/io.h>
 #include <asm/arch/smc_s10.h>
+#include <asm/arch/system_manager.h>
 #include <asm/secure.h>
 #include <linux/intel-smc.h>
 
 #define S10_WARM_RESET_WFI_FLAG BIT(31)
+#define SYSMGR_ECC_DBE_COLD_RST_MASK	0x00030002
+
+bool __secure is_ecc_dbe_cold_reset(void)
+{
+	return !!(readl(socfpga_get_sysmgr_addr() +
+			SYSMGR_SOC64_BOOT_SCRATCH_COLD8) &
+		  SYSMGR_ECC_DBE_COLD_RST_MASK);
+}
 
 /* ECC DBEs require a Reset but just notify here */
 static void __secure smc_socfpga_ecc_dbe_nofify(unsigned long function_id,
