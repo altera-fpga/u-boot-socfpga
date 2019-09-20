@@ -29,6 +29,10 @@
 #define RSU_NOTIFY_CLEAR_ERROR_STATUS   (1 << 17)
 #define RSU_NOTIFY_RESET_RETRY_COUNTER  (1 << 16)
 
+/* RSU Version Bitmasks */
+#define RSU_VERSION_DCMF_MASK		GENMASK(7, 0)
+#define RSU_VERSION_ACMF_MASK		GENMASK(15, 8)
+
 /**
  * struct rsu_status_info - firmware status log info structure
  * @current_image:address of image currently running in flash

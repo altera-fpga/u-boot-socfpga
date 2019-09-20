@@ -23,7 +23,7 @@ static int rsu_print_status(void)
 {
 	struct rsu_status_info status_info;
 
-	if (mbox_rsu_status((u32 *)&status_info, sizeof(status_info))) {
+	if (mbox_rsu_status((u32 *)&status_info, sizeof(status_info) / 4)) {
 		puts("RSU: Firmware or flash content not supporting RSU\n");
 		return -ENOTSUPP;
 	}

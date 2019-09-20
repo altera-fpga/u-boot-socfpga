@@ -600,7 +600,7 @@ int rsu_clear_error_status(void)
 	if (ret < 0)
 		return ret;
 
-	if (!info.version)
+	if (!(info.version & RSU_VERSION_ACMF_MASK))
 		return -ELOWLEVEL;
 
 	arg = RSU_NOTIFY_IGNORE_STAGE | RSU_NOTIFY_CLEAR_ERROR_STATUS;
@@ -628,7 +628,10 @@ int rsu_reset_retry_counter(void)
 	if (ret < 0)
 		return ret;
 
-	if (!info.version)
+	if (!(info.version & RSU_VERSION_DCMF_MASK))
+		return -ELOWLEVEL;
+
+	if (!(info.version & RSU_VERSION_ACMF_MASK))
 		return -ELOWLEVEL;
 
 	arg = RSU_NOTIFY_IGNORE_STAGE | RSU_NOTIFY_RESET_RETRY_COUNTER;

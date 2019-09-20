@@ -19,11 +19,11 @@ u32 smc_rsu_update_address __secure_data = 0;
 static void __secure smc_socfpga_rsu_status_psci(unsigned long function_id)
 {
 	SMC_ALLOC_REG_MEM(r);
-	u64 rsu_status[4];
+	u64 rsu_status[5];
 
 	SMC_INIT_REG_MEM(r);
 
-	if (mbox_rsu_status_psci((u32 *)rsu_status, sizeof(rsu_status) / 4)) {
+	if (mbox_rsu_status_psci((u32 *)rsu_status, 9)) {
 		SMC_ASSIGN_REG_MEM(r, SMC_ARG0, INTEL_SIP_SMC_RSU_ERROR);
 		SMC_RET_REG_MEM(r);
 		return;
@@ -73,7 +73,6 @@ static void __secure smc_socfpga_rsu_retry_counter_psci(
 
 	SMC_INIT_REG_MEM(r);
 
-	rsu_status[8] = 0;
 	if (mbox_rsu_status_psci((u32 *)rsu_status, sizeof(rsu_status) / 4)) {
 		SMC_ASSIGN_REG_MEM(r, SMC_ARG0, INTEL_SIP_SMC_RSU_ERROR);
 		SMC_RET_REG_MEM(r);

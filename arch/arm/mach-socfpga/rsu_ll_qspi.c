@@ -953,7 +953,7 @@ static int image_load(u64 offset)
 static int status_log(struct rsu_status_info *info)
 {
 	if (mbox_rsu_status((u32 *)info,
-			    sizeof(struct rsu_status_info))) {
+			    sizeof(struct rsu_status_info) / 4)) {
 		rsu_log(RSU_ERR,
 			"RSU: Firmware or flash content not supporting RSU\n");
 		return -ENOTSUPP;

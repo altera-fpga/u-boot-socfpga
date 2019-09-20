@@ -6,6 +6,7 @@
 
 #include <asm/arch/clock_manager.h>
 #include <asm/arch/mailbox_s10.h>
+#include <asm/arch/rsu.h>
 #include <asm/arch/smc_api.h>
 #include <asm/arch/system_manager.h>
 #include <asm/io.h>
@@ -25,6 +26,8 @@
 
 #define MBOX_WRITE_CMD_BUF(data, cin)	\
 	MBOX_WRITEL(data, MBOX_CMD_BUF + ((cin) * sizeof(u32)))
+
+#define RSU_VERSION_ACMF_ONE		0x00000100
 
 static __always_inline int mbox_polling_resp(u32 rout)
 {
@@ -418,15 +421,48 @@ int mbox_rsu_get_spt_offset(u32 *resp_buf, u32 resp_buf_len)
 
 int mbox_rsu_status(u32 *resp_buf, u32 resp_buf_len)
 {
-	return mbox_send_cmd(MBOX_ID_UBOOT, MBOX_RSU_STATUS, MBOX_CMD_DIRECT, 0,
-			     NULL, 0, (u32 *)&resp_buf_len, (u32 *)resp_buf);
+	int ret;
+	struct rsu_status_info *info = (struct rsu_status_info *)resp_buf;
+
+	info->retry_counter = -1;
+
+	ret = mbox_send_cmd(MBOX_ID_UBOOT, MBOX_RSU_STATUS, MBOX_CMD_DIRECT, 0,
+			    NULL, 0, (u32 *)&resp_buf_len, (u32 *)resp_buf);
+
+	if (ret)
+		return ret;
+
+	if (info->retry_counter != -1)
+		if (!(info->version & RSU_VERSION_ACMF_MASK))
+			info->version |= RSU_VERSION_ACMF_ONE;
+
+	return ret;
 }
 
 int __secure mbox_rsu_status_psci(u32 *resp_buf, u32 resp_buf_len)
 {
-	return mbox_send_cmd_psci(MBOX_ID_UBOOT, MBOX_RSU_STATUS,
-				  MBOX_CMD_DIRECT, 0, NULL, 0,
-				  (u32 *)&resp_buf_len, (u32 *)resp_buf);
+	int ret;
+	struct rsu_status_info *info = (struct rsu_status_info *)resp_buf;
+	int adjust = (resp_buf_len >= 9);
+
+	if (adjust)
+		info->retry_counter = -1;
+
+	ret = mbox_send_cmd_psci(MBOX_ID_UBOOT, MBOX_RSU_STATUS,
+				 MBOX_CMD_DIRECT, 0, NULL, 0,
+				 (u32 *)&resp_buf_len, (u32 *)resp_buf);
+
+	if (ret)
+		return ret;
+
+	if (!adjust)
+		return ret;
+
+	if (info->retry_counter != -1)
+		if (!(info->version & RSU_VERSION_ACMF_MASK))
+			info->version |= RSU_VERSION_ACMF_ONE;
+
+	return ret;
 }
 
 int mbox_rsu_update(u32 *flash_offset)
