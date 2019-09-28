@@ -3,7 +3,15 @@
 # (C) Copyright 2006
 # Wolfgang Denk, DENX Software Engineering, wd@denx.de.
 
+nand-framework-objs := nand.o nand_bbt.o nand_ids.o nand_util.o \
+		       nand_ecc.o nand_base.o nand_timings.o
+
 ifdef CONFIG_XPL_BUILD
+
+ifdef CONFIG_SPL_NAND_FRAMEWORK
+obj-y += $(nand-framework-objs)
+NORMAL_DRIVERS=y
+endif
 
 ifdef CONFIG_SPL_NAND_DRIVERS
 NORMAL_DRIVERS=y
@@ -28,19 +36,7 @@ else # not spl
 
 NORMAL_DRIVERS=y
 
-obj-y += nand.o
-obj-y += nand_bbt.o
-obj-y += nand_ids.o
-obj-y += nand_util.o
-obj-y += nand_ecc.o
-obj-y += nand_base.o
-obj-y += nand_amd.o
-obj-y += nand_hynix.o
-obj-y += nand_macronix.o
-obj-y += nand_micron.o
-obj-y += nand_samsung.o
-obj-y += nand_toshiba.o
-obj-y += nand_timings.o
+obj-y += $(nand-framework-objs)
 
 endif # not spl
 
