@@ -11,6 +11,11 @@
 #include <asm/arch/rsu_misc.h>
 #include <asm/system.h>
 
+/* RSU Notify Bitmasks */
+#define RSU_NOTIFY_IGNORE_STAGE         BIT(18)
+#define RSU_NOTIFY_CLEAR_ERROR_STATUS   BIT(17)
+#define RSU_NOTIFY_RESET_RETRY_COUNTER  BIT(16)
+
 struct rsu_ll_intf *ll_intf;
 
 /**
@@ -617,7 +622,7 @@ int rsu_clear_error_status(void)
 	if (ret < 0)
 		return ret;
 
-	if (!(info.version & RSU_VERSION_ACMF_MASK))
+	if (!RSU_VERSION_ACMF_VERSION(info.version))
 		return -ELOWLEVEL;
 
 	arg = RSU_NOTIFY_IGNORE_STAGE | RSU_NOTIFY_CLEAR_ERROR_STATUS;
@@ -645,10 +650,8 @@ int rsu_reset_retry_counter(void)
 	if (ret < 0)
 		return ret;
 
-	if (!(info.version & RSU_VERSION_DCMF_MASK))
-		return -ELOWLEVEL;
-
-	if (!(info.version & RSU_VERSION_ACMF_MASK))
+	if (!RSU_VERSION_ACMF_VERSION(info.version) ||
+	    !RSU_VERSION_DCMF_VERSION(info.version))
 		return -ELOWLEVEL;
 
 	arg = RSU_NOTIFY_IGNORE_STAGE | RSU_NOTIFY_RESET_RETRY_COUNTER;

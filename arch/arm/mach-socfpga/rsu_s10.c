@@ -34,7 +34,8 @@ static int rsu_print_status(void)
 	printf("Version\t\t: 0x%08x\n", status_info.version);
 	printf("Error location\t: 0x%08x\n", status_info.error_location);
 	printf("Error details\t: 0x%08x\n", status_info.error_details);
-	if (status_info.version)
+	if (RSU_VERSION_ACMF_VERSION(status_info.version) &&
+	    RSU_VERSION_DCMF_VERSION(status_info.version))
 		printf("Retry counter\t: 0x%08x\n", status_info.retry_counter);
 
 	return 0;

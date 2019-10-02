@@ -7,6 +7,8 @@
 #define __RSU_H__
 
 #include <asm/types.h>
+#include <linux/bitops.h>
+#include <linux/bitfield.h>
 
 /* RSU Error Codes */
 #define EINTF		1
@@ -24,14 +26,15 @@
 #define EWRPROT		13
 #define EARGS		14
 
-/* RSU Notify Bitmasks */
-#define RSU_NOTIFY_IGNORE_STAGE         (1 << 18)
-#define RSU_NOTIFY_CLEAR_ERROR_STATUS   (1 << 17)
-#define RSU_NOTIFY_RESET_RETRY_COUNTER  (1 << 16)
-
 /* RSU Version Bitmasks */
+#define RSU_VERSION_ERR_MASK		GENMASK(31, 16)
 #define RSU_VERSION_DCMF_MASK		GENMASK(7, 0)
 #define RSU_VERSION_ACMF_MASK		GENMASK(15, 8)
+
+/* Macros for extracting RSU version fields */
+#define RSU_VERSION_ERROR_SOURCE(v)	FIELD_GET(RSU_VERSION_ERR_MASK, (v))
+#define RSU_VERSION_ACMF_VERSION(v)	FIELD_GET(RSU_VERSION_ACMF_MASK, (v))
+#define RSU_VERSION_DCMF_VERSION(v)	FIELD_GET(RSU_VERSION_DCMF_MASK, (v))
 
 /**
  * struct rsu_status_info - firmware status log info structure

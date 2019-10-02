@@ -27,8 +27,6 @@
 #define MBOX_WRITE_CMD_BUF(data, cin)	\
 	MBOX_WRITEL(data, MBOX_CMD_BUF + ((cin) * sizeof(u32)))
 
-#define RSU_VERSION_ACMF_ONE		0x00000100
-
 static __always_inline int mbox_polling_resp(u32 rout)
 {
 	u32 rin;
@@ -433,8 +431,8 @@ int mbox_rsu_status(u32 *resp_buf, u32 resp_buf_len)
 		return ret;
 
 	if (info->retry_counter != -1)
-		if (!(info->version & RSU_VERSION_ACMF_MASK))
-			info->version |= RSU_VERSION_ACMF_ONE;
+		if (!RSU_VERSION_ACMF_VERSION(info->version))
+			info->version |= FIELD_PREP(RSU_VERSION_ACMF_MASK, 1);
 
 	return ret;
 }
@@ -459,8 +457,8 @@ int __secure mbox_rsu_status_psci(u32 *resp_buf, u32 resp_buf_len)
 		return ret;
 
 	if (info->retry_counter != -1)
-		if (!(info->version & RSU_VERSION_ACMF_MASK))
-			info->version |= RSU_VERSION_ACMF_ONE;
+		if (!RSU_VERSION_ACMF_VERSION(info->version))
+			info->version |= FIELD_PREP(RSU_VERSION_ACMF_MASK, 1);
 
 	return ret;
 }
