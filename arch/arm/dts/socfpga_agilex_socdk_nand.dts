@@ -81,7 +81,7 @@
 			};
 			partition@4280000 {
 				label = "rootfs";
-				reg = <0x4280000 0x3bd0000>;
+				reg = <0x4280000 0x3bd80000>;
 			};
 		};
 	};
