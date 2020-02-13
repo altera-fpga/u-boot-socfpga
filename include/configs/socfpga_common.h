@@ -168,6 +168,9 @@
 	"kernel_addr_r="__stringify(CONFIG_SYS_LOAD_ADDR)"\0" \
 	"fdt_addr_r=0x02000000\0" \
 	"scriptaddr=0x02100000\0" \
+	"scriptfile=u-boot.scr\0" \
+	"fatscript=if fatload mmc 0:1 ${scriptaddr} ${scriptfile};" \
+			"then source ${scriptaddr}; fi\0" \
 	"pxefile_addr_r=0x02200000\0" \
 	"ramdisk_addr_r=0x02300000\0" \
 	"socfpga_legacy_reset_compat=1\0" \
