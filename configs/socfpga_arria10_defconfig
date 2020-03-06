@@ -20,7 +20,7 @@ CONFIG_SPL_FIT=y
 CONFIG_DISTRO_DEFAULTS=y
 CONFIG_USE_BOOTARGS=y
 CONFIG_BOOTARGS="console=ttyS0,115200"
-CONFIG_BOOTCOMMAND="run fatscript;bridge enable;run distro_bootcmd"
+CONFIG_BOOTCOMMAND="run fatscript;run prog_core;bridge enable;run distro_bootcmd"
 CONFIG_DEFAULT_FDT_FILE="socfpga_arria10_socdk_sdmmc.dtb"
 CONFIG_SYS_CONSOLE_IS_IN_ENV=y
 CONFIG_SYS_CONSOLE_OVERWRITE_ROUTINE=y

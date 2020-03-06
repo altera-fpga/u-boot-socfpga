@@ -174,6 +174,8 @@
 	"pxefile_addr_r=0x02200000\0" \
 	"ramdisk_addr_r=0x02300000\0" \
 	"socfpga_legacy_reset_compat=1\0" \
+	"prog_core=if load mmc 0:1 ${loadaddr} fit_spl_fpga.itb;" \
+		   "then fpga loadmk 0 ${loadaddr}:fpga-core-1; fi\0" \
 	SOCFPGA_BOOT_SETTINGS \
 	BOOTENV
 
