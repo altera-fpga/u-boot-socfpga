@@ -790,6 +790,29 @@ static int reset_retry_counter(int argc, char * const argv[])
 	return CMD_RET_SUCCESS;
 }
 
+static int display_dcmf_version(int argc, char * const argv[])
+{
+	int i, ret;
+	u32 versions[4];
+
+	if (rsu_init(NULL))
+		return CMD_RET_FAILURE;
+
+	ret = rsu_dcmf_version(versions);
+	rsu_exit();
+
+	if (ret)
+		return CMD_RET_FAILURE;
+
+	for (i = 0; i < 4; i++)
+		printf("DCMF%d version = %d.%d.%d\n", i,
+		       (int)DCMF_VERSION_MAJOR(versions[i]),
+		       (int)DCMF_VERSION_MINOR(versions[i]),
+		       (int)DCMF_VERSION_UPDATE(versions[i]));
+
+	return CMD_RET_SUCCESS;
+}
+
 struct func_t {
 	const char *cmd_string;
 	int (*func_ptr)(int cmd_argc, char * const cmd_argv[]);
@@ -818,7 +841,8 @@ static const struct func_t rsu_func_t[] = {
 	{"update", rsu_update},
 	{"notify", notify},
 	{"clear_error_status", clear_error_status},
-	{"reset_retry_counter", reset_retry_counter}
+	{"reset_retry_counter", reset_retry_counter},
+	{"display_dcmf_version", display_dcmf_version}
 };
 
 int do_rsu(struct cmd_tbl *cmdtp, int flag, int argc, char * const argv[])
@@ -867,5 +891,6 @@ U_BOOT_CMD(
 	"notify <value> - Let SDM know the current state of HPS software\n"
 	"clear_error_status - clear the RSU error status\n"
 	"reset_retry_counter - reset the RSU retry counter\n"
+	"display_dcmf_version - display DCMF versions and store them for SMC handler usage\n"
 	""
 );

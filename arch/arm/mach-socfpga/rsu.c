@@ -657,3 +657,33 @@ int rsu_reset_retry_counter(void)
 	arg = RSU_NOTIFY_IGNORE_STAGE | RSU_NOTIFY_RESET_RETRY_COUNTER;
 	return ll_intf->fw_ops.notify(arg);
 }
+
+/**
+ * rsu_dcmf_version() - retrieve the decision firmware version
+ * @versions: pointer to where the four DCMF versions will be stored
+ *
+ * This function is used to retrieve the version of each of the four DCMF copies
+ * in flash and also report the values to the SMC handler.
+ *
+ * Returns: 0 on success, or error code
+ */
+int rsu_dcmf_version(u32 *versions)
+{
+	int ret;
+
+	if (!ll_intf)
+		return -EINTF;
+
+	if (!versions)
+		return -EARGS;
+
+	ret = ll_intf->fw_ops.dcmf_version(versions);
+	if (ret)
+		return ret;
+
+#if !defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_ATF)
+	return -EINTF;
+#else
+	return smc_store_dcmf_version(versions);
+#endif
+}

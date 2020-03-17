@@ -36,6 +36,16 @@
 #define RSU_VERSION_ACMF_VERSION(v)	FIELD_GET(RSU_VERSION_ACMF_MASK, (v))
 #define RSU_VERSION_DCMF_VERSION(v)	FIELD_GET(RSU_VERSION_DCMF_MASK, (v))
 
+/* DCMF Version Bitmasks */
+#define DCMF_VERSION_MAJOR_MASK		GENMASK(31, 24)
+#define DCMF_VERSION_MINOR_MASK		GENMASK(23, 16)
+#define DCMF_VERSION_UPDATE_MASK	GENMASK(15, 8)
+
+/* Macros for extracting DCMF version fields */
+#define DCMF_VERSION_MAJOR(v)		FIELD_GET(DCMF_VERSION_MAJOR_MASK, (v))
+#define DCMF_VERSION_MINOR(v)		FIELD_GET(DCMF_VERSION_MINOR_MASK, (v))
+#define DCMF_VERSION_UPDATE(v)		FIELD_GET(DCMF_VERSION_UPDATE_MASK, (v))
+
 /**
  * struct rsu_status_info - firmware status log info structure
  * @current_image:address of image currently running in flash
@@ -287,5 +297,16 @@ int rsu_clear_error_status(void);
  * Returns: 0 on success, or error code
  */
 int rsu_reset_retry_counter(void);
+
+/**
+ * rsu_dcmf_version() - retrieve the decision firmware version
+ * @versions: pointer to where the four DCMF versions will be stored
+ *
+ * This function is used to retrieve the version of each of the four DCMF copies
+ * in flash.
+ *
+ * Returns: 0 on success, or error code
+ */
+int rsu_dcmf_version(u32 *versions);
 
 #endif

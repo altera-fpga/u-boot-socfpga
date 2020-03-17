@@ -15,6 +15,26 @@
 DECLARE_GLOBAL_DATA_PTR;
 
 u32 smc_rsu_update_address __secure_data = 0;
+static u32 smc_rsu_dcmf_version[4] __secure_data = {0, 0, 0, 0};
+
+int smc_store_dcmf_version(u32 *versions)
+{
+	void *dcmf_versions;
+
+	if (!versions)
+		return -EINVAL;
+
+	/*
+	 * Convert the address of smc_rsu_dcmf_versions
+	 * to pre-relocation address.
+	 */
+	dcmf_versions = (char *)__secure_start - CONFIG_ARMV8_SECURE_BASE +
+			(u64)secure_ram_addr(smc_rsu_dcmf_version);
+
+	memcpy(dcmf_versions, versions, sizeof(*versions) * 4);
+
+	return 0;
+}
 
 static void __secure smc_socfpga_rsu_status_psci(unsigned long function_id)
 {
@@ -85,6 +105,28 @@ static void __secure smc_socfpga_rsu_retry_counter_psci(
 	SMC_RET_REG_MEM(r);
 }
 
+static void __secure smc_socfpga_rsu_dcmf_version_psci(unsigned long
+						       function_id)
+{
+	SMC_ALLOC_REG_MEM(r);
+	u64 resp0;
+	u64 resp1;
+
+	SMC_INIT_REG_MEM(r);
+
+	resp0 = smc_rsu_dcmf_version[1];
+	resp0 = (resp0 << 32) | (u64)smc_rsu_dcmf_version[0];
+
+	resp1 = smc_rsu_dcmf_version[3];
+	resp1 = (resp1 << 32) | (u64)smc_rsu_dcmf_version[2];
+
+	SMC_ASSIGN_REG_MEM(r, SMC_ARG0, INTEL_SIP_SMC_STATUS_OK);
+	SMC_ASSIGN_REG_MEM(r, SMC_ARG1, resp0);
+	SMC_ASSIGN_REG_MEM(r, SMC_ARG2, resp1);
+
+	SMC_RET_REG_MEM(r);
+}
+
 DECLARE_SECURE_SVC(rsu_status_psci, INTEL_SIP_SMC_RSU_STATUS,
 		   smc_socfpga_rsu_status_psci);
 DECLARE_SECURE_SVC(rsu_update_psci, INTEL_SIP_SMC_RSU_UPDATE,
@@ -93,3 +135,5 @@ DECLARE_SECURE_SVC(rsu_notify_psci, INTEL_SIP_SMC_RSU_NOTIFY,
 		   smc_socfpga_rsu_notify_psci);
 DECLARE_SECURE_SVC(rsu_retry_counter_psci, INTEL_SIP_SMC_RSU_RETRY_COUNTER,
 		   smc_socfpga_rsu_retry_counter_psci);
+DECLARE_SECURE_SVC(rsu_dcmf_version_psci, INTEL_SIP_SMC_RSU_DCMF_VERSION,
+		   smc_socfpga_rsu_dcmf_version_psci);

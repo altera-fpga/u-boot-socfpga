@@ -58,7 +58,9 @@ struct rsu_ll_intf {
 		int (*load)(u64 offset);
 		int (*status)(struct rsu_status_info *info);
 		int (*notify)(u32 value);
+		int (*dcmf_version)(u32 *versions);
 	} fw_ops;
+
 };
 
 /**

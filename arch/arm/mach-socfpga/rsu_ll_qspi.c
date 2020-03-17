@@ -25,6 +25,11 @@
 #define SPT_VERSION		0
 #define LIBRSU_VER		0
 
+#define DCMF0_VERSION_OFFSET	0x00420
+#define DCMF1_VERSION_OFFSET	0x40420
+#define DCMF2_VERSION_OFFSET	0x80420
+#define DCMF3_VERSION_OFFSET	0xC0420
+
 /**
  * struct sub_partition_table_partition - SPT partition structure
  * @name: sub-partition name
@@ -978,6 +983,49 @@ static int notify_fw(u32 value)
 	return 0;
 }
 
+/**
+ * dcmf_version() - retrieve the decision firmware version
+ * @versions: pointer to where the four DCMF versions will be stored
+ *
+ * This function is used to retrieve the version of each of the four DCMF copies
+ * in flash.
+ *
+ * Returns: 0 on success, or error code
+ */
+static int dcmf_version(__u32 *versions)
+{
+	int ret;
+
+	if (!versions)
+		return -1;
+
+	ret = spi_flash_read(flash, DCMF0_VERSION_OFFSET, 4, &versions[0]);
+	if (ret) {
+		rsu_log(RSU_ERR, "read flash error=%i\n", ret);
+		return ret;
+	}
+
+	ret = spi_flash_read(flash, DCMF1_VERSION_OFFSET, 4, &versions[1]);
+	if (ret) {
+		rsu_log(RSU_ERR, "read flash error=%i\n", ret);
+		return ret;
+	}
+
+	ret = spi_flash_read(flash, DCMF2_VERSION_OFFSET, 4, &versions[2]);
+	if (ret) {
+		rsu_log(RSU_ERR, "read flash error=%i\n", ret);
+		return ret;
+	}
+
+	ret = spi_flash_read(flash, DCMF3_VERSION_OFFSET, 4, &versions[3]);
+	if (ret) {
+		rsu_log(RSU_ERR, "read flash error=%i\n", ret);
+		return ret;
+	}
+
+	return 0;
+}
+
 static void ll_exit(void)
 {
 	if (flash) {
@@ -1007,7 +1055,8 @@ static struct rsu_ll_intf qspi_ll_intf = {
 
 	.fw_ops.load = image_load,
 	.fw_ops.status = status_log,
-	.fw_ops.notify = notify_fw
+	.fw_ops.notify = notify_fw,
+	.fw_ops.dcmf_version = dcmf_version
 };
 
 int rsu_ll_qspi_init(struct rsu_ll_intf **intf)
