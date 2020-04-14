@@ -9,6 +9,9 @@
 #define RSU_S10_CPB_MAGIC_NUMBER	0x57789609
 #define RSU_S10_SPT_MAGIC_NUMBER	0x57713427
 
+#define SPT0_INDEX	1
+#define SPT1_INDEX	3
+
 /* CMF pointer block */
 struct socfpga_rsu_s10_cpb {
 	u32 magic_number;
