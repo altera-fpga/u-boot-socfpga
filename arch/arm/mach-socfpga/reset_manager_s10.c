@@ -275,6 +275,50 @@ void socfpga_bridges_reset(int enable, unsigned int mask)
 	}
 }
 
+void __secure socfpga_bridges_reset_psci(int enable)
+{
+	if (enable) {
+		/* clear idle request to all bridges */
+		setbits_le32(SOCFPGA_SYSMGR_ADDRESS +
+			     SYSMGR_SOC64_NOC_IDLEREQ_CLR, ~0);
+
+		/* Release all bridges from reset state */
+		clrbits_le32(SOCFPGA_RSTMGR_ADDRESS + RSTMGR_SOC64_BRGMODRST,
+			     ~0);
+
+		/* Poll until all idleack to 0 */
+		while (readl(SOCFPGA_SYSMGR_ADDRESS +
+			     SYSMGR_SOC64_NOC_IDLEACK))
+			;
+	} else {
+		/* set idle request to all bridges */
+		writel(~0,
+		       SOCFPGA_SYSMGR_ADDRESS +
+		       SYSMGR_SOC64_NOC_IDLEREQ_SET);
+
+		/* Enable the NOC timeout */
+		writel(1, SOCFPGA_SYSMGR_ADDRESS + SYSMGR_SOC64_NOC_TIMEOUT);
+
+		/* Poll until all idleack to 1 */
+		while ((readl(SOCFPGA_SYSMGR_ADDRESS + SYSMGR_SOC64_NOC_IDLEACK) ^
+			(SYSMGR_NOC_H2F_MSK | SYSMGR_NOC_LWH2F_MSK)))
+			;
+
+		/* Poll until all idlestatus to 1 */
+		while ((readl(SOCFPGA_SYSMGR_ADDRESS + SYSMGR_SOC64_NOC_IDLESTATUS) ^
+			(SYSMGR_NOC_H2F_MSK | SYSMGR_NOC_LWH2F_MSK)))
+			;
+
+		/* Reset all bridges (except NOR DDR scheduler & F2S) */
+		setbits_le32(SOCFPGA_RSTMGR_ADDRESS + RSTMGR_SOC64_BRGMODRST,
+			     ~(RSTMGR_BRGMODRST_DDRSCH_MASK |
+			       RSTMGR_BRGMODRST_FPGA2SOC_MASK));
+
+		/* Disable NOC timeout */
+		writel(0, SOCFPGA_SYSMGR_ADDRESS + SYSMGR_SOC64_NOC_TIMEOUT);
+	}
+}
+
 /*
  * Return non-zero if the CPU has been warm reset
  */
