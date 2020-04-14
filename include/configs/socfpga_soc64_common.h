@@ -33,6 +33,13 @@
 #define L2_RESET_DONE_STATUS		0x1228E5E7
 
 /*
+ * sysmgr.boot_scratch_cold6 & 7 (64bit) will be used by master CPU to
+ * store its VBAR_EL3 value. Other slave CPUs will read from this
+ * location and update their VBAR_EL3 respectively
+ */
+#define VBAR_EL3_BASE_ADDR		0xFFD12218
+
+/*
  * U-Boot console configurations
  */
 
