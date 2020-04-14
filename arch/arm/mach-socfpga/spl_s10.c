@@ -17,6 +17,7 @@
 #include <asm/arch/mailbox_s10.h>
 #include <asm/arch/misc.h>
 #include <asm/arch/reset_manager.h>
+#include <asm/arch/smmu_s10.h>
 #include <asm/arch/system_manager.h>
 #include <watchdog.h>
 #include <dm/uclass.h>
@@ -68,6 +69,9 @@ void board_init_f(ulong dummy)
 	cm_print_clock_quick_summary();
 
 	firewall_setup();
+
+	/* Setup and Initialize SMMU */
+	socfpga_init_smmu();
 
 	/* disable ocram security at CCU for non secure access */
 	clrbits_le32(CCU_REG_ADDR(CCU_CPU0_MPRT_ADMASK_MEM_RAM0),
