@@ -3,6 +3,7 @@
 
 #include <linux/compiler.h>
 #include <asm/barriers.h>
+#include <asm/secure.h>
 
 #ifdef CONFIG_ARM64
 
@@ -339,10 +340,15 @@ void mmu_change_region_attr_nobreak(phys_addr_t addr, size_t size, u64 attrs);
  */
 void smc_call(struct pt_regs *args);
 
+#if defined(CONFIG_ARMV7_SECURE_BASE) || defined(CONFIG_ARMV8_SECURE_BASE)
+void __noreturn __secure psci_system_reset(void);
+void __noreturn __secure psci_system_off(void);
+#else
 void __noreturn psci_system_reset(void);
 void __noreturn psci_system_reset2(u32 reset_level, u32 cookie);
 void __noreturn psci_system_off(void);
 int psci_features(u32 psci_func_id);
+#endif
 
 #ifdef CONFIG_ARMV8_PSCI
 extern char __secure_start[];

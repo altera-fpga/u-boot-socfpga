@@ -39,6 +39,9 @@ obj-y	+= system_manager_soc64.o
 obj-y	+= timer_s10.o
 obj-y	+= wrap_handoff_soc64.o
 obj-y	+= wrap_pll_config_soc64.o
+ifndef CONFIG_SPL_BUILD
+obj-$(CONFIG_ARMV8_PSCI) += psci.o
+endif
 endif
 
 ifdef CONFIG_ARCH_SOCFPGA_AGILEX
@@ -55,6 +58,9 @@ obj-$(CONFIG_SOCFPGA_SECURE_VAB_AUTH)	+= vab.o
 obj-y	+= wrap_handoff_soc64.o
 obj-y	+= wrap_pll_config_soc64.o
 obj-y	+= altera-sysmgr.o
+ifndef CONFIG_SPL_BUILD
+obj-$(CONFIG_ARMV8_PSCI) += psci.o
+endif
 endif
 
 ifdef CONFIG_ARCH_SOCFPGA_AGILEX5
@@ -102,6 +108,9 @@ obj-y	+= timer_s10.o
 obj-$(CONFIG_SOCFPGA_SECURE_VAB_AUTH)	+= vab.o
 obj-y	+= wrap_handoff_soc64.o
 obj-y	+= wrap_pll_config_soc64.o
+ifndef CONFIG_SPL_BUILD
+obj-$(CONFIG_ARMV8_PSCI) += psci.o
+endif
 endif
 
 ifdef CONFIG_XPL_BUILD
