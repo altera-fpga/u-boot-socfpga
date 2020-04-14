@@ -8,6 +8,7 @@
 #include <asm/psci.h>
 #include <errno.h>
 #include <asm/arch/mailbox_s10.h>
+#include <asm/arch/rsu_s10.h>
 #include <asm/secure.h>
 
 static u64 psci_cpu_on_64_cpuid __secure_data;
@@ -15,8 +16,11 @@ static u64 psci_cpu_on_64_entry_point __secure_data;
 
 void __noreturn __secure psci_system_reset(void)
 {
-	mbox_send_cmd_psci(MBOX_ID_UBOOT, MBOX_REBOOT_HPS,
-			   MBOX_CMD_DIRECT, 0, NULL, 0, 0, NULL);
+	if (smc_rsu_update_address)
+		mbox_rsu_update_psci(&smc_rsu_update_address);
+	else
+		mbox_send_cmd_psci(MBOX_ID_UBOOT, MBOX_REBOOT_HPS,
+				   MBOX_CMD_DIRECT, 0, NULL, 0, 0, NULL);
 
 	while (1)
 		;

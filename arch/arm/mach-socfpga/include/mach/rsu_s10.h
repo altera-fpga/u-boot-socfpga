@@ -6,6 +6,8 @@
 #ifndef _RSU_S10_H_
 #define _RSU_S10_H_
 
+extern u32 smc_rsu_update_address;
+
 #define RSU_S10_CPB_MAGIC_NUMBER	0x57789609
 #define RSU_S10_SPT_MAGIC_NUMBER	0x57713427
 
