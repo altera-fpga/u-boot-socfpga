@@ -19,6 +19,8 @@
 #include <asm/system.h>
 #include <mach/clock_manager.h>
 
+#define RSU_DEFAULT_LOG_LEVEL  7
+
 /* Agilex5 Sub Device Jtag ID List */
 #define A3690_JTAG_ID	0x036090DD
 #define A3694_JTAG_ID	0x436090DD
@@ -101,10 +103,16 @@ int print_cpuinfo(void)
 int arch_misc_init(void)
 {
 	char qspi_string[13];
+	char level[4];
 	unsigned long id;
 
+	snprintf(level, sizeof(level), "%u", RSU_DEFAULT_LOG_LEVEL);
 	sprintf(qspi_string, "<0x%08x>", cm_get_qspi_controller_clk_hz());
 	env_set("qspi_clock", qspi_string);
+
+	/* for RSU, set log level to default if log level is not set */
+	if (!env_get("rsu_log_level"))
+		env_set("rsu_log_level", level);
 
 	/* Export board_id as environment variable */
 	id = socfpga_get_board_id();
