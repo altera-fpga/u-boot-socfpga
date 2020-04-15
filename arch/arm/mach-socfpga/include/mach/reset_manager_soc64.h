@@ -12,6 +12,7 @@ int cpu_has_been_warmreset(void);
 void print_reset_info(void);
 void socfpga_bridges_reset(int enable, unsigned int mask);
 void socfpga_bridges_reset_psci(int enable);
+void l2_reset_cpu_psci(void);
 
 #define RSTMGR_SOC64_STATUS	0x00
 #define RSTMGR_SOC64_HDSKEN	0x10

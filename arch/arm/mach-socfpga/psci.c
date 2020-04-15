@@ -8,6 +8,7 @@
 #include <asm/psci.h>
 #include <errno.h>
 #include <asm/arch/mailbox_s10.h>
+#include <asm/arch/reset_manager_soc64.h>
 #include <asm/arch/rsu_s10.h>
 #include <asm/secure.h>
 
@@ -24,6 +25,36 @@ void __noreturn __secure psci_system_reset(void)
 
 	while (1)
 		;
+}
+
+/*
+ * RESET2 is assumed to be a standard PSCI warm reset.
+ *
+ * reset_type bit[31]   == 1: Vendor-specific implementation, may utilize cookie
+ *
+ * reset_type bit[31]   == 0: Architectural reset.
+ *            bit[30:0] == 0: Warm reset
+ */
+int __secure psci_system_reset2_64(u32 function_id, u32 reset_type, u64 cookie)
+{
+	if (reset_type != 0)
+		return ARM_PSCI_RET_INVAL;
+
+	l2_reset_cpu_psci();
+
+	return ARM_PSCI_RET_INTERNAL_FAILURE; /* Never reached */
+}
+
+int __secure psci_features(u32 function_id, u32 psci_fid)
+{
+	switch (psci_fid) {
+	case ARM_PSCI_0_2_FN_CPU_ON:
+	case ARM_PSCI_0_2_FN_SYSTEM_RESET:
+	case ARM_PSCI_1_0_FN64_SYSTEM_RESET2:
+		return 0x0;
+	}
+
+	return ARM_PSCI_RET_NI;
 }
 
 /* This function will handle multiple core release based PSCI */
