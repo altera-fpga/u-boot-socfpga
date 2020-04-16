@@ -118,5 +118,4 @@ int socfpga_bridges_reset(void);
 
 #define ALT_RSTMGR_FPGAMGRWARMMASK_S2F_SET_MSK	BIT(3)
 #define ALT_RSTMGR_SYSWARMMASK_S2F_SET_MSK	BIT(4)
-
 #endif /* _RESET_MANAGER_ARRIA10_H_ */

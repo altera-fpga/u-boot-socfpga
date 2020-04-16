@@ -201,7 +201,6 @@ bool is_regular_boot_valid(void)
 
 	status = readl(socfpga_get_sysmgr_addr() +
 		       SYSMGR_A10_ISW_HANDOFF_BASE + SYSMGR_A10_ISW_HANDOFF_7);
-
 	if (status == REGULAR_BOOT_MAGIC)
 		return true;
 	else

@@ -38,6 +38,9 @@ static inline bool socfpga_is_booting_from_fpga(void)
 #ifdef CONFIG_ARCH_SOCFPGA_ARRIA10
 void socfpga_init_security_policies(void);
 void socfpga_sdram_remap_zero(void);
+void set_regular_boot(unsigned int status);
+bool is_regular_boot_valid(void);
+int qspi_flash_software_reset(void);
 #endif
 
 #if defined(CONFIG_ARCH_SOCFPGA_STRATIX10) || \
