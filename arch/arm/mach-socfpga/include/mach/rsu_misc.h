@@ -57,6 +57,5 @@ int rsu_misc_writeprotected(int slot);
 void rsu_misc_safe_strcpy(char *dst, int dsz, char *src, int ssz);
 
 void rsu_log(const enum rsu_log_level level, const char *format, ...);
-int smc_store_dcmf_version(u32 *versions);
 
 #endif

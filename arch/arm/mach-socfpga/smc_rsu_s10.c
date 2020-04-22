@@ -15,26 +15,7 @@
 DECLARE_GLOBAL_DATA_PTR;
 
 u32 smc_rsu_update_address __secure_data = 0;
-static u32 smc_rsu_dcmf_version[4] __secure_data = {0, 0, 0, 0};
-
-int smc_store_dcmf_version(u32 *versions)
-{
-	void *dcmf_versions;
-
-	if (!versions)
-		return -EINVAL;
-
-	/*
-	 * Convert the address of smc_rsu_dcmf_versions
-	 * to pre-relocation address.
-	 */
-	dcmf_versions = (char *)__secure_start - CONFIG_ARMV8_SECURE_BASE +
-			(u64)secure_ram_addr(smc_rsu_dcmf_version);
-
-	memcpy(dcmf_versions, versions, sizeof(*versions) * 4);
-
-	return 0;
-}
+u32 smc_rsu_dcmf_version[4] __secure_data = {0, 0, 0, 0};
 
 static void __secure smc_socfpga_rsu_status_psci(unsigned long function_id)
 {
