@@ -412,9 +412,14 @@ int mbox_reset_cold(void)
 
 int mbox_rsu_get_spt_offset(u32 *resp_buf, u32 resp_buf_len)
 {
+#if !defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_ATF)
+	return smc_send_mailbox(MBOX_GET_SUBPARTITION_TABLE, 0, NULL, 0,
+				(u32 *)&resp_buf_len, (u32 *)resp_buf);
+#else
 	return mbox_send_cmd(MBOX_ID_UBOOT, MBOX_GET_SUBPARTITION_TABLE,
 			     MBOX_CMD_DIRECT, 0, NULL, 0, (u32 *)&resp_buf_len,
 			     (u32 *)resp_buf);
+#endif
 }
 
 int mbox_rsu_status(u32 *resp_buf, u32 resp_buf_len)
@@ -424,8 +429,13 @@ int mbox_rsu_status(u32 *resp_buf, u32 resp_buf_len)
 
 	info->retry_counter = -1;
 
+#if !defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_ATF)
+	ret = smc_send_mailbox(MBOX_RSU_STATUS, 0, NULL, 0,
+			       (u32 *)&resp_buf_len, (u32 *)resp_buf);
+#else
 	ret = mbox_send_cmd(MBOX_ID_UBOOT, MBOX_RSU_STATUS, MBOX_CMD_DIRECT, 0,
 			    NULL, 0, (u32 *)&resp_buf_len, (u32 *)resp_buf);
+#endif
 
 	if (ret)
 		return ret;
@@ -467,8 +477,13 @@ int __secure mbox_rsu_status_psci(u32 *resp_buf, u32 resp_buf_len)
 
 int mbox_rsu_update(u32 *flash_offset)
 {
+#if !defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_ATF)
+	return smc_send_mailbox(MBOX_RSU_UPDATE, 2, (u32 *)flash_offset, 0,
+				0, NULL);
+#else
 	return mbox_send_cmd(MBOX_ID_UBOOT, MBOX_RSU_UPDATE, MBOX_CMD_DIRECT, 2,
 			     (u32 *)flash_offset, 0, 0, NULL);
+#endif
 }
 
 #ifdef CONFIG_ARMV8_PSCI
