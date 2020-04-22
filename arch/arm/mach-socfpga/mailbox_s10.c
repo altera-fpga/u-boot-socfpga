@@ -437,6 +437,7 @@ int mbox_rsu_status(u32 *resp_buf, u32 resp_buf_len)
 	return ret;
 }
 
+#ifdef CONFIG_ARMV8_PSCI
 int __secure mbox_rsu_status_psci(u32 *resp_buf, u32 resp_buf_len)
 {
 	int ret;
@@ -462,6 +463,7 @@ int __secure mbox_rsu_status_psci(u32 *resp_buf, u32 resp_buf_len)
 
 	return ret;
 }
+#endif
 
 int mbox_rsu_update(u32 *flash_offset)
 {
@@ -469,12 +471,14 @@ int mbox_rsu_update(u32 *flash_offset)
 			     (u32 *)flash_offset, 0, 0, NULL);
 }
 
+#ifdef CONFIG_ARMV8_PSCI
 int __secure mbox_rsu_update_psci(u32 *flash_offset)
 {
 	return mbox_send_cmd_psci(MBOX_ID_UBOOT, MBOX_RSU_UPDATE,
 				  MBOX_CMD_DIRECT, 2, (u32 *)flash_offset,
 				  0, 0, NULL);
 }
+#endif
 
 /* Accepted commands: CONFIG_STATUS or RECONFIG_STATUS */
 static __always_inline int mbox_get_fpga_config_status_common(u32 cmd)
@@ -514,21 +518,25 @@ static __always_inline int mbox_get_fpga_config_status_common(u32 cmd)
 	return MBOX_CFGSTAT_STATE_CONFIG;
 }
 
+#ifdef CONFIG_ARMV8_PSCI
 int  __secure mbox_hps_stage_notify_psci(u32 execution_stage)
 {
 	return mbox_send_cmd_psci(MBOX_ID_UBOOT, MBOX_HPS_STAGE_NOTIFY,
 			     MBOX_CMD_DIRECT, 1, &execution_stage, 0, 0, NULL);
 }
+#endif
 
 int mbox_get_fpga_config_status(u32 cmd)
 {
 	return mbox_get_fpga_config_status_common(cmd);
 }
 
+#ifdef CONFIG_ARMV8_PSCI
 int __secure mbox_get_fpga_config_status_psci(u32 cmd)
 {
 	return mbox_get_fpga_config_status_common(cmd);
 }
+#endif
 
 int mbox_send_cmd(u8 id, u32 cmd, u8 is_indirect, u32 len, u32 *arg,
 		  u8 urgent, u32 *resp_buf_len, u32 *resp_buf)
@@ -537,6 +545,7 @@ int mbox_send_cmd(u8 id, u32 cmd, u8 is_indirect, u32 len, u32 *arg,
 					  urgent, resp_buf_len, resp_buf);
 }
 
+#ifdef CONFIG_ARMV8_PSCI
 int __secure mbox_send_cmd_psci(u8 id, u32 cmd, u8 is_indirect, u32 len,
 				u32 *arg, u8 urgent, u32 *resp_buf_len,
 				u32 *resp_buf)
@@ -544,6 +553,7 @@ int __secure mbox_send_cmd_psci(u8 id, u32 cmd, u8 is_indirect, u32 len,
 	return mbox_send_cmd_common_retry(id, cmd, is_indirect, len, arg,
 					  urgent, resp_buf_len, resp_buf);
 }
+#endif
 
 int mbox_hps_stage_notify(u32 execution_stage)
 {
@@ -561,18 +571,22 @@ int mbox_send_cmd_only(u8 id, u32 cmd, u8 is_indirect, u32 len, u32 *arg)
 	return mbox_send_cmd_only_common(id, cmd, is_indirect, len, arg);
 }
 
+#ifdef CONFIG_ARMV8_PSCI
 int __secure mbox_send_cmd_only_psci(u8 id, u32 cmd, u8 is_indirect, u32 len,
 				     u32 *arg)
 {
 	return mbox_send_cmd_only_common(id, cmd, is_indirect, len, arg);
 }
+#endif
 
 int mbox_rcv_resp(u32 *resp_buf, u32 resp_buf_max_len)
 {
 	return __mbox_rcv_resp(resp_buf, resp_buf_max_len);
 }
 
+#ifdef CONFIG_ARMV8_PSCI
 int __secure mbox_rcv_resp_psci(u32 *resp_buf, u32 resp_buf_max_len)
 {
 	return __mbox_rcv_resp(resp_buf, resp_buf_max_len);
 }
+#endif
