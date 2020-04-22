@@ -9,7 +9,10 @@
 #include <linux/errno.h>
 #include <asm/arch/rsu.h>
 #include <asm/arch/rsu_misc.h>
+#include <asm/arch/smc_api.h>
 #include <asm/system.h>
+#include <linux/errno.h>
+#include <linux/intel-smc.h>
 
 /* RSU Notify Bitmasks */
 #define RSU_NOTIFY_IGNORE_STAGE         BIT(18)
@@ -726,13 +729,22 @@ extern u32 smc_rsu_dcmf_version[4];
 static int copy_dcmf_version_to_smc(u32 *versions)
 {
 #if !defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_ATF)
-	return -EINTF;
+	u64 args[2];
 #else
 	void *dcmf_versions;
+#endif
 
 	if (!versions)
 		return -EINVAL;
 
+#if !defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_ATF)
+	args[0] = ((u64)versions[1] << 32) | versions[0];
+	args[1] = ((u64)versions[3] << 32) | versions[2];
+
+	if (invoke_smc(INTEL_SIP_SMC_RSU_COPY_DCMF_VERSION, args,
+		       ARRAY_SIZE(args), NULL, 0))
+		return -EINVAL;
+#else
 	/*
 	 * Convert the address of smc_rsu_dcmf_versions
 	 * to pre-relocation address.
@@ -741,9 +753,8 @@ static int copy_dcmf_version_to_smc(u32 *versions)
 			(u64)secure_ram_addr(smc_rsu_dcmf_version);
 
 	memcpy(dcmf_versions, versions, sizeof(*versions) * 4);
-
-	return 0;
 #endif
+	return 0;
 }
 
 /**
