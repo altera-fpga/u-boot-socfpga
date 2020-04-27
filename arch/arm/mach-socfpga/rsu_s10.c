@@ -867,7 +867,11 @@ int do_rsu(struct cmd_tbl *cmdtp, int flag, int argc, char * const argv[])
 
 U_BOOT_CMD(
 	rsu, 5, 1, do_rsu,
-	"SoCFPGA Stratix10 SoC Remote System Update",
+#ifdef CONFIG_TARGET_SOCFPGA_AGILEX
+	"Agilex SoC Remote System Update",
+#else
+	"Stratix 10 SoC Remote System Update",
+#endif
 	"dtb   - Update Linux DTB qspi-boot parition offset with spt0 value\n"
 	"list  - List down the available bitstreams in flash\n"
 	"slot_by_name <name> - find slot by name and display the slot number\n"
