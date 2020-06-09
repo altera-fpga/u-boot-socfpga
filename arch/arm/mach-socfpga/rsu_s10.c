@@ -707,6 +707,59 @@ static int slot_rename(int argc, char * const argv[])
 	return CMD_RET_SUCCESS;
 }
 
+static int slot_delete(int argc, char * const argv[])
+{
+	int slot;
+	char *endp;
+	int ret;
+
+	if (argc != 2)
+		return CMD_RET_USAGE;
+
+	if (rsu_init(NULL))
+		return CMD_RET_FAILURE;
+
+	slot = dectoul(argv[1], &endp);
+
+	ret = rsu_slot_delete(slot);
+	rsu_exit();
+
+	if (ret < 0)
+		return CMD_RET_FAILURE;
+
+	printf("Slot %d deleted.\n", slot);
+	return CMD_RET_SUCCESS;
+}
+
+static int slot_create(int argc, char * const argv[])
+{
+	char *endp;
+	char *name;
+	int address;
+	int size;
+	int ret;
+
+	if (argc != 4)
+		return CMD_RET_USAGE;
+
+	if (rsu_init(NULL))
+		return CMD_RET_FAILURE;
+
+	name = argv[1];
+	address = simple_strtoul(argv[2], &endp, 16);
+	size = simple_strtoul(argv[3], &endp, 16);
+
+	ret = rsu_slot_create(name, address, size);
+	rsu_exit();
+
+	if (ret < 0)
+		return CMD_RET_FAILURE;
+
+	printf("Slot %s created at 0x%08x with size =  0x%08x bytes.\n", name,
+	       address, size);
+	return CMD_RET_SUCCESS;
+}
+
 static int status_log(int argc, char * const argv[])
 {
 	struct rsu_status_info info;
@@ -853,6 +906,8 @@ static const struct func_t rsu_func_t[] = {
 	{"slot_program_buf_raw", slot_program_buf_raw},
 	{"slot_program_factory_update_buf", slot_program_factory_update_buf},
 	{"slot_rename", slot_rename},
+	{"slot_delete", slot_delete},
+	{"slot_create", slot_create},
 	{"slot_size", slot_size},
 	{"slot_verify_buf", slot_verify_buf},
 	{"slot_verify_buf_raw", slot_verify_buf_raw},
@@ -907,6 +962,8 @@ U_BOOT_CMD(
 	"slot_program_buf_raw <slot> <buffer> <size> - program raw buffer into slot\n"
 	"slot_program_factory_update_buf <slot> <buffer> <size> - program factory update buffer into slot, and make it highest priority\n"
 	"slot_rename <slot> <name> - rename slot\n"
+	"slot_delete <slot> - delete slot\n"
+	"slot_create <name> <address> <size> - create slot\n"
 	"slot_size <slot> - display slot size\n"
 	"slot_verify_buf <slot> <buffer> <size> - verify slot contents against buffer\n"
 	"slot_verify_buf_raw <slot> <buffer> <size> - verify slot contents against raw buffer\n"

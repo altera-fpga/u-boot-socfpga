@@ -265,6 +265,24 @@ int rsu_slot_load_factory(void);
 int rsu_slot_rename(int slot, char *name);
 
 /**
+ * rsu_slot_delete() - Delete the selected slot.
+ * @slot: slot number
+ *
+ * Returns 0 on success, or Error Code
+ */
+int rsu_slot_delete(int slot);
+
+/**
+ * rsu_slot_create() - Create a new slot.
+ * @name: slot name
+ * @address: slot start address
+ * @size: slot size
+ *
+ * Returns 0 on success, or Error Code
+ */
+int rsu_slot_create(char *name, u64 address, unsigned int size);
+
+/**
  * rsu_status_log() - Copy firmware status log to info struct
  * @info: pointer to info struct to fill in
  *

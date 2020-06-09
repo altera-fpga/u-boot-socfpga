@@ -39,6 +39,9 @@
 #define DCIO_MAX_RETRY_OFFSET   0x10018C
 #endif
 
+#define SPT_MAX_PARTITIONS 	127
+#define MIN_QSPI_ERASE_SIZE	4096
+
 /**
  * struct sub_partition_table_partition - SPT partition structure
  * @name: sub-partition name
@@ -66,7 +69,7 @@ struct sub_partition_table {
 	u32 version;
 	u32 partitions;
 	u32 rsvd[5];
-	struct sub_partition_table_partition partition[127];
+	struct sub_partition_table_partition partition[SPT_MAX_PARTITIONS];
 };
 
 /**
@@ -799,6 +802,107 @@ static int partition_rename(int part_num, char *name)
 }
 
 /**
+ * partition_delete() - delete a partition
+ * @part_num: the selected partition
+ *
+ * Return: 0 for success, or -1 on error
+ */
+static int partition_delete(int part_num)
+{
+	int x;
+
+	if (part_num < 0 || part_num >= spt.partitions) {
+		rsu_log(RSU_ERR, "Invalid partition number\n");
+		return -1;
+	}
+
+	for (x = part_num; x < spt.partitions; x++)
+		spt.partition[x] = spt.partition[x + 1];
+
+	spt.partitions--;
+
+	if (writeback_spt())
+		return -1;
+
+	if (load_spt())
+		return -1;
+
+	return 0;
+}
+
+/**
+ * partition_create() - create a partition
+ * @name: partition name
+ * @start: partition start address
+ * @size: partition size
+ *
+ * Return: 0 for success, or -1 on error
+ */
+static int partition_create(char *name, u64 start, unsigned int size)
+{
+	int x;
+	u64 end = start + size;
+
+	if (size % MIN_QSPI_ERASE_SIZE) {
+		rsu_log(RSU_ERR, "Invalid partition size\n");
+		return -1;
+	}
+
+	if (start % MIN_QSPI_ERASE_SIZE) {
+		rsu_log(RSU_ERR, "Invalid partition address\n");
+		return -1;
+	}
+
+	if (strnlen(name, sizeof(spt.partition[0].name)) >=
+	    sizeof(spt.partition[0].name)) {
+		rsu_log(RSU_ERR, "Partition name is too long - limited to %i\n",
+			sizeof(spt.partition[0].name) - 1);
+		return -1;
+	}
+
+	for (x = 0; x < spt.partitions; x++) {
+		if (strncmp(spt.partition[x].name, name,
+			    sizeof(spt.partition[0].name) - 1) == 0) {
+			rsu_log(RSU_ERR, "Partition name already in use\n");
+			return -1;
+		}
+	}
+
+	if (spt.partitions == SPT_MAX_PARTITIONS) {
+		rsu_log(RSU_ERR, "Partition table is full\n");
+		return -1;
+	}
+
+	for (x = 0; x < spt.partitions; x++) {
+		u64 pstart = spt.partition[x].offset;
+		u64 pend = spt.partition[x].offset +
+			     spt.partition[x].length;
+
+		if (start < pend && end > pstart) {
+			rsu_log(RSU_ERR, "Partition overlap\n");
+			return -1;
+		}
+	}
+
+	rsu_misc_safe_strcpy(spt.partition[spt.partitions].name,
+			     sizeof(spt.partition[0].name), name,
+			     sizeof(spt.partition[0].name));
+	spt.partition[spt.partitions].offset = start;
+	spt.partition[spt.partitions].length = size;
+	spt.partition[spt.partitions].flags = 0;
+
+	spt.partitions++;
+
+	if (writeback_spt())
+		return -1;
+
+	if (load_spt())
+		return -1;
+
+	return 0;
+}
+
+/**
  * priority_get() - get the selected partition's priority
  * @part_num: the selected partition number
  *
@@ -1082,6 +1186,8 @@ static struct rsu_ll_intf qspi_ll_intf = {
 	.partition.reserved = partition_reserved,
 	.partition.readonly = partition_readonly,
 	.partition.rename = partition_rename,
+	.partition.delete = partition_delete,
+	.partition.create = partition_create,
 
 	.priority.get = priority_get,
 	.priority.add = priority_add,

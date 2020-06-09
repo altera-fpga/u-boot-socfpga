@@ -574,6 +574,69 @@ int rsu_slot_rename(int slot, char *name)
 }
 
 /**
+ * rsu_slot_delete() - Delete the selected slot.
+ * @slot: slot number
+ *
+ * Returns 0 on success, or Error Code
+ */
+int rsu_slot_delete(int slot)
+{
+	int part_num;
+
+	if (!ll_intf)
+		return -EINTF;
+
+	if (slot < 0 || slot >= rsu_slot_count()) {
+		rsu_log(RSU_ERR, "Invalid slot number\n");
+		return -ESLOTNUM;
+	}
+
+	if (rsu_misc_writeprotected(slot)) {
+		rsu_log(RSU_ERR, "Trying to delete a write protected slot\n");
+		return -EWRPROT;
+	}
+
+	part_num = rsu_misc_slot2part(ll_intf, slot);
+	if (part_num < 0)
+		return -ESLOTNUM;
+
+	if (ll_intf->priority.remove(part_num))
+		return -ELOWLEVEL;
+
+	if (ll_intf->data.erase(part_num))
+		return -ELOWLEVEL;
+
+	if (ll_intf->partition.delete(part_num))
+		return -ELOWLEVEL;
+
+	return 0;
+}
+
+/**
+ * rsu_slot_create() - Create a new slot.
+ * @name: slot name
+ * @address: slot start address
+ * @size: slot size
+ *
+ * Returns 0 on success, or Error Code
+ */
+int rsu_slot_create(char *name, u64 address, unsigned int size)
+{
+	if (!ll_intf)
+		return -EINTF;
+
+	if (rsu_misc_is_rsvd_name(name)) {
+		rsu_log(RSU_ERR, "Partition create uses a reserved name\n");
+		return -ENAME;
+	}
+
+	if (ll_intf->partition.create(name, address, size))
+		return -ELOWLEVEL;
+
+	return 0;
+}
+
+/**
  * rsu_status_log() - Copy firmware status log to info struct
  * @info: pointer to info struct to fill in
  *
