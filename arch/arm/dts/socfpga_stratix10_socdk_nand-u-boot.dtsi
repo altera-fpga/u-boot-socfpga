@@ -1,0 +1,36 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright Altera Corporation (C) 2020. All rights reserved.
+ */
+
+#include "socfpga_stratix10_socdk-u-boot.dtsi"
+
+/ {
+	chosen {
+		u-boot,boot0 = <&nand>;
+	};
+
+	memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		device_type = "memory";
+		/* 4GB */
+		reg = <0 0x00000000 0 0x80000000>,
+		      <1 0x80000000 0 0x80000000>;
+		u-boot,dm-pre-reloc;
+	};
+
+	soc {
+		eccmgr {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+		};
+	};
+};
+
+&nand {
+	u-boot,dm-pre-reloc;
+	nand-bus-width = <16>;
+};
