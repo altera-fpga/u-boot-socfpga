@@ -59,8 +59,8 @@ struct rsu_ll_intf {
 		int (*status)(struct rsu_status_info *info);
 		int (*notify)(u32 value);
 		int (*dcmf_version)(u32 *versions);
+		int (*max_retry)(u8 *value);
 	} fw_ops;
-
 };
 
 /**

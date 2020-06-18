@@ -309,4 +309,15 @@ int rsu_reset_retry_counter(void);
  */
 int rsu_dcmf_version(u32 *versions);
 
+/**
+ * rsu_max_retry() - retrieve the max_retry parameter
+ * @value: pointer to where the max_retry will be stored
+ *
+ * This function is used to retrieve the max_retry parameter from the decision
+ * firmware section in flash
+ *
+ * Returns: 0 on success, or error code
+ */
+int rsu_max_retry(u8 *value);
+
 #endif

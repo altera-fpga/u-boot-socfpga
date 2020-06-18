@@ -708,3 +708,33 @@ int rsu_dcmf_version(u32 *versions)
 
 	return copy_dcmf_version_to_smc(versions);
 }
+
+/**
+ * rsu_max_retry() - retrieve the max_retry parameter
+ * @value: pointer to where the max_retry will be stored
+ *
+ * This function is used to retrieve the max_retry parameter from the decision
+ * firmware section in flash
+ *
+ * Returns: 0 on success, or error code
+ */
+int rsu_max_retry(u8 *value)
+{
+	int ret;
+
+	if (!ll_intf)
+		return -EINTF;
+
+	if (!value)
+		return -EARGS;
+
+	ret = ll_intf->fw_ops.max_retry(value);
+	if (ret)
+		return ret;
+
+#if !defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_ATF)
+	return -EINTF;
+#else
+	return smc_store_max_retry(*value);
+#endif
+}

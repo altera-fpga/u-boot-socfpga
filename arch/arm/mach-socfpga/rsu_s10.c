@@ -813,6 +813,25 @@ static int display_dcmf_version(int argc, char * const argv[])
 	return CMD_RET_SUCCESS;
 }
 
+static int display_max_retry(int argc, char * const argv[])
+{
+	int ret;
+	u8 value;
+
+	if (rsu_init(NULL))
+		return CMD_RET_FAILURE;
+
+	ret = rsu_max_retry(&value);
+	rsu_exit();
+
+	if (ret)
+		return CMD_RET_FAILURE;
+
+	printf("max_retry = %d\n", (int)value);
+
+	return CMD_RET_SUCCESS;
+}
+
 struct func_t {
 	const char *cmd_string;
 	int (*func_ptr)(int cmd_argc, char * const cmd_argv[]);
@@ -842,7 +861,8 @@ static const struct func_t rsu_func_t[] = {
 	{"notify", notify},
 	{"clear_error_status", clear_error_status},
 	{"reset_retry_counter", reset_retry_counter},
-	{"display_dcmf_version", display_dcmf_version}
+	{"display_dcmf_version", display_dcmf_version},
+	{"display_max_retry", display_max_retry}
 };
 
 int do_rsu(struct cmd_tbl *cmdtp, int flag, int argc, char * const argv[])
@@ -896,5 +916,6 @@ U_BOOT_CMD(
 	"clear_error_status - clear the RSU error status\n"
 	"reset_retry_counter - reset the RSU retry counter\n"
 	"display_dcmf_version - display DCMF versions and store them for SMC handler usage\n"
+	"display_max_retry - display max_retry parameter, and store it for SMC handler usage\n"
 	""
 );

@@ -16,6 +16,23 @@ DECLARE_GLOBAL_DATA_PTR;
 
 u32 smc_rsu_update_address __secure_data = 0;
 u32 smc_rsu_dcmf_version[4] __secure_data = {0, 0, 0, 0};
+static u32 smc_rsu_max_retry __secure_data;
+
+int smc_store_max_retry(u32 value)
+{
+	void *max_retry;
+
+	/*
+	 * Convert the address of smc_rsu_max_retry
+	 * to pre-relocation address.
+	 */
+	max_retry = (char *)__secure_start - CONFIG_ARMV8_SECURE_BASE +
+			(u64)secure_ram_addr(&smc_rsu_max_retry);
+
+	memcpy(max_retry, &value, sizeof(u32));
+
+	return 0;
+}
 
 static void __secure smc_socfpga_rsu_status_psci(unsigned long function_id)
 {
@@ -108,6 +125,22 @@ static void __secure smc_socfpga_rsu_dcmf_version_psci(unsigned long
 	SMC_RET_REG_MEM(r);
 }
 
+static void __secure smc_socfpga_rsu_max_retry_psci(unsigned long
+						       function_id)
+{
+	SMC_ALLOC_REG_MEM(r);
+	u64 resp0;
+
+	SMC_INIT_REG_MEM(r);
+
+	resp0 = smc_rsu_max_retry;
+
+	SMC_ASSIGN_REG_MEM(r, SMC_ARG0, INTEL_SIP_SMC_STATUS_OK);
+	SMC_ASSIGN_REG_MEM(r, SMC_ARG1, resp0);
+
+	SMC_RET_REG_MEM(r);
+}
+
 DECLARE_SECURE_SVC(rsu_status_psci, INTEL_SIP_SMC_RSU_STATUS,
 		   smc_socfpga_rsu_status_psci);
 DECLARE_SECURE_SVC(rsu_update_psci, INTEL_SIP_SMC_RSU_UPDATE,
@@ -118,3 +151,5 @@ DECLARE_SECURE_SVC(rsu_retry_counter_psci, INTEL_SIP_SMC_RSU_RETRY_COUNTER,
 		   smc_socfpga_rsu_retry_counter_psci);
 DECLARE_SECURE_SVC(rsu_dcmf_version_psci, INTEL_SIP_SMC_RSU_DCMF_VERSION,
 		   smc_socfpga_rsu_dcmf_version_psci);
+DECLARE_SECURE_SVC(rsu_max_retry_psci, INTEL_SIP_SMC_RSU_MAX_RETRY,
+		   smc_socfpga_rsu_max_retry_psci);

@@ -30,11 +30,13 @@
 #define DCMF1_VERSION_OFFSET	0x080420
 #define DCMF2_VERSION_OFFSET	0x100420
 #define DCMF3_VERSION_OFFSET	0x180420
+#define DCIO_MAX_RETRY_OFFSET   0x20018C
 #else
 #define DCMF0_VERSION_OFFSET	0x000420
 #define DCMF1_VERSION_OFFSET	0x040420
 #define DCMF2_VERSION_OFFSET	0x080420
 #define DCMF3_VERSION_OFFSET	0x0C0420
+#define DCIO_MAX_RETRY_OFFSET   0x10018C
 #endif
 
 /**
@@ -1033,6 +1035,35 @@ static int dcmf_version(__u32 *versions)
 	return 0;
 }
 
+/**
+ * max_retry() - retrieve the max_retry parameter
+ * @value: pointer to where the max_retry will be stored
+ *
+ * This function is used to retrieve the max_retry parameter from the decision
+ * firmware data section.
+ *
+ * Returns: 0 on success, or error code
+ */
+static int max_retry(__u8 *value)
+{
+	int ret;
+	__u8 tmp;
+
+	if (!value)
+		return -1;
+
+	ret = spi_flash_read(flash, DCIO_MAX_RETRY_OFFSET, 1, &tmp);
+	if (ret) {
+		rsu_log(RSU_ERR, "read flash error=%i\n", ret);
+		return ret;
+	}
+
+	/* Add one, to make value consistent with Quartus view */
+	*value = tmp + 1;
+
+	return ret;
+}
+
 static void ll_exit(void)
 {
 	if (flash) {
@@ -1063,7 +1094,8 @@ static struct rsu_ll_intf qspi_ll_intf = {
 	.fw_ops.load = image_load,
 	.fw_ops.status = status_log,
 	.fw_ops.notify = notify_fw,
-	.fw_ops.dcmf_version = dcmf_version
+	.fw_ops.dcmf_version = dcmf_version,
+	.fw_ops.max_retry = max_retry
 };
 
 int rsu_ll_qspi_init(struct rsu_ll_intf **intf)
