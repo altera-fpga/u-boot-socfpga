@@ -794,6 +794,9 @@ int rsu_dcmf_version(u32 *versions)
  */
 int rsu_max_retry(u8 *value)
 {
+#if !defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_ATF)
+	u64 arg;
+#endif
 	int ret;
 
 	if (!ll_intf)
@@ -807,7 +810,10 @@ int rsu_max_retry(u8 *value)
 		return ret;
 
 #if !defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_ATF)
-	return -EINTF;
+	arg = *value;
+	if (invoke_smc(INTEL_SIP_SMC_RSU_COPY_MAX_RETRY, &arg, 1, NULL, 0))
+		return -EINVAL;
+	return 0;
 #else
 	return smc_store_max_retry(*value);
 #endif
