@@ -80,6 +80,7 @@ void __secure psci_cpu_on_64_mpidr(void)
 		"1:	wfe			\n"
 		"	ldr	x0, [%0]	\n"
 		"	ldr	x1, [%1]	\n"
+		"	cbz	x1, 1b		\n"
 		"	mrs	x2, mpidr_el1	\n"
 		"	and	x2, x2, #0xff	\n"
 		"	cmp	x0, x2		\n"
