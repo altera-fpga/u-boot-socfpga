@@ -34,6 +34,8 @@ static int intel_get_freeze_br_addr(fdt_addr_t *addr, unsigned int region)
 {
 	int offset;
 	char freeze_br[12];
+	struct fdt_resource r;
+	int ret;
 
 	snprintf(freeze_br, sizeof(freeze_br), "freeze_br%d", region);
 
@@ -49,13 +51,15 @@ static int intel_get_freeze_br_addr(fdt_addr_t *addr, unsigned int region)
 		return -ENODEV;
 	}
 
-	*addr = fdtdec_get_addr(gd->fdt_blob, offset, "reg");
-	if (*addr == FDT_ADDR_T_NONE) {
+	ret = fdt_get_resource(gd->fdt_blob, offset, "reg", 0, &r);
+	if (ret) {
 		printf("%s has no 'reg' property!\n", freeze_br);
-		return -ENXIO;
+		return ret;
 	}
 
-	return 0;
+	*addr = r.start;
+
+	return ret;
 }
 
 static int intel_freeze_br_do_freeze(unsigned int region)
