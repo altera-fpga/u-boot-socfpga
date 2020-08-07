@@ -866,6 +866,26 @@ static int display_dcmf_version(int argc, char * const argv[])
 	return CMD_RET_SUCCESS;
 }
 
+static int display_dcmf_status(int argc, char * const argv[])
+{
+	int i, ret;
+	u16 status[4];
+
+	if (rsu_init(NULL))
+		return CMD_RET_FAILURE;
+
+	ret = rsu_dcmf_status(status);
+	rsu_exit();
+
+	if (ret)
+		return CMD_RET_FAILURE;
+
+	for (i = 0; i < 4; i++)
+		printf("DCMF%d: %s\n", i, status[i] ? "Corrupted" : "OK");
+
+	return CMD_RET_SUCCESS;
+}
+
 static int display_max_retry(int argc, char * const argv[])
 {
 	int ret;
@@ -917,6 +937,7 @@ static const struct func_t rsu_func_t[] = {
 	{"clear_error_status", clear_error_status},
 	{"reset_retry_counter", reset_retry_counter},
 	{"display_dcmf_version", display_dcmf_version},
+	{"display_dcmf_status", display_dcmf_status},
 	{"display_max_retry", display_max_retry}
 };
 
@@ -973,6 +994,7 @@ U_BOOT_CMD(
 	"clear_error_status - clear the RSU error status\n"
 	"reset_retry_counter - reset the RSU retry counter\n"
 	"display_dcmf_version - display DCMF versions and store them for SMC handler usage\n"
+	"display_dcmf_status - display DCMF status and store it for SMC handler usage\n"
 	"display_max_retry - display max_retry parameter, and store it for SMC handler usage\n"
 	""
 );

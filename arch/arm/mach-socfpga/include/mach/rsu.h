@@ -27,11 +27,13 @@
 #define EARGS		14
 
 /* RSU Version Bitmasks */
-#define RSU_VERSION_ERR_MASK		GENMASK(31, 16)
+#define RSU_VERSION_CRT_IDX_MASK	GENMASK(31, 28)
+#define RSU_VERSION_ERR_MASK		GENMASK(27, 16)
 #define RSU_VERSION_DCMF_MASK		GENMASK(7, 0)
 #define RSU_VERSION_ACMF_MASK		GENMASK(15, 8)
 
 /* Macros for extracting RSU version fields */
+#define RSU_VERSION_CRT_DCMF_IDX(v)	FIELD_GET(RSU_VERSION_CRT_IDX_MASK, (v))
 #define RSU_VERSION_ERROR_SOURCE(v)	FIELD_GET(RSU_VERSION_ERR_MASK, (v))
 #define RSU_VERSION_ACMF_VERSION(v)	FIELD_GET(RSU_VERSION_ACMF_MASK, (v))
 #define RSU_VERSION_DCMF_VERSION(v)	FIELD_GET(RSU_VERSION_DCMF_MASK, (v))
@@ -337,5 +339,19 @@ int rsu_dcmf_version(u32 *versions);
  * Returns: 0 on success, or error code
  */
 int rsu_max_retry(u8 *value);
+
+/**
+ * rsu_dcmf_status() - retrieve the decision firmware status
+ * @status: pointer to where the status will be stored
+ *
+ * This function is used to determine whether decision firmware copies are
+ * corrupted in flash, with the currently used decision firmware being used as
+ * reference. The status is an array of 4 values, one for each decision
+ * firmware copy. A 0 means the copy is fine, anything else means the copy is
+ * corrupted.
+ *
+ * Returns: 0 on success, or error code
+ */
+int rsu_dcmf_status(u16 *status);
 
 #endif

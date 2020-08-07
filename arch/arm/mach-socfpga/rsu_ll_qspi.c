@@ -25,18 +25,20 @@
 #define SPT_VERSION		0
 #define LIBRSU_VER		0
 
-#ifdef CONFIG_TARGET_SOCFPGA_AGILEX
-#define DCMF0_VERSION_OFFSET	0x000420
-#define DCMF1_VERSION_OFFSET	0x080420
-#define DCMF2_VERSION_OFFSET	0x100420
-#define DCMF3_VERSION_OFFSET	0x180420
-#define DCIO_MAX_RETRY_OFFSET   0x20018C
-#else
+#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_STRATIX10)
+#define DCMF_SIZE		0x040000
 #define DCMF0_VERSION_OFFSET	0x000420
 #define DCMF1_VERSION_OFFSET	0x040420
 #define DCMF2_VERSION_OFFSET	0x080420
 #define DCMF3_VERSION_OFFSET	0x0C0420
 #define DCIO_MAX_RETRY_OFFSET   0x10018C
+#else
+#define DCMF_SIZE		0x080000
+#define DCMF0_VERSION_OFFSET	0x000420
+#define DCMF1_VERSION_OFFSET	0x080420
+#define DCMF2_VERSION_OFFSET	0x100420
+#define DCMF3_VERSION_OFFSET	0x180420
+#define DCIO_MAX_RETRY_OFFSET   0x20018C
 #endif
 
 #define SPT_MAX_PARTITIONS 	127
@@ -1140,6 +1142,82 @@ static int dcmf_version(__u32 *versions)
 }
 
 /**
+ * dcmf_status() - determine if decision dcmfs are corrupted
+ * @status: pointer to where the status will be stored
+ *
+ * This function is used to determine whether decision firmware copies are
+ * corrupted in flash, with the currently used decision firmware being used as
+ * reference. The status is an array of 4 values, one for each decision
+ * firmware copy. A 0 means the copy is fine, anything else means the copy is
+ * corrupted.
+ *
+ * Returns: 0 on success, or error code
+ */
+static int dcmf_status(u16 *status)
+{
+	int ret;
+	struct rsu_status_info rsu_status;
+	char *buffa = NULL;
+	char *buffb = NULL;
+	int crt_dcmf;
+	int idx;
+
+	ret = status_log(&rsu_status);
+	if (ret) {
+		rsu_log(RSU_ERR, "status_log error");
+		return -1;
+	}
+	crt_dcmf = RSU_VERSION_CRT_DCMF_IDX(rsu_status.version);
+
+	buffa = (char *)malloc(DCMF_SIZE);
+	if (!buffa) {
+		rsu_log(RSU_ERR, "malloc error");
+		return -1;
+	}
+
+	buffb = (char *)malloc(DCMF_SIZE);
+	if (!buffb) {
+		rsu_log(RSU_ERR, "malloc error");
+		ret = -1;
+		goto ret_val;
+	}
+
+	ret = spi_flash_read(flash, crt_dcmf * DCMF_SIZE, DCMF_SIZE, buffa);
+	if (ret) {
+		rsu_log(RSU_ERR, "read flash error=%i\n", ret);
+		goto ret_val;
+	}
+
+	for (idx = 0; idx < 4; idx++) {
+		int i;
+
+		status[idx] = 0;
+
+		if (idx == crt_dcmf)
+			continue;
+
+		ret = spi_flash_read(flash, idx * DCMF_SIZE, DCMF_SIZE, buffb);
+		if (ret) {
+			rsu_log(RSU_ERR, "read flash error=%i\n", ret);
+			goto ret_val;
+		}
+
+		for (i = 0; i < DCMF_SIZE; i++)
+			if (buffa[i] != buffb[i]) {
+				status[idx] = 1;
+				break;
+			}
+	}
+
+ret_val:
+	if (buffa)
+		free(buffa);
+	if (buffb)
+		free(buffb);
+	return ret;
+}
+
+/**
  * max_retry() - retrieve the max_retry parameter
  * @value: pointer to where the max_retry will be stored
  *
@@ -1201,6 +1279,7 @@ static struct rsu_ll_intf qspi_ll_intf = {
 	.fw_ops.status = status_log,
 	.fw_ops.notify = notify_fw,
 	.fw_ops.dcmf_version = dcmf_version,
+	.fw_ops.dcmf_status = dcmf_status,
 	.fw_ops.max_retry = max_retry
 };
 

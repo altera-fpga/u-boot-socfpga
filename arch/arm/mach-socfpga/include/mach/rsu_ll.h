@@ -28,6 +28,7 @@
  * @fw_ops.load: inform firmware to load image
  * @fw_ops.status: get status from firmware
  * @fw_ops.notify: send notify command to firmware
+ * @fw_ops.dcmf_status: get dcmf status
  */
 struct rsu_ll_intf {
 	void (*exit)(void);
@@ -61,6 +62,7 @@ struct rsu_ll_intf {
 		int (*status)(struct rsu_status_info *info);
 		int (*notify)(u32 value);
 		int (*dcmf_version)(u32 *versions);
+		int (*dcmf_status)(u16 *status);
 		int (*max_retry)(u8 *value);
 	} fw_ops;
 };

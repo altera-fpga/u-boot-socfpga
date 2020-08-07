@@ -818,3 +818,63 @@ int rsu_max_retry(u8 *value)
 	return smc_store_max_retry(*value);
 #endif
 }
+
+extern u16 smc_rsu_dcmf_status[4];
+
+static int copy_dcmf_status_to_smc(u16 *status)
+{
+#if !defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_ATF)
+	u64 arg;
+#else
+	void *dcmf_status;
+#endif
+
+	if (!status)
+		return -EINVAL;
+
+#if !defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_ATF)
+	arg = ((u64)status[3] << 48) | ((u64)status[2] << 32) |
+	      ((u64)status[1] << 16) | status[0];
+	if (invoke_smc(INTEL_SIP_SMC_RSU_COPY_DCMF_STATUS, &arg, 1, NULL, 0))
+		return -EINVAL;
+#else
+	/*
+	 * Convert the address of smc_rsu_dcmf_status
+	 * to pre-relocation address.
+	 */
+	dcmf_status = (char *)__secure_start - CONFIG_ARMV8_SECURE_BASE +
+			(u64)secure_ram_addr(smc_rsu_dcmf_status);
+
+	memcpy(dcmf_status, status, sizeof(*status) * 4);
+#endif
+	return 0;
+}
+
+/**
+ * rsu_dcmf_status() - retrieve the decision firmware status
+ * @status: pointer to where the statuses will be stored
+ *
+ * This function is used to determine whether decision firmware copies are
+ * corrupted in flash, with the currently used decision firmware being used as
+ * reference. The status is an array of 4 values, one for each decision
+ * firmware copy. A 0 means the copy is fine, anything else means the copy is
+ * corrupted. The status is also reported to the SMC handler.
+ *
+ * Returns: 0 on success, or error code
+ */
+int rsu_dcmf_status(u16 *status)
+{
+	int ret;
+
+	if (!ll_intf)
+		return -EINTF;
+
+	if (!status)
+		return -EARGS;
+
+	ret = ll_intf->fw_ops.dcmf_status(status);
+	if (ret)
+		return ret;
+
+	return copy_dcmf_status_to_smc(status);
+}

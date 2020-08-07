@@ -14,8 +14,14 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
+#define DCMF_STATUS_INVALID 0xFFFF
+
 u32 smc_rsu_update_address __secure_data = 0;
 u32 smc_rsu_dcmf_version[4] __secure_data = {0, 0, 0, 0};
+u16 smc_rsu_dcmf_status[4] __secure_data = {DCMF_STATUS_INVALID,
+					    DCMF_STATUS_INVALID,
+					    DCMF_STATUS_INVALID,
+					    DCMF_STATUS_INVALID};
 static u32 smc_rsu_max_retry __secure_data;
 
 int smc_store_max_retry(u32 value)
@@ -141,6 +147,33 @@ static void __secure smc_socfpga_rsu_max_retry_psci(unsigned long
 	SMC_RET_REG_MEM(r);
 }
 
+static void __secure smc_socfpga_rsu_dcmf_status_psci(unsigned long function_id)
+{
+	SMC_ALLOC_REG_MEM(r);
+	u64 resp0;
+
+	SMC_INIT_REG_MEM(r);
+
+	if (smc_rsu_dcmf_status[0] == DCMF_STATUS_INVALID ||
+	    smc_rsu_dcmf_status[1] == DCMF_STATUS_INVALID ||
+	    smc_rsu_dcmf_status[2] == DCMF_STATUS_INVALID ||
+	    smc_rsu_dcmf_status[3] == DCMF_STATUS_INVALID) {
+		SMC_ASSIGN_REG_MEM(r, SMC_ARG0, INTEL_SIP_SMC_RSU_ERROR);
+		SMC_RET_REG_MEM(r);
+		return;
+	}
+
+	resp0 = smc_rsu_dcmf_status[3];
+	resp0 = (resp0 << 16) | (u64)smc_rsu_dcmf_status[2];
+	resp0 = (resp0 << 16) | (u64)smc_rsu_dcmf_status[1];
+	resp0 = (resp0 << 16) | (u64)smc_rsu_dcmf_status[0];
+
+	SMC_ASSIGN_REG_MEM(r, SMC_ARG0, INTEL_SIP_SMC_STATUS_OK);
+	SMC_ASSIGN_REG_MEM(r, SMC_ARG1, resp0);
+
+	SMC_RET_REG_MEM(r);
+}
+
 DECLARE_SECURE_SVC(rsu_status_psci, INTEL_SIP_SMC_RSU_STATUS,
 		   smc_socfpga_rsu_status_psci);
 DECLARE_SECURE_SVC(rsu_update_psci, INTEL_SIP_SMC_RSU_UPDATE,
@@ -153,3 +186,5 @@ DECLARE_SECURE_SVC(rsu_dcmf_version_psci, INTEL_SIP_SMC_RSU_DCMF_VERSION,
 		   smc_socfpga_rsu_dcmf_version_psci);
 DECLARE_SECURE_SVC(rsu_max_retry_psci, INTEL_SIP_SMC_RSU_MAX_RETRY,
 		   smc_socfpga_rsu_max_retry_psci);
+DECLARE_SECURE_SVC(rsu_dcmf_status_psci, INTEL_SIP_SMC_RSU_DCMF_STATUS,
+		   smc_socfpga_rsu_dcmf_status_psci);
