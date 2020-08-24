@@ -65,6 +65,13 @@ struct rsu_ll_intf {
 		int (*dcmf_status)(u16 *status);
 		int (*max_retry)(u8 *value);
 	} fw_ops;
+
+	struct {
+		int (*empty)(void);
+		int (*restore)(u64 address);
+		int (*save)(u64 address);
+		int (*corrupted)(void);
+	} cpb_ops;
 };
 
 /**

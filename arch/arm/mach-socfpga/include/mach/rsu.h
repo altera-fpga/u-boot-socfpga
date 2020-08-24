@@ -25,6 +25,7 @@
 #define ELOWLEVEL	12
 #define EWRPROT		13
 #define EARGS		14
+#define ECORRUPTED_CPB	15
 
 /* RSU Version Bitmasks */
 #define RSU_VERSION_CRT_IDX_MASK	GENMASK(31, 28)
@@ -354,4 +355,32 @@ int rsu_max_retry(u8 *value);
  */
 int rsu_dcmf_status(u16 *status);
 
+/**
+ * rsu_create_empty_cpb() - create a cpb with header field only
+ * This function is used to create a empty configuration pointer block
+ * (CPB) with the header field only.
+ *
+ * Returns: 0 on success, or error code
+ */
+int rsu_create_empty_cpb(void);
+
+/**
+ * rsu_restore_cpb() - restore the cpb from an address
+ * @address: the address which cpb is restored from.
+ *
+ * This function is used to restore a saved CPB from an address.
+ *
+ * Returns: 0 on success, or error code
+ */
+int rsu_restore_cpb(u64 address);
+
+/**
+ * rsu_save_cpb() - save cpb to the address
+ * @address: the address which cpb is saved to.
+ *
+ * This function is used to save CPB to an address.
+ *
+ * Returns: 0 on success, or error code
+ */
+int rsu_save_cpb(u64 address);
 #endif
