@@ -60,4 +60,5 @@ int rsu_misc_spt_checksum_enabled(void);
 void rsu_log(const enum rsu_log_level level, const char *format, ...);
 int smc_store_max_retry(u32 value);
 
+void swap_bits(char *data, int size);
 #endif

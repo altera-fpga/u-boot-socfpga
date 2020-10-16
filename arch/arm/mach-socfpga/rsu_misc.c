@@ -119,7 +119,7 @@ static int add_section(struct rsu_image_state *state, u64 section)
  * @data: pointer point to data
  * @len: data length
  */
-static void swap_bits(char *data, int len)
+void swap_bits(char *data, int len)
 {
 	int x, y;
 	char tmp;

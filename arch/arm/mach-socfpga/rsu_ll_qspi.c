@@ -80,7 +80,8 @@ struct sub_partition_table {
 	u32 magic_number;
 	u32 version;
 	u32 partitions;
-	u32 rsvd[5];
+	u32 checksum;
+	u32 rsvd[4];
 	struct sub_partition_table_partition partition[SPT_MAX_PARTITIONS];
 };
 
@@ -323,6 +324,8 @@ static int writeback_spt(void)
 {
 	int x;
 	int updates = 0;
+	char *spt_data;
+	u32 calc_crc;
 
 	for (x = 0; x < spt.partitions; x++) {
 		if (strcmp(spt.partition[x].name, "SPT0") &&
@@ -332,6 +335,45 @@ static int writeback_spt(void)
 		if (erase_part(x)) {
 			rsu_log(RSU_ERR, "failed to erase SPTx");
 			return -1;
+		}
+
+		if (spt.version > SPT_VERSION &&
+		    rsu_misc_spt_checksum_enabled()) {
+			rsu_log(RSU_DEBUG, "update SPT checksum...\n");
+			spt_data = (char *)malloc(SPT_SIZE);
+			if (!spt_data) {
+				rsu_log(RSU_ERR,
+					"failed to allocate spt_data\n");
+				return -ENOMEM;
+			}
+
+			spt.checksum = (u32)0xFFFFFFFF;
+			if (write_part(x, SPT_CHECKSUM_OFFSET,
+				       &spt.checksum,
+				       sizeof(spt.checksum))) {
+				rsu_log(RSU_ERR,
+					"failed to write SPTx table");
+				free(spt_data);
+				return -EINVAL;
+			}
+
+			memcpy(spt_data, &spt, SPT_SIZE);
+			memset(spt_data + SPT_CHECKSUM_OFFSET, 0,
+			       sizeof(spt.checksum));
+
+			swap_bits(spt_data, SPT_SIZE);
+			calc_crc = crc32(0, (void *)spt_data, SPT_SIZE);
+			spt.checksum = be32_to_cpu(calc_crc);
+			swap_bits(spt_data, SPT_SIZE);
+			free(spt_data);
+
+			if (write_part(x, SPT_CHECKSUM_OFFSET,
+				       &spt.checksum,
+				       sizeof(spt.checksum))) {
+				rsu_log(RSU_ERR,
+					"failed to write SPTx table");
+				return -EINVAL;
+			}
 		}
 
 		spt.magic_number = (u32)0xFFFFFFFF;
@@ -430,6 +472,9 @@ static int check_spt(void)
 	int cpb0_found = 0;
 	int cpb1_found = 0;
 
+	u32 calc_crc;
+	char *spt_data;
+
 	/*
 	 * Make sure the SPT names are '\0' terminated. Truncate last byte
 	 * if the name uses all available bytes.  Perform validity check on
@@ -439,12 +484,29 @@ static int check_spt(void)
 	rsu_log(RSU_DEBUG,
 		"MAX length of a name = %i bytes\n", max_len - 1);
 
-	if (spt.version > SPT_VERSION) {
-		rsu_log(RSU_WARNING, "SPT version %i is greater than %i\n",
-			spt.version, SPT_VERSION);
-		rsu_log(RSU_WARNING,
-			"RSU Version %i - update to for newer features\n",
-			LIBRSU_VER);
+	if (spt.version > SPT_VERSION &&
+	    rsu_misc_spt_checksum_enabled()) {
+		rsu_log(RSU_DEBUG, "check SPT checksum...\n");
+
+		spt_data = (char *)malloc(SPT_SIZE);
+		if (!spt_data) {
+			rsu_log(RSU_ERR, "failed to allocate spt_data\n");
+			return -ENOMEM;
+		}
+
+		memcpy(spt_data, &spt, SPT_SIZE);
+		memset(spt_data + SPT_CHECKSUM_OFFSET, 0,
+		       sizeof(spt.checksum));
+
+		swap_bits(spt_data, SPT_SIZE);
+		calc_crc = crc32(0, (void *)spt_data, SPT_SIZE);
+		if (be32_to_cpu(spt.checksum) != calc_crc) {
+			rsu_log(RSU_ERR, "Error, bad SPT checksum\n");
+			free(spt_data);
+			return -EINVAL;
+		}
+		swap_bits(spt_data, SPT_SIZE);
+		free(spt_data);
 	}
 
 	if (spt.partitions > SPT_MAX_PARTITIONS) {
