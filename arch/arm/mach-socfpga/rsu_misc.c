@@ -233,6 +233,27 @@ int rsu_misc_writeprotected(int slot)
 }
 
 /**
+ * rsu_misc_spt_checksum_enabled() - check if the SPT checksum is enabled
+ *
+ * Return 1 if SPT checksum mechanism is enabled, 0 for disabled
+ */
+int rsu_misc_spt_checksum_enabled(void)
+{
+	char *c_enabled;
+	int checksum_enabled;
+
+	c_enabled = env_get("rsu_spt_checksum");
+	if (!strcmp(c_enabled, ""))
+		return 0;
+
+	checksum_enabled = (int)simple_strtol(c_enabled, NULL, 0);
+	if (checksum_enabled)
+		return 1;
+
+	return 0;
+}
+
+/**
  * rsu_misc_safe_strcpy() - buffer copy
  * @dst: pointer to dst
  * @dsz: dst buffer size

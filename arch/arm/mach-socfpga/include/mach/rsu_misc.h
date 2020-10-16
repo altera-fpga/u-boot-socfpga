@@ -55,6 +55,7 @@ int rsu_misc_is_slot(struct rsu_ll_intf *ll_intf, int part_num);
 int rsu_misc_slot2part(struct rsu_ll_intf *ll_intf, int slot);
 int rsu_misc_writeprotected(int slot);
 void rsu_misc_safe_strcpy(char *dst, int dsz, char *src, int ssz);
+int rsu_misc_spt_checksum_enabled(void);
 
 void rsu_log(const enum rsu_log_level level, const char *format, ...);
 int smc_store_max_retry(u32 value);
