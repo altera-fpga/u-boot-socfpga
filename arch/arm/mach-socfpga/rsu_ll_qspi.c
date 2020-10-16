@@ -52,6 +52,8 @@
 #define CPB_IMAGE_PTR_OFFSET	32
 #define CPB_IMAGE_PTR_NSLOTS	508
 
+#define SPT_CHECKSUM_OFFSET	0x0C
+
 /**
  * struct sub_partition_table_partition - SPT partition structure
  * @name: sub-partition name
@@ -114,6 +116,7 @@ static u32 spt1_offset;
 static int cpb0_part = -1;
 static int cpb1_part = -1;
 static bool cpb_corrupted;
+static bool cpb_fixed;
 static bool spt_corrupted;
 static int load_cpb(void);
 
@@ -805,6 +808,26 @@ static int load_cpb(void)
 	int x;
 	int cpb0_good = 0;
 	int cpb1_good = 0;
+	struct rsu_status_info status_info;
+	int cpb0_corrupted = 0;
+
+	if (mbox_rsu_status((u32 *)&status_info,
+			    sizeof(status_info) / 4)) {
+		rsu_log(RSU_ERR, "FW doesn't support RSU\n");
+		return -EINVAL;
+	}
+
+	if (!cpb_fixed && status_info.state == STATE_CPB0_CPB1_CORRUPTED) {
+		rsu_log(RSU_ERR, "FW detects both CPBs corrupted\n");
+		cpb_corrupted = true;
+		return -EINVAL;
+	}
+
+	if (!cpb_fixed && status_info.state == STATE_CPB0_CORRUPTED) {
+		rsu_log(RSU_ERR,
+			"FW detects corrupted CPB0 but CPB1 is fine\n");
+		cpb0_corrupted = 1;
+	}
 
 	for (x = 0; x < spt.partitions; x++) {
 		if (strcmp(spt.partition[x].name, "CPB0") == 0)
@@ -832,15 +855,17 @@ static int load_cpb(void)
 		rsu_log(RSU_ERR, "Bad CPB1 is bad\n");
 	}
 
-	rsu_log(RSU_DEBUG, "Reading CPB0\n");
-	if (read_part(cpb0_part, 0, &cpb, sizeof(cpb)) == 0 &&
-	    cpb.header.magic_number == CPB_MAGIC_NUMBER) {
-		cpb_slots = (u64 *)
-			     &cpb.data[cpb.header.image_ptr_offset];
-		if (check_cpb() == 0)
-			cpb0_good = 1;
-	} else {
-		rsu_log(RSU_ERR, "Bad CPB0 is bad\n");
+	if (!cpb0_corrupted) {
+		rsu_log(RSU_DEBUG, "Reading CPB0\n");
+		if (read_part(cpb0_part, 0, &cpb, sizeof(cpb)) == 0 &&
+		    cpb.header.magic_number == CPB_MAGIC_NUMBER) {
+			cpb_slots = (u64 *)
+				     &cpb.data[cpb.header.image_ptr_offset];
+			if (check_cpb() == 0)
+				cpb0_good = 1;
+		} else {
+			rsu_log(RSU_ERR, "Bad CPB0 is bad\n");
+		}
 	}
 
 	if (cpb0_good && cpb1_good) {
@@ -1043,6 +1068,7 @@ static int empty_cpb(void)
 
 	cpb_slots = (u64 *)&cpb.data[cpb.header.image_ptr_offset];
 	cpb_corrupted = false;
+	cpb_fixed = true;
 
 ops_error:
 	free(c_header);
@@ -1105,6 +1131,7 @@ static int restore_cpb_from_address(u64 address)
 	cpb_slots = (u64 *)&cpb.data[cpb.header.image_ptr_offset];
 
 	cpb_corrupted = false;
+	cpb_fixed = true;
 	return 0;
 }
 
@@ -1680,6 +1707,7 @@ static void ll_exit(void)
 	cpb0_part = -1;
 	cpb1_part = -1;
 	cpb_corrupted = false;
+	cpb_fixed = false;
 	spt_corrupted = false;
 
 	if (flash) {
