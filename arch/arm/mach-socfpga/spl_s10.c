@@ -70,9 +70,6 @@ void board_init_f(ulong dummy)
 
 	firewall_setup();
 
-	/* Setup and Initialize SMMU */
-	socfpga_init_smmu();
-
 	/* disable ocram security at CCU for non secure access */
 	clrbits_le32(CCU_REG_ADDR(CCU_CPU0_MPRT_ADMASK_MEM_RAM0),
 		     CCU_ADMASK_P_MASK | CCU_ADMASK_NS_MASK);
