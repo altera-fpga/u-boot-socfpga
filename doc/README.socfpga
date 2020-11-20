@@ -56,7 +56,7 @@ Table of Contents
 	---------------------------------------------------------------------------------------------------------------------
 	Remote System Update (RSU)		No		No		Yes		Yes		No
 	ARM Trusted Firmware (ATF)		No		No		Yes		Yes		Yes
-	Vendor Authorized Boot (VAB)		No		No		No		Yes		Yes
+	Vendor Authorized Boot (VAB)		No		No		No		No		Yes
 	---------------------------------------------------------------------------------------------------------------------
 
 
