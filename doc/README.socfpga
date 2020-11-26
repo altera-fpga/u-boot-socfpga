@@ -68,6 +68,13 @@ Table of Contents
 		Command format: vab addr len
 		Authorize 'len' bytes starting at 'addr' via vendor public key
 
+	3.2 Support SDRAM secure region in U-boot-ATF flow
+
+		First 1 MiB of SDRAM is configured as secure region, other
+		address spaces are non-secure regions. Only software executing
+		at secure state EL3 (eg: U-boot SPL) and secure masters are
+		allowed access to secure region.
+
 
 4. Cyclone5 / Arria 5 generating the handoff header files for U-Boot SPL
 ---------------------------------------------------------------------
