@@ -214,10 +214,8 @@ int rsu_misc_writeprotected(int slot)
 		return 0;
 
 	protected = env_get("rsu_protected_slot");
-	if (!strcmp(protected, "")) {
-		/* user doesn't set protected slot */
+	if (!protected)
 		return 0;
-	}
 
 	protected_slot_numb = (int)simple_strtol(protected, NULL, 0);
 	if (protected_slot_numb < 0 || protected_slot_numb > 31) {
@@ -243,7 +241,7 @@ int rsu_misc_spt_checksum_enabled(void)
 	int checksum_enabled;
 
 	c_enabled = env_get("rsu_spt_checksum");
-	if (!strcmp(c_enabled, ""))
+	if (!c_enabled)
 		return 0;
 
 	checksum_enabled = (int)simple_strtol(c_enabled, NULL, 0);
@@ -824,16 +822,21 @@ int rsu_cb_verify_common(struct rsu_ll_intf *ll_intf, int slot,
 void rsu_log(const enum rsu_log_level level, const char *format, ...)
 {
 	va_list args;
+	char *log_level_env;
 	int log_level;
 	char printbuffer[LOG_BUF_SIZE];
 
-	log_level = (int)simple_strtol(env_get("rsu_log_level"), NULL, 0);
+	log_level_env = env_get("rsu_log_level");
 
-	if (level >= log_level)
-		return;
+	if (log_level_env) {
+		log_level = (int)simple_strtol(log_level_env, NULL, 0);
 
-	va_start(args, format);
-	vscnprintf(printbuffer, sizeof(printbuffer), format, args);
-	va_end(args);
-	puts(printbuffer);
+		if (level >= log_level)
+			return;
+
+		va_start(args, format);
+		vscnprintf(printbuffer, sizeof(printbuffer), format, args);
+		va_end(args);
+		puts(printbuffer);
+	}
 }
