@@ -1852,7 +1852,8 @@ int rsu_ll_qspi_init(struct rsu_ll_intf **intf)
 
 	/* get the offset from firmware */
 	if (mbox_rsu_get_spt_offset(spt_offset, 4)) {
-		rsu_log(RSU_ERR, "Error from mbox_rsu_get_spt_offset\n");
+		rsu_log(RSU_ERR,
+			"RSU: Firmware or flash content not supporting RSU\n");
 		return -ECOMM;
 	}
 
