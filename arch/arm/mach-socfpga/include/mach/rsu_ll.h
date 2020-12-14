@@ -37,6 +37,7 @@ struct rsu_ll_intf {
 		int (*count)(void);
 		char* (*name)(int part_num);
 		u64 (*offset)(int part_num);
+		s64 (*factory_offset)(void);
 		u32 (*size)(int part_num);
 		int (*reserved)(int part_num);
 		int (*readonly)(int part_num);

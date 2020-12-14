@@ -1012,6 +1012,27 @@ static int save_spt(int argc, char * const argv[])
 	return CMD_RET_SUCCESS;
 }
 
+static int check_running_factory(int argc, char * const argv[])
+{
+	int ret;
+	int factory;
+
+	if (argc != 1)
+		return CMD_RET_USAGE;
+
+	if (rsu_init(NULL))
+		return CMD_RET_FAILURE;
+
+	ret = rsu_running_factory(&factory);
+	rsu_exit();
+
+	if (ret)
+		return CMD_RET_FAILURE;
+
+	printf("Running factory image: %s\n", factory ? "yes" : "no");
+	return CMD_RET_SUCCESS;
+}
+
 struct func_t {
 	const char *cmd_string;
 	int (*func_ptr)(int cmd_argc, char * const cmd_argv[]);
@@ -1050,7 +1071,8 @@ static const struct func_t rsu_func_t[] = {
 	{"restore_spt", restore_spt},
 	{"create_empty_cpb", create_empty_cpb},
 	{"restore_cpb", restore_cpb},
-	{"save_cpb", save_cpb}
+	{"save_cpb", save_cpb},
+	{"check_running_factory", check_running_factory}
 };
 
 int do_rsu(struct cmd_tbl *cmdtp, int flag, int argc, char * const argv[])
@@ -1113,5 +1135,6 @@ U_BOOT_CMD(
 	"create_empty_cpb - create a empty CPB\n"
 	"restore_cpb <address> - restore CPB from an address\n"
 	"save_cpb <address> - save CPB to an address\n"
+	"check_running_factory - check if currently running the factory image\n"
 	""
 );
