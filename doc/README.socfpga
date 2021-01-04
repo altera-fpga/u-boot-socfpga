@@ -11,8 +11,9 @@ Table of Contents
 	1. Device Family Support vs Tested Intel Quartus
 	2. Feature Support
 	3. Major Changes and Known Issues 
-	4. Cyclone5 / Arria 5 generating the handoff header files for U-Boot SPL
+	4. Cyclone V / Arria V generating the handoff header files for U-Boot SPL
 	5. Arria10 generating the handoff header files for U-Boot SPL
+	6. mkimage for Cyclone V, Arria V and Arria 10
 
 
 1. Device Family Support vs Tested Intel Quartus
@@ -76,7 +77,7 @@ Table of Contents
 		allowed access to secure region.
 
 
-4. Cyclone5 / Arria 5 generating the handoff header files for U-Boot SPL
+4. Cyclone V / Arria V generating the handoff header files for U-Boot SPL
 ---------------------------------------------------------------------
 
 	Rebuilding your Quartus project
@@ -225,3 +226,21 @@ Table of Contents
 
 	The script generates a single header file names <output_file> that should
 	be placed in arch/arm/dts.
+
+6. mkimage for Cyclone V, Arria V and Arria 10
+----------------------------------------------------------
+
+	The mkimage tool creates an Intel BootROM compatible image of the
+	Cyclone V SoC, Arria V SoC or Arria 10 SoC bootloader. mkimage is invoked
+	automatically in default U-boot building proccess. To create BootROM
+	compatible image manually, user can run example below:
+
+	./tools/mkimage -T <type> -d <input file> <output file>
+
+	Cyclone V and Arria V:
+	./tools/mkimage -T socfpgaimage -d spl/u-boot-spl.bin spl/u-boot-spl.sfp
+
+	Arria 10:
+	./tools/mkimage -T socfpgaimage_v1 -d spl/u-boot-spl.bin spl/u-boot-spl.sfp
+
+	For more inforation, run "./tools/mkimage --help".
