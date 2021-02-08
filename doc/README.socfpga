@@ -23,10 +23,10 @@ Table of Contents
 	--------------------------------------------------------------------------------------------------------------------------------------------
 	Dual-core ARM Cortex-A9		Cyclone V			N/A					20.1
 					Arria V				N/A					20.1
-					Arria 10			20.1, 20.3				20.1
+					Arria 10			20.4					20.1
 
-	Quad-core ARM Cortex-A53	Stratix 10			20.1, 20.2, 20.3			N/A
-					Agilex				20.1, 20.2, 20.3			N/A
+	Quad-core ARM Cortex-A53	Stratix 10			20.1, 20.2, 20.3, 20.4			N/A
+					Agilex				20.1, 20.2, 20.3, 20.4			N/A
 					Diamond Mesa			Early access				N/A
 
 
@@ -55,26 +55,27 @@ Table of Contents
 	Software Feature			Cyclone V	Arria 10	Stratix 10	Agilex		Diamond Mesa
 						Arria V
 	---------------------------------------------------------------------------------------------------------------------
-	Remote System Update (RSU)		No		No		Yes		Yes		No
-	ARM Trusted Firmware (ATF)		No		No		Yes		Yes		Yes
+	Remote System Update (RSU) [1]		No		No		Yes		Yes		No
+	ARM Trusted Firmware (ATF) [2]		No		No		Yes		Yes		Yes
 	Vendor Authorized Boot (VAB)		No		No		No		No		Yes
 	---------------------------------------------------------------------------------------------------------------------
+
+	Notes:
+	[1] RSU SPT/CPB recovery features are supported with Quartus version 20.4 onwards
+	[2] ATF boot flow is supported with altera-opensource/arm-trusted-firmware branch:socfpga_v2.3 onwards
 
 
 3. Major Changes and Known Issues 
 ---------------------------------------------------------------------
 
-	3.1 Support 'vab' command to perform vendor authentication.
+	3.1 Upgraded U-boot to version v2020.10
 
-		Command format: vab addr len
-		Authorize 'len' bytes starting at 'addr' via vendor public key
+	3.2 Changes in bootloader image generation for Cyclone V, Arria V and Arria 10
 
-	3.2 Support SDRAM secure region in U-boot-ATF flow
-
-		First 1 MiB of SDRAM is configured as secure region, other
-		address spaces are non-secure regions. Only software executing
-		at secure state EL3 (eg: U-boot SPL) and secure masters are
-		allowed access to secure region.
+		The socfpgaimage tool (of mkimage) pads the bootloader image to 16 bytes aligned,
+		instead of always padding to the maximum size of onchip memory.
+		This avoids the encryption signature key to be appended beyond the memory size.
+		Refer to section 6 in this file for more information on mkimage usage.
 
 
 4. Cyclone V / Arria V generating the handoff header files for U-Boot SPL
