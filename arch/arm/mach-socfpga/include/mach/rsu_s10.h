@@ -14,6 +14,8 @@ extern u32 smc_rsu_update_address;
 #define SPT0_INDEX	1
 #define SPT1_INDEX	3
 
+#define MAX_PART_NAME_LENGTH 16
+
 /* CMF pointer block */
 struct socfpga_rsu_s10_cpb {
 	u32 magic_number;
@@ -28,7 +30,7 @@ struct socfpga_rsu_s10_cpb {
 
 /* sub partition slot */
 struct socfpga_rsu_s10_spt_slot {
-	char name[16];
+	char name[MAX_PART_NAME_LENGTH];
 	u32 offset[2];
 	u32 length;
 	u32 flag;

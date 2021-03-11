@@ -6,6 +6,15 @@ config ERR_PTR_OFFSET
 config NR_DRAM_BANKS
 	default 1
 
+config SOCFPGA_RSU_MULTIBOOT
+	bool "Enable RSU Multiboot Selection Feature"
+	depends on ARCH_SOCFPGA_SOC64 && SPI_FLASH
+	default y
+	help
+	 Multiboot u-boot proper image (SSBL) selection feature for RSU.
+	 SPL will select the respective SSBL based on the partition it resides
+	 inside RSU QSPI flash layout.
+
 config SOCFPGA_SECURE_VAB_AUTH
 	bool "Enable boot image authentication with Secure Device Manager"
 	depends on ARCH_SOCFPGA_AGILEX || ARCH_SOCFPGA_N5X || \

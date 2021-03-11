@@ -176,6 +176,10 @@ obj-$(CONFIG_SPL_ATF) += secure_reg_helper.o
 obj-$(CONFIG_SPL_ATF) += smc_api.o
 endif
 
+ifdef CONFIG_SOCFPGA_RSU_MULTIBOOT
+obj-y	+= rsu_spl.o
+endif
+
 ifdef CONFIG_ARCH_SOCFPGA_GEN5
 # QTS-generated config file wrappers
 CFLAGS_wrap_iocsr_config.o	+= -I$(srctree)/board/$(BOARDDIR)

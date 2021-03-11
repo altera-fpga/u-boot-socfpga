@@ -21,6 +21,9 @@
 #include <asm/global_data.h>
 #include <dm/device-internal.h>
 #include <u-boot/crc.h>
+#if (CONFIG_IS_ENABLED(SOCFPGA_RSU_MULTIBOOT))
+#include <asm/arch/rsu_spl.h>
+#endif
 
 #define	OFFSET_INVALID		(~(u32)0)
 
@@ -35,6 +38,13 @@ static ulong env_new_offset	= CONFIG_ENV_OFFSET_REDUND;
 #define ENV_OFFSET_REDUND	OFFSET_INVALID
 
 #endif /* CONFIG_ENV_OFFSET_REDUND */
+
+#if (CONFIG_IS_ENABLED(SOCFPGA_RSU_MULTIBOOT))
+#undef CONFIG_ENV_OFFSET
+#define CONFIG_ENV_OFFSET (rsu_spl_ssbl_address() +\
+					       rsu_spl_ssbl_size() -\
+					       CONFIG_ENV_SIZE)
+#endif
 
 DECLARE_GLOBAL_DATA_PTR;
 
