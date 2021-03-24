@@ -81,10 +81,17 @@ static int intel_freeze_br_do_freeze(unsigned int region)
 
 	writel(FREEZE_CSR_CTRL_FREEZE_REQ, addr + FREEZE_CSR_CTRL_OFFSET);
 
-	return wait_for_bit_le32((const u32 *)(addr +
+	ret = wait_for_bit_le32((const u32 *)(addr +
 				 FREEZE_CSR_STATUS_OFFSET),
 				 FREEZE_CSR_STATUS_FREEZE_REQ_DONE, true,
 				 FREEZE_TIMEOUT, false);
+
+	if (ret)
+		writel(0, addr + FREEZE_CSR_CTRL_OFFSET);
+	else
+		writel(FREEZE_CSR_CTRL_RESET_REQ, addr + FREEZE_CSR_CTRL_OFFSET);
+
+	return ret;
 }
 
 static int intel_freeze_br_do_unfreeze(unsigned int region)
@@ -97,6 +104,8 @@ static int intel_freeze_br_do_unfreeze(unsigned int region)
 	if (ret)
 		return ret;
 
+	writel(0, addr + FREEZE_CSR_CTRL_OFFSET);
+
 	status = readl(addr + FREEZE_CSR_STATUS_OFFSET);
 
 	if (status & FREEZE_CSR_STATUS_UNFREEZE_REQ_DONE)
@@ -106,10 +115,14 @@ static int intel_freeze_br_do_unfreeze(unsigned int region)
 
 	writel(FREEZE_CSR_CTRL_UNFREEZE_REQ, addr + FREEZE_CSR_CTRL_OFFSET);
 
-	return wait_for_bit_le32((const u32 *)(addr +
+	ret = wait_for_bit_le32((const u32 *)(addr +
 				 FREEZE_CSR_STATUS_OFFSET),
 				 FREEZE_CSR_STATUS_UNFREEZE_REQ_DONE, true,
 				 FREEZE_TIMEOUT, false);
+
+	writel(0, addr + FREEZE_CSR_CTRL_OFFSET);
+
+	return ret;
 }
 
 static int do_pr(struct cmd_tbl *cmdtp, int flag, int argc, char * const argv[])
