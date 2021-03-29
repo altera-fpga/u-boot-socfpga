@@ -245,3 +245,12 @@ Table of Contents
 	./tools/mkimage -T socfpgaimage_v1 -d spl/u-boot-spl.bin spl/u-boot-spl.sfp
 
 	For more inforation, run "./tools/mkimage --help".
+
+7. SDRAM secure region in U-boot ATF flow
+----------------------------------------------------------
+
+	In boot flow that uses ATF (ARM trusted firmware), the first 1 MiB of SDRAM
+	is configured as secure region, other address spaces are non-secure regions.
+	Only software executing	at secure state EL3 (eg: U-boot SPL, ATF) and secure
+	masters	are allowed access to the secure region.
+
