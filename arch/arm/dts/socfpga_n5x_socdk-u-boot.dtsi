@@ -19,6 +19,11 @@
 		sfconfig = <0 0 100000000 3>;
 	};
 
+	chosen {
+		stdout-path = "serial0:115200n8";
+		u-boot,spl-boot-order = &mmc;
+	};
+
 	memory {
 		/*
 		 * Memory type: DDR4 (non-interleaving mode)

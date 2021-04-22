@@ -8,6 +8,11 @@
 #include "socfpga_stratix10-u-boot.dtsi"
 
 /{
+	chosen {
+		stdout-path = "serial0:115200n8";
+		u-boot,spl-boot-order = &mmc,&flash0,&nand;
+	};
+
 	aliases {
 		spi0 = &qspi;
 		freeze_br0 = &freeze_controller;

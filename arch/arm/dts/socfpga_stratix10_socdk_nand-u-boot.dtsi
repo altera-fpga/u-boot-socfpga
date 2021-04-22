@@ -6,10 +6,6 @@
 #include "socfpga_stratix10_socdk-u-boot.dtsi"
 
 / {
-	chosen {
-		u-boot,boot0 = <&nand>;
-	};
-
 	memory {
 		#address-cells = <2>;
 		#size-cells = <2>;
