@@ -29,8 +29,3 @@
 		};
 	};
 };
-
-&nand {
-	u-boot,dm-pre-reloc;
-	nand-bus-width = <16>;
-};

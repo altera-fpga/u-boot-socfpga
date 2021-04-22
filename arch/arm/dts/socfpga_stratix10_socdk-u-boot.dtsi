@@ -26,6 +26,12 @@
 	bootph-all;
 };
 
+&nand {
+	status = "okay";
+	nand-bus-width = <16>;
+	bootph-all;
+};
+
 &qspi {
 	status = "okay";
 	bootph-all;

@@ -51,9 +51,6 @@
 };
 
 &nand {
-	status = "okay";
-	nand-bus-width = <16>;
-
 	flash@0 {
 		partitions {
 			compatible = "fixed-partitions";
