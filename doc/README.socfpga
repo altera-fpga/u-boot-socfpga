@@ -23,17 +23,17 @@ Table of Contents
 	--------------------------------------------------------------------------------------------------------------------------------------------
 	Dual-core ARM Cortex-A9		Cyclone V			N/A					20.1
 					Arria V				N/A					20.1
-					Arria 10			20.4					20.1
+					Arria 10			21.1					20.1
 
-	Quad-core ARM Cortex-A53	Stratix 10			20.1, 20.2, 20.3, 20.4			N/A
-					Agilex				20.1, 20.2, 20.3, 20.4			N/A
-					Diamond Mesa			Early access				N/A
+	Quad-core ARM Cortex-A53	Stratix 10			20.1, 20.2, 20.3, 20.4, 21.1		N/A
+					Agilex				20.1, 20.2, 20.3, 20.4, 21.1		N/A
+					eASIC N5X			Early access				N/A
 
 
 2. Feature Support
 ---------------------------------------------------------------------
 
-	Hardware Feature			Cyclone V	Arria 10	Stratix 10	Agilex		Diamond Mesa
+	Hardware Feature			Cyclone V	Arria 10	Stratix 10	Agilex		eASIC N5X
 						Arria V
 	--------------------------------------------------------------------------------------------------------------------
 	SDRAM					Yes		Yes		Yes		Yes		Yes
@@ -52,7 +52,7 @@ Table of Contents
 	Denali NAND controller			No		Yes		Yes		Yes		Yes
 	---------------------------------------------------------------------------------------------------------------------
 
-	Software Feature			Cyclone V	Arria 10	Stratix 10	Agilex		Diamond Mesa
+	Software Feature			Cyclone V	Arria 10	Stratix 10	Agilex		eASIC N5X
 						Arria V
 	---------------------------------------------------------------------------------------------------------------------
 	Remote System Update (RSU) [1]		No		No		Yes		Yes		No
@@ -68,14 +68,28 @@ Table of Contents
 3. Major Changes and Known Issues 
 ---------------------------------------------------------------------
 
-	3.1 Upgraded U-boot to version v2020.10
+	3.1 Upgraded U-boot to version v2021.01
 
-	3.2 Changes in bootloader image generation for Cyclone V, Arria V and Arria 10
+	3.2 Applied patches for CVE-2021-27097 and CVE-2021-27138
 
-		The socfpgaimage tool (of mkimage) pads the bootloader image to 16 bytes aligned,
-		instead of always padding to the maximum size of onchip memory.
-		This avoids the encryption signature key to be appended beyond the memory size.
-		Refer to section 6 in this file for more information on mkimage usage.
+	3.3 Add N5X DDR4 (with ECC) driver support
+
+	3.4 HPS-FPGA bridges support
+
+	3.4.1 Add support to enable or disable the FPGA-to-HPS
+	      and FPGA-to-HPS SDRAM bridges. The FPGA-to-HPS SDRAM bridge is
+	      only available in Stratix 10.
+
+	3.4.2 Add support to enable or disable specific bridge via u-boot
+	      'bridge' command: bridge enable/disable <mask>
+	      mask bits are defined as:
+		Bit 0: HPS-to-FPGA bridge
+		Bit 1: Lightweight HPS-to-FPGA bridge
+		Bit 2: FPGA-to-HPS bridge
+	      Only available in Stratix 10:
+		Bit 3: FPGA-to-HPS SDRAM 0 bridge
+		Bit 4: FPGA-to-HPS SDRAM 1 bridge
+		Bit 5: FPGA-to-HPS SDRAM 2 bridge
 
 
 4. Cyclone V / Arria V generating the handoff header files for U-Boot SPL
