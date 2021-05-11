@@ -13,6 +13,12 @@
 		i2c0 = &i2c1;
 	};
 
+	fs_loader0: fs-loader {
+		u-boot,dm-pre-reloc;
+		compatible = "u-boot,fs-loader";
+		sfconfig = <0 0 100000000 3>;
+	};
+
 	memory {
 		/*
 		 * Memory type: DDR4 (non-interleaving mode)
@@ -35,6 +41,13 @@
 		reg = <0 0x00000000 0 0x60000000>,
 			  <0x10 0x00100000 0 0x40000000>;
 	};
+};
+
+&sdr {
+	intel,ddrcal-qspi-offset = "0x7000000";
+	intel,ddrcal-ddr-offset = "0x100000";
+	firmware-loader = <&fs_loader0>;
+	u-boot,dm-pre-reloc;
 };
 
 &flash0 {
