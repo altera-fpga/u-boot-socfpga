@@ -14,6 +14,8 @@ Table of Contents
 	4. Cyclone V / Arria V generating the handoff header files for U-Boot SPL
 	5. Arria10 generating the handoff header files for U-Boot SPL
 	6. mkimage for Cyclone V, Arria V and Arria 10
+	7. SDRAM secure region in U-boot ATF flow
+	8. binman for U-boot ATF flow
 
 
 1. Device Family Support vs Tested Intel Quartus
@@ -25,8 +27,8 @@ Table of Contents
 					Arria V				N/A					20.1
 					Arria 10			21.1					20.1
 
-	Quad-core ARM Cortex-A53	Stratix 10			20.1, 20.2, 20.3, 20.4, 21.1		N/A
-					Agilex				20.1, 20.2, 20.3, 20.4, 21.1		N/A
+	Quad-core ARM Cortex-A53	Stratix 10			21.1					N/A
+					Agilex				21.1					N/A
 					eASIC N5X			Early access				N/A
 
 
@@ -68,29 +70,27 @@ Table of Contents
 3. Major Changes and Known Issues 
 ---------------------------------------------------------------------
 
-	3.1 Upgraded U-boot to version v2021.01
+	3.1 Upgraded U-boot to version v2021.04
 
-	3.2 Applied patches for CVE-2021-27097 and CVE-2021-27138
+	3.2 Switched to use 'binman' tool to generate FIT image (*.itb)
 
-	3.3 Add N5X DDR4 (with ECC) driver support
+	    Please refer to section '8. binman for U-boot ATF flow' for more information.
 
-	3.4 HPS-FPGA bridges support
+	3.3 Updated *_atf_defconfig files to load Linux via FIT image
 
-	3.4.1 Add support to enable or disable the FPGA-to-HPS
-	      and FPGA-to-HPS SDRAM bridges. The FPGA-to-HPS SDRAM bridge is
-	      only available in Stratix 10.
+	    Standardized all ATF boot flow to load Linux via FIT image for all SOC64 devices
+	    (Stratix 10, Agilex, eASIC N5X).
 
-	3.4.2 Add support to enable or disable specific bridge via u-boot
-	      'bridge' command: bridge enable/disable <mask>
-	      mask bits are defined as:
-		Bit 0: HPS-to-FPGA bridge
-		Bit 1: Lightweight HPS-to-FPGA bridge
-		Bit 2: FPGA-to-HPS bridge
-	      Only available in Stratix 10:
-		Bit 3: FPGA-to-HPS SDRAM 0 bridge
-		Bit 4: FPGA-to-HPS SDRAM 1 bridge
-		Bit 5: FPGA-to-HPS SDRAM 2 bridge
+	    Boot flow before U-boot version v2021.04:
+		SPL --(U-boot.itb)--> U-boot --(booti: Image, dtb)--> Linux
 
+	    Boot flow started in U-boot version v2021.04:
+		SPL --(U-boot.itb)--> U-boot --(bootm: kernel.itb)--> Linux
+
+	3.4 Add support to get JTAG usercode via SMC call
+
+	    Add SMC Function ID "INTEL_SIP_SMC_GET_USERCODE" to get device JTAG usercode for all
+	    SOC64 devices (Stratix 10, Agilex, eASIC N5X).
 
 4. Cyclone V / Arria V generating the handoff header files for U-Boot SPL
 ---------------------------------------------------------------------
@@ -268,3 +268,59 @@ Table of Contents
 	Only software executing	at secure state EL3 (eg: U-boot SPL, ATF) and secure
 	masters	are allowed access to the secure region.
 
+8. binman for U-boot ATF flow
+----------------------------------------------------------
+
+	Overview
+	~~~~~~~~
+
+	Before v2021.04, we provide *.sh/*.its for user to generate FIT image using
+	'mkimage' tool. To align with U-Boot community strategy to eliminate the custom
+	*.sh/*its script, we have removed all *.sh/*.its files and switched to use
+	'binman' tool to generate FIT image for all SOC64 devices (Stratix 10, Agilex,
+	eASIC N5X) started in U-boot version v2021.04.
+
+	FIT image content is defined in binman node in U-boot device tree (u-boot.dtb).
+	U-Boot v2021.04 support u-boot.itb and kernel.itb.
+
+	With "CONFIG_BINMAN" enabled in deconfig, U-boot will always run 'binman' tool
+	before end of the code compilation. If the required input files exists in U-boot
+	folder, *.itb files defined in u-boot.dtb will be generated. Otherwise, 'binman'
+	will not generate the *.itb files. You can run 'binman' tool manually via command
+	line to generate the *.itb file.
+
+	Input Files
+	~~~~~~~~~~~
+
+	Input files for *_atf_defconfig FIT image generation:
+		To generate u-boot.itb:
+		    u-boot-nodtb.bin
+		    u-boot.dtb
+		    bl31.bin
+		To generate kernel.itb:
+		    Image
+		    linux.dtb
+
+	Input files for *_vab_defconfig FIT image generation:
+		To generate u-boot.itb:
+		    signed-u-boot-nodtb.bin
+		    signed-u-boot.dtb
+		    signed-bl31.bin
+
+		To generate kernel.itb:
+		    signed-Image
+		    signed-linux.dtb
+
+	Command Line
+	~~~~~~~~~~~~
+
+	Please use the following commands to generate the u-boot.itb and kernel.itb:
+
+		$ <U-boot path>/tools/binman/binman build -u -d u-boot.dtb -O .
+			This command generate all FIT images that defined in device tree.
+
+		$ <U-boot path>/tools/binman/binman build -u -d u-boot.dtb -O . -i u-boot
+			This command generate u-boot.itb only.
+
+		$ <U-boot path>/tools/binman/binman build -u -d u-boot.dtb -O . -i kernel
+			This command generate kernel.itb only.
