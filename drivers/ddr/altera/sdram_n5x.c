@@ -3045,10 +3045,13 @@ int sdram_mmr_init_full(struct udevice *dev)
 
 	sdram_set_firewall(&bd);
 
-	ddr_offset = simple_strtoul(offset, &endptr, 16);
-	if (!(offset == endptr || *endptr != '\0'))
-		memcpy((void *)ddr_offset,
-		       (const void *)SOC64_OCRAM_PHY_BACKUP_BASE, SZ_4K);
+	if (is_ddr_retention_enabled(reg)) {
+		ddr_offset = simple_strtoul(offset, &endptr, 16);
+		if (!(offset == endptr || *endptr != '\0'))
+			memcpy((void *)ddr_offset,
+			       (const void *)SOC64_OCRAM_PHY_BACKUP_BASE,
+			       SZ_4K);
+	}
 
 	return 0;
 }
