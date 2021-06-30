@@ -75,6 +75,7 @@ obj-y	+= rsu_misc.o
 obj-y	+= rsu_s10.o
 obj-$(CONFIG_ARMV8_PSCI) += psci.o
 obj-$(CONFIG_ARMV8_PSCI) += smc_ecc_dbe_s10.o
+obj-$(CONFIG_ARMV8_PSCI) += smc_fpga_reconfig_s10.o
 obj-$(CONFIG_ARMV8_PSCI) += smc_registers_s10.o
 obj-$(CONFIG_ARMV8_PSCI) += smc_rsu_s10.o
 endif
@@ -147,21 +148,20 @@ obj-y	+= wrap_iocsr_config.o
 obj-y	+= wrap_pinmux_config.o
 obj-y	+= wrap_sdram_config.o
 endif
-ifdef CONFIG_ARCH_SOCFPGA_SOC64
-obj-y	+= firewall.o
-obj-y	+= spl_soc64.o
-endif
 ifdef CONFIG_ARCH_SOCFPGA_ARRIA10
 obj-y	+= spl_a10.o
 endif
 ifdef CONFIG_ARCH_SOCFPGA_STRATIX10
 obj-y	+= spl_s10.o
+obj-y	+= spl_soc64.o
 endif
 ifdef CONFIG_ARCH_SOCFPGA_AGILEX
 obj-y	+= spl_agilex.o
+obj-y	+= spl_soc64.o
 endif
 ifdef CONFIG_ARCH_SOCFPGA_N5X
 obj-y	+= spl_n5x.o
+obj-y	+= spl_soc64.o
 endif
 ifdef CONFIG_ARCH_SOCFPGA_AGILEX5
 obj-y	+= spl_soc64.o
@@ -169,6 +169,7 @@ obj-y	+= spl_agilex5.o
 endif
 ifdef CONFIG_ARCH_SOCFPGA_AGILEX7M
 obj-y	+= spl_agilex7m.o
+obj-y	+= spl_soc64.o
 endif
 else
 obj-$(CONFIG_SPL_ATF) += secure_reg_helper.o
