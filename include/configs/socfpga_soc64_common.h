@@ -31,6 +31,7 @@
 
 /* Magic word to indicate L2 reset is completed */
 #define L2_RESET_DONE_STATUS		0x1228E5E7
+#define CFG_SYS_MEM_RESERVE_SECURE	0	/* using OCRAM, not DDR */
 
 /*
  * sysmgr.boot_scratch_cold6 & 7 (64bit) will be used by master CPU to
