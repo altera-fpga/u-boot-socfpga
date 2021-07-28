@@ -348,7 +348,10 @@ enum ddr_type {
 enum reset_type {
 	POR_RESET,
 	WARM_RESET,
-	COLD_RESET
+	COLD_RESET,
+	NCONFIG,
+	JTAG_CONFIG,
+	RSU_RECONFIG
 };
 
 /* DDR handoff structure */
@@ -392,16 +395,6 @@ struct ddr_handoff {
 enum message_mode {
 	MAJOR_MESSAGE,
 	STREAMING_MESSAGE
-};
-
-/* Reset type */
-enum reset_type {
-	POR_RESET,
-	WARM_RESET,
-	COLD_RESET,
-	NCONFIG,
-	JTAG_CONFIG,
-	RSU_RECONFIG
 };
 
 enum data_type {
@@ -1013,14 +1006,13 @@ static int init_umctl2(phys_addr_t umctl2_handoff_base,
 		/* Setting selfref_sw to 1, based on lpddr4 requirement */
 		setbits_le32(umctl2_base + DDR4_PWRCTL_OFFSET,
 			     DDR4_PWRCTL_SELFREF_SW);
-
 		/* Backup user settings, restore after DDR up running */
 		user_backup++;
 		*user_backup = readl(umctl2_base + DDR4_INIT0_OFFSET) &
 				     DDR4_INIT0_SKIP_RAM_INIT;
 
 		/*
-		 * Setting INIT0.skip_dram_init to 0x3, based on lpddr4
+		 * Setting INIT0.skip_dram_init to 0x3, based on ddr4 / lpddr4
 		 * requirement
 		 */
 		setbits_le32(umctl2_base + DDR4_INIT0_OFFSET,
@@ -1614,8 +1606,6 @@ static bool is_cal_bak_data_valid(void)
 static int init_phy(struct ddr_handoff *ddr_handoff_info,
 		    bool *need_calibrate, bool is_ddr_hang_be4_rst)
 {
-	u32 handoff_table[ddr_handoff_info->phy_handoff_length];
-	u32 i, value;
 	u32 reg = readl(socfpga_get_sysmgr_addr() +
 			SYSMGR_SOC64_BOOT_SCRATCH_COLD0);
 	int ret;
@@ -2816,24 +2806,6 @@ static int ddr_post_config(struct ddr_handoff *handoff, bool *need_calibrate)
 	return ret;
 }
 
-static bool is_ddr_retention_enabled(u32 boot_scratch_cold0_reg)
-{
-	return boot_scratch_cold0_reg &
-	       ALT_SYSMGR_SCRATCH_REG_0_DDR_RETENTION_MASK;
-}
-
-static bool is_ddr_bitstream_sha_matching(u32 boot_scratch_cold0_reg)
-{
-	return boot_scratch_cold0_reg & ALT_SYSMGR_SCRATCH_REG_0_DDR_SHA_MASK;
-}
-
-static enum reset_type get_reset_type(u32 boot_scratch_cold0_reg)
-{
-	return (boot_scratch_cold0_reg &
-		ALT_SYSMGR_SCRATCH_REG_0_DDR_RESET_TYPE_MASK) >>
-		ALT_SYSMGR_SCRATCH_REG_0_DDR_RESET_TYPE_SHIFT;
-}
-
 void reset_type_debug_print(u32 boot_scratch_cold0_reg)
 {
 	switch (get_reset_type(boot_scratch_cold0_reg)) {
@@ -2849,37 +2821,6 @@ void reset_type_debug_print(u32 boot_scratch_cold0_reg)
 	default:
 		debug("%s: Invalid reset type\n", __func__);
 	}
-}
-
-bool is_ddr_init(void)
-{
-	u32 reg = readl(socfpga_get_sysmgr_addr() +
-			SYSMGR_SOC64_BOOT_SCRATCH_COLD0);
-
-	reset_type_debug_print(reg);
-
-	if (get_reset_type(reg) == POR_RESET) {
-		debug("%s: DDR init is required\n", __func__);
-		return true;
-	}
-
-	if (get_reset_type(reg) == WARM_RESET) {
-		debug("%s: DDR init is skipped\n", __func__);
-		return false;
-	}
-
-	if (get_reset_type(reg) == COLD_RESET) {
-		if (is_ddr_retention_enabled(reg) &&
-		    is_ddr_bitstream_sha_matching(reg)) {
-			debug("%s: DDR retention bit is set\n", __func__);
-			debug("%s: Matching in DDR bistream\n", __func__);
-			debug("%s: DDR init is skipped\n", __func__);
-			return false;
-		}
-	}
-
-	debug("%s: DDR init is required\n", __func__);
-	return true;
 }
 
 int sdram_mmr_init_full(struct udevice *dev)
@@ -2899,11 +2840,11 @@ int sdram_mmr_init_full(struct udevice *dev)
 
 	printf("Checking SDRAM configuration in progress ...\n");
 	ret = populate_ddr_handoff(&ddr_handoff_info);
-		if (ret) {
-			debug("%s: Failed to populate DDR handoff\n",
-			      __func__);
-			return ret;
-		}
+	if (ret) {
+		debug("%s: Failed to populate DDR handoff\n",
+		      __func__);
+		return ret;
+	}
 
 	/* Set the MPFE NoC mux to correct DDR controller type */
 	use_ddr4(ddr_handoff_info.cntlr_t);
