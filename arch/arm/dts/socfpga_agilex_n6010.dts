@@ -40,6 +40,7 @@
 
 &spi0 {
 	status = "okay";
+	bits-per-word = <16>;
 };
 
 &gpio0 {
