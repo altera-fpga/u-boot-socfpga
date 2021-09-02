@@ -1,0 +1,6 @@
+SOCFPGA BOARD
+M:	Matthew Gerlach <matthew.gerlach@linux.intel.com>
+S:	Maintained
+F:	board/intel/agilex-acadp/
+F:	include/configs/socfpga_agilex_n6010.h
+F:	configs/socfpga_agilex_n6010_defconfig
