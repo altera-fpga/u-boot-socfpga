@@ -1,0 +1,97 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * U-Boot additions
+ *
+ * Copyright (C) 2021 Intel Corporation <www.intel.com>
+ */
+
+#include "socfpga_agilex-u-boot.dtsi"
+
+/{
+	aliases {
+		spi0 = &qspi;
+		i2c0 = &i2c1;
+	};
+
+	memory {
+		/* 1GB */
+		reg = <0 0x00000000 0 0x40000000>;
+	};
+
+	chosen {
+		stdout-path = "serial0:115200n8";
+		u-boot,spl-boot-order = &memory;
+	};
+};
+
+&binman {
+	/delete-node/ u-boot-script;
+	u-boot {
+		fit {
+			images {
+				/delete-node/ atf;
+
+				kernel_uboot {
+					description = "Linux Kernel";
+					type = "kernel";
+					arch = "arm64";
+					os = "linux";
+					compression = "none";
+					load = <0xb600000>;
+					entry = <0xb600000>;
+
+					kernel_uboot_blob: blob-ext {
+						filename = "Image";
+					};
+					hash {
+						algo = "md5";
+					};
+				};
+
+				kernel_fdt {
+					description = "Linux DTB";
+					type = "flat_dt";
+					arch = "arm64";
+					compression = "none";
+
+					kernel_uboot_fdt_blob: blob-ext {
+						filename = "linux.dtb";
+					};
+					hash {
+						algo = "md5";
+					};
+				};
+
+				kernel_ramdisk {
+					description = "Linux ramdisk";
+					type = "ramdisk";
+					arch = "arm64";
+					os = "linux";
+					compression = "none";
+
+					kernel_ramdisk_blob: blob-ext {
+						filename = "rootfs.cpio";
+					};
+					hash {
+						algo = "md5";
+					};
+				};
+			};
+
+			configurations {
+				conf {
+					/delete-property/ firmware;
+				};
+
+				linux_conf {
+					description = "Intel SoC64 FPGA";
+					kernel = "kernel_uboot";
+					fdt = "kernel_fdt";
+					ramdisk = "kernel_ramdisk";
+				};
+			};
+		};
+	};
+
+	/delete-node/ kernel;
+};
