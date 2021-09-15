@@ -5,3 +5,4 @@
 #
 
 obj-y	:= socfpga.o
+obj-y	+= plldata.o
