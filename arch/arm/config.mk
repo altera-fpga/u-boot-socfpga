@@ -31,7 +31,7 @@ endif
 
 # LLVM support
 LLVM_RELFLAGS		:= $(call cc-option,-mllvm,)
-PLATFORM_CPPFLAGS += -D__ARM__
+PLATFORM_CPPFLAGS += -D__ARM__ -gdwarf-4
 
 ifdef CONFIG_ARM64
 PLATFORM_ELFFLAGS += -B aarch64 -O elf64-littleaarch64
