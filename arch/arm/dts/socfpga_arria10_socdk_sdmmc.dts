@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright (C) 2014-2015 Altera Corporation <www.altera.com>
+ * Copyright (C) 2014-2021 Altera Corporation <www.altera.com>
  */
 
 /dts-v1/;
 #include "socfpga_arria10_socdk.dtsi"
+#include "socfpga_arria10_socdk-u-boot.dtsi"
 
 &mmc {
 	status = "okay";
