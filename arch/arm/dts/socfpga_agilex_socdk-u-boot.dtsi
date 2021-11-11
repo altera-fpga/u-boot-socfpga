@@ -213,6 +213,30 @@
 			sign-images = "atf", "uboot", "fdt-1";
 		};
 	};
+
+	board-3 {
+	description = "board_3";
+		firmware = "atf";
+		loadables = "uboot";
+		fdt = "fdt-0";
+		signature {
+			algo = "crc32";
+			key-name-hint = "dev";
+			sign-images = "atf", "uboot", "fdt-0";
+		};
+	};
+
+	board-4 {
+		description = "board_4";
+		firmware = "atf";
+		loadables = "uboot";
+		fdt = "fdt-0";
+		signature {
+			algo = "crc32";
+			key-name-hint = "dev";
+			sign-images = "atf", "uboot", "fdt-0";
+		};
+	};
 };
 
 &binman {
