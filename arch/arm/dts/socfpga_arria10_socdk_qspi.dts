@@ -54,7 +54,6 @@
 		block-size = <16>; /* 2^16, 64KB */
 		cdns,page-size = <256>;
 		cdns,block-size = <16>;
-		cdns,read-delay = <4>;
 		cdns,tshsl-ns = <50>;
 		cdns,tsd2d-ns = <50>;
 		cdns,tchsh-ns = <4>;
