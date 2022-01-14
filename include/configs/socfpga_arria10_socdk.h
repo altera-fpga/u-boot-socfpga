@@ -19,6 +19,7 @@
  * Serial / UART configurations
  */
 #define CFG_SYS_BAUDRATE_TABLE {4800, 9600, 19200, 38400, 57600, 115200}
+#define CONFIG_SYS_NAND_U_BOOT_OFFS 0x100000
 
 /*
  * L4 OSC1 Timer 0
