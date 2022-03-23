@@ -11,12 +11,12 @@ Table of Contents
 	1. Device Family Support vs Tested Intel Quartus
 	2. Feature Support
 	3. Major Changes and Known Issues 
-	4. Cyclone V / Arria V generating the handoff header files for U-Boot SPL
-	5. Arria10 generating the handoff header files for U-Boot SPL
-	6. mkimage for Cyclone V, Arria V and Arria 10
-	7. SDRAM secure region in U-boot ATF flow
-	8. binman for U-boot ATF flow
-	9. Official Boot-up Flow Support
+	4. Git branch naming convention
+	5. Cyclone V / Arria V generating the handoff header files for U-Boot SPL
+	6. Arria10 generating the handoff header files for U-Boot SPL
+	7. mkimage for Cyclone V, Arria V and Arria 10
+	8. SDRAM secure region in U-boot ATF flow
+	9. binman for U-boot ATF flow
 
 
 1. Device Family Support vs Tested Intel Quartus
@@ -73,7 +73,37 @@ Table of Contents
 	3.1 Upgraded U-boot to version v2022.04
 
 
-4. Cyclone V / Arria V generating the handoff header files for U-Boot SPL
+
+4. Git branch naming convention
+---------------------------------------------------------------------
+	This convention is important to direct all users of Intel SOCFPGA U-Boot repository to use
+	the appropriate branch.
+
+	The syntax of branch naming will be "socfpga_v[year].[month][_RC]". For example,
+	"socfpga_v2021.04_RC" or "socfpga_v2021.01"
+	Where,
+		[year] is the year of the branch released.
+		[month] is the month of the branch released.
+		[_RC] is the label for branch categories, optional, based on the branch categories below.
+
+	Generally, branches in Intel SOCFPGA U-Boot repository can be distincted into TWO categories,
+	which are with and without "RC" labeled.
+
+	Branch with "RC" labeled
+	~~~~~~~~~~~~~~~~~~~~~~~~
+	A "RC" labeled branch is for Intel internal active development use and customer early access
+	for latest updates without official customer support. Since this "RC" labeled branch is still
+	comes with active development, the branch release with latest year and month. There will be
+	always only ONE branch labeled with "RC" in Intel SOCFPGA U-Boot repository.
+
+	Branch without "RC" labeled
+	~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	Latest stable branch (no RC labeled) is strongly recommended for any development and
+	production use outside of Intel. Only stable branches will be supported by official
+	customer support.
+
+
+5. Cyclone V / Arria V generating the handoff header files for U-Boot SPL
 ---------------------------------------------------------------------
 
 	Rebuilding your Quartus project
@@ -195,7 +225,7 @@ Table of Contents
 	The Preloader will not be needed any more.
 
 
-5. Arria10 generating the handoff header files for U-Boot SPL
+6. Arria10 generating the handoff header files for U-Boot SPL
 ----------------------------------------------------------
 
 	A header file for inclusion in a devicetree for Arria10 can be generated
@@ -223,7 +253,7 @@ Table of Contents
 	The script generates a single header file names <output_file> that should
 	be placed in arch/arm/dts.
 
-6. mkimage for Cyclone V, Arria V and Arria 10
+7. mkimage for Cyclone V, Arria V and Arria 10
 ----------------------------------------------------------
 
 	The mkimage tool creates an Intel BootROM compatible image of the
@@ -241,7 +271,7 @@ Table of Contents
 
 	For more inforation, run "./tools/mkimage --help".
 
-7. SDRAM secure region in U-boot ATF flow
+8. SDRAM secure region in U-boot ATF flow
 ----------------------------------------------------------
 
 	In boot flow that uses ATF (ARM trusted firmware), the first 1 MiB of SDRAM
@@ -249,7 +279,7 @@ Table of Contents
 	Only software executing	at secure state EL3 (eg: U-boot SPL, ATF) and secure
 	masters	are allowed access to the secure region.
 
-8. binman for U-boot ATF flow
+9. binman for U-boot ATF flow
 ----------------------------------------------------------
 
 	Overview
