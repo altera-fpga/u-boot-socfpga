@@ -95,6 +95,17 @@ obj-y	+= system_manager_soc64.o
 obj-y	+= timer_s10.o
 obj-$(CONFIG_SOCFPGA_SECURE_VAB_AUTH)	+= secure_vab.o
 obj-$(CONFIG_SOCFPGA_SECURE_VAB_AUTH)	+= vab.o
+ifndef CONFIG_SPL_BUILD
+obj-y   += rsu.o
+obj-y   += rsu_ll_qspi.o
+obj-y   += rsu_misc.o
+obj-y	+= rsu_s10.o
+obj-$(CONFIG_ARMV8_PSCI) += psci.o
+obj-$(CONFIG_ARMV8_PSCI) += smc_ecc_dbe_s10.o
+obj-$(CONFIG_ARMV8_PSCI) += smc_fpga_reconfig_s10.o
+obj-$(CONFIG_ARMV8_PSCI) += smc_registers_s10.o
+obj-$(CONFIG_ARMV8_PSCI) += smc_rsu_s10.o
+endif
 endif
 
 ifdef CONFIG_ARCH_SOCFPGA_AGILEX7M
