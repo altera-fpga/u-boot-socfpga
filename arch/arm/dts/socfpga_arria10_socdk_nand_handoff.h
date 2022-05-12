@@ -1,6 +1,6 @@
-/* SPDX-License-Identifier: BSD-3-Clause */
+// SPDX-License-Identifier: BSD-3-Clause
 /*
- * Altera Arria10 SoCFPGA configuration
+ * Intel Arria 10 SoCFPGA configuration
  */
 
 #ifndef __SOCFPGA_ARRIA10_CONFIG_H__

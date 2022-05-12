@@ -1,56 +1,27 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2019 Intel Corporation
- *
- *	These codes were based on handoffs
- *	generated from both Qsys and Quartus.
+ * Copyright (C) 2015-2022 Altera Corporation. All rights reserved.
  */
 
 /dts-v1/;
 #include "socfpga_arria10_socdk.dtsi"
 #include "socfpga_arria10_socdk-u-boot.dtsi"
-#include "socfpga_arria10_handoff_u-boot.dtsi"
-#include "socfpga_arria10_socdk_nand_handoff.dtsi"
-
-/ {
-	fs_loader0: fs-loader {
-		u-boot,dm-pre-reloc;
-		compatible = "u-boot,fs-loader";
-	};
-};
-
-&fpga_mgr {
-	u-boot,dm-pre-reloc;
-	firmware-loader = <&fs_loader0>;
-	altr,bitstream = "300000";
-};
-
-&l4_mp_clk {
-	u-boot,dm-pre-reloc;
-};
-
-&nand_x_clk {
-	u-boot,dm-pre-reloc;
-};
-
-&nand_ecc_clk {
-	u-boot,dm-pre-reloc;
-};
-
-&nand_clk {
-	u-boot,dm-pre-reloc;
-};
 
 &nand {
-	u-boot,dm-pre-reloc;
 	status = "okay";
 
-	partition@nand-boot {
-		label = "Boot and fpga data";
-		reg = <0x0 0x1EA0000>;
-	};
-	partition@nand-rootfs {
-		label = "Root Filesystem - JFFS2";
-		reg = <0x1EA0000 0x6160000>;
+	nand@0 {
+		reg = <0>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		partition@0 {
+			label = "Boot and fpga data";
+			reg = <0x0 0x02000000>;
+		};
+		partition@1c00000 {
+			label = "Root Filesystem - JFFS2";
+			reg = <0x02000000 0x06000000>;
+		};
 	};
 };
