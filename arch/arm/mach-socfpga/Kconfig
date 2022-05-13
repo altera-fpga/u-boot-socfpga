@@ -95,6 +95,9 @@ config ARCH_SOCFPGA_AGILEX5
 	select SPL_CLK if SPL
 	select ARCH_SOCFPGA_SOC64
 
+config TARGET_SOCFPGA_AGILEX5_EMU
+	bool "Enable build that bootable only on Agilex5 Emulator"
+
 config ARCH_SOCFPGA_ARRIA5
 	bool
 	select ARCH_SOCFPGA_GEN5
