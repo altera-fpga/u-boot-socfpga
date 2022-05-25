@@ -23,13 +23,12 @@ Table of Contents
 
 	Processor			SOCFPGA Device Family		Intel Quartus Prime Pro Edition		Intel Quartus Prime Standard Edition	
 	--------------------------------------------------------------------------------------------------------------------------------------------
-	Dual-core ARM Cortex-A9		Cyclone V			N/A					20.1
-					Arria V				N/A					20.1
-					Arria 10			21.1					20.1
+	Dual-core ARM Cortex-A9		Cyclone V			N/A					21.1
+					Arria 10			22.1					N/A
 
-	Quad-core ARM Cortex-A53	Stratix 10			21.1					N/A
-					Agilex				21.1					N/A
-					eASIC N5X			Early access				N/A
+	Quad-core ARM Cortex-A53	Stratix 10			22.1					N/A
+					Agilex				22.1					N/A
+					eASIC N5X			22.1					N/A
 
 
 2. Feature Support
@@ -70,27 +69,8 @@ Table of Contents
 3. Major Changes and Known Issues 
 ---------------------------------------------------------------------
 
-	3.1 Upgraded U-boot to version v2021.04
+	3.1 Upgraded U-boot to version v2022.04
 
-	3.2 Switched to use 'binman' tool to generate FIT image (*.itb)
-
-	    Please refer to section '8. binman for U-boot ATF flow' for more information.
-
-	3.3 Updated *_atf_defconfig files to load Linux via FIT image
-
-	    Standardized all ATF boot flow to load Linux via FIT image for all SOC64 devices
-	    (Stratix 10, Agilex, eASIC N5X).
-
-	    Boot flow before U-boot version v2021.04:
-		SPL --(U-boot.itb)--> U-boot --(booti: Image, dtb)--> Linux
-
-	    Boot flow started in U-boot version v2021.04:
-		SPL --(U-boot.itb)--> U-boot --(bootm: kernel.itb)--> Linux
-
-	3.4 Add support to get JTAG usercode via SMC call
-
-	    Add SMC Function ID "INTEL_SIP_SMC_GET_USERCODE" to get device JTAG usercode for all
-	    SOC64 devices (Stratix 10, Agilex, eASIC N5X).
 
 4. Cyclone V / Arria V generating the handoff header files for U-Boot SPL
 ---------------------------------------------------------------------
