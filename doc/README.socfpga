@@ -16,6 +16,7 @@ Table of Contents
 	6. mkimage for Cyclone V, Arria V and Arria 10
 	7. SDRAM secure region in U-boot ATF flow
 	8. binman for U-boot ATF flow
+	9. Official Boot-up Flow Support
 
 
 1. Device Family Support vs Tested Intel Quartus
@@ -304,3 +305,30 @@ Table of Contents
 
 		$ <U-boot path>/tools/binman/binman build -u -d u-boot.dtb -O . -i kernel
 			This command generate kernel.itb only.
+
+9. Official Boot-up Flow Support
+---------------------------------------------------------------------
+	U-boot with Arm Trusted Firmware (ATF, TF-A) boot-up is the official supported
+	boot flow for Intel SoC FPGA Arm 64-bit architecture devices including
+	Stratix 10, Agilex and N5X. ATF is the secure runtime firmware running at EL3
+	which handles secure accesses from U-boot proper and Linux running at EL2 and EL1.
+
+	Official boot flow:
+		U-boot -> ATF BL31 -> U-boot proper -> Linux
+
+	Legacy (aka non ATF) boot flow:
+		U-boot -> U-boot proper -> Linux
+
+	U-boot version socfpga_v2021.07 and onwards change the defconfig name to match
+	the official boot flow. The non ATF flow defconfigs are renamed with _legacy_
+	appended and is not officially supported moving forward. See details as follow.
+
+	Legacy boot flow:
+		socfpga_agilex_defconfig    -> socfpga_agilex_legacy_defconfig
+		socfpga_n5x_defconfig       -> socfpga_n5x_legacy_defconfig
+		socfpga_stratix10_defconfig -> socfpga_stratix10_legacy_defconfig
+
+	Official boot flow:
+		socfpga_agilex_atf_defconfig    -> socfpga_agilex_defconfig
+		socfpga_n5x_atf_defconfig       -> socfpga_n5x_defconfig
+		socfpga_stratix10_atf_defconfig -> socfpga_stratix10_defconfig
