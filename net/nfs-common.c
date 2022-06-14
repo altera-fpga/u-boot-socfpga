@@ -596,8 +596,6 @@ static int nfs_lookup_reply(uchar *pkt, unsigned int len)
 		return ret;
 
 	if (choosen_nfs_version != NFS_V3) {
-		if (((uchar *)&rpc_pkt.u.reply.data[0] - (uchar *)&rpc_pkt + NFS_FHSIZE) > len)
-			return -NFS_RPC_DROP;
 		memcpy(filefh, rpc_pkt.u.reply.data + 1, NFS_FHSIZE);
 	} else {  /* NFS_V3 */
 		filefh3_length = ntohl(rpc_pkt.u.reply.data[1]);
