@@ -469,56 +469,36 @@ static enum reset_type get_reset_type(u32 reg)
 		ALT_SYSMGR_SCRATCH_REG_0_DDR_RESET_TYPE_SHIFT;
 }
 
-void reset_type_print(enum reset_type reset_t)
+bool is_ddr_init(bool is_ddr_hang_be4_rst)
 {
-	switch (reset_t) {
-	case POR_RESET:
-		printf("%s: POR is triggered\n", __func__);
-		break;
-	case WARM_RESET:
-		printf("%s: Warm reset is triggered\n", __func__);
-		break;
-	case COLD_RESET:
-		printf("%s: Cold reset is triggered\n", __func__);
-		break;
-	case NCONFIG:
-		printf("%s: NCONFIG is triggered\n", __func__);
-		break;
-	case JTAG_CONFIG:
-		printf("%s: JTAG_CONFIG is triggered\n", __func__);
-		break;
-	case RSU_RECONFIG:
-		printf("%s: RSU_RECONFIG is triggered\n", __func__);
-		break;
-	default:
-		printf("%s: Invalid reset type\n", __func__);
-	}
-}
+	u32 reg = readl(socfpga_get_sysmgr_addr() +
+			SYSMGR_SOC64_BOOT_SCRATCH_COLD0);
 
-bool is_ddr_init_skipped(u32 reg, bool is_ddr_hang_be4_rst)
-{
-	enum reset_type reset_t = get_reset_type(reg);
-
-	reset_type_print(reset_t);
+	reset_type_debug_print(reg);
 
 	if (!is_ddr_dbe_triggered() && !is_ddr_hang_be4_rst) {
-		if (reset_t == WARM_RESET) {
-			debug("%s: DDR init is skipped\n", __func__);
+		if (get_reset_type(reg) == POR_RESET) {
+			debug("%s: DDR init is required\n", __func__);
 			return true;
 		}
 
-		if (reset_t == COLD_RESET) {
+
+		if (get_reset_type(reg) == WARM_RESET) {
+			debug("%s: DDR init is skipped\n", __func__);
+			return false;
+		}
+
+		if (get_reset_type(reg) == COLD_RESET) {
 			if (is_ddr_retention_enabled(reg)) {
-				debug("%s: DDR retention bit is set\n",
-				      __func__);
+				debug("%s: DDR retention bit is set\n", __func__);
 				debug("%s: DDR init is skipped\n", __func__);
-				return true;
+				return false;
 			}
 		}
 	}
 
 	debug("%s: DDR init is required\n", __func__);
-	return false;
+	return true;
 }
 
 bool is_ddr_calibration_skipped(u32 reg, bool is_ddr_hang_be4_rst)
@@ -2818,6 +2798,15 @@ void reset_type_debug_print(u32 boot_scratch_cold0_reg)
 	case COLD_RESET:
 		debug("%s: Cold reset is triggered\n", __func__);
 		break;
+	case NCONFIG:
+		printf("%s: NCONFIG is triggered\n", __func__);
+		break;
+	case JTAG_CONFIG:
+		printf("%s: JTAG_CONFIG is triggered\n", __func__);
+		break;
+	case RSU_RECONFIG:
+		printf("%s: RSU_RECONFIG is triggered\n", __func__);
+		break;
 	default:
 		debug("%s: Invalid reset type\n", __func__);
 	}
@@ -2855,7 +2844,7 @@ int sdram_mmr_init_full(struct udevice *dev)
 	 */
 	writel(SOC64_CRAM_PHY_BACKUP_SKIP_MAGIC, SOC64_OCRAM_PHY_BACKUP_BASE);
 
-	if (!is_ddr_init_skipped(reg, is_ddr_hang_be4_rst)) {
+	if (is_ddr_init(is_ddr_hang_be4_rst)) {
 		printf("SDRAM init in progress ...\n");
 		ddr_init_inprogress(true);
 
