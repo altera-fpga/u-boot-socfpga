@@ -471,6 +471,8 @@ static int dw_adjust_link(struct dw_eth_dev *priv, struct eth_mac_regs *mac_p,
 			  struct phy_device *phydev)
 {
 	u32 conf = readl(&mac_p->conf) | FRAMEBURSTENABLE | DISABLERXOWN;
+	struct udevice *dev = priv->phydev->dev;
+	struct dw_eth_pdata *dw_pdata = dev_get_plat(dev);
 
 	if (!phydev->link) {
 		printf("%s: No link.\n", phydev->dev->name);
@@ -489,6 +491,9 @@ static int dw_adjust_link(struct dw_eth_dev *priv, struct eth_mac_regs *mac_p,
 		conf |= FULLDPLXMODE;
 
 	writel(conf, &mac_p->conf);
+
+	if (dw_pdata->pcs_adjust_link)
+		dw_pdata->pcs_adjust_link(dev, phydev);
 
 	printf("Speed: %d, %s duplex%s\n", phydev->speed,
 	       (phydev->duplex) ? "full" : "half",

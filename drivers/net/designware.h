@@ -256,6 +256,7 @@ extern const struct eth_ops designware_eth_ops;
 struct dw_eth_pdata {
 	struct eth_pdata eth_pdata;
 	u32 reset_delays[3];
+	void (*pcs_adjust_link)(struct udevice *dev, struct phy_device *phydev);
 };
 
 int designware_eth_init(struct dw_eth_dev *priv, u8 *enetaddr);
