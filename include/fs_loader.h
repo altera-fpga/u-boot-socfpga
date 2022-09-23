@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 Intel Corporation <www.intel.com>
+ * Copyright (C) 2022 Intel Corporation <www.intel.com>
  *
  * SPDX-License-Identifier:    GPL-2.0
  */
@@ -30,14 +30,10 @@ struct phandle_part {
  *
  * @bus: SPI bus number.
  * @cs: SPI chip selection.
- * @speed: Speed selection.
- * @mode: SPI mode.
  */
 struct sf_config {
 	u32 bus;
 	u32 cs;
-	u32 speed;
-	u32 mode;
 };
 
 /**

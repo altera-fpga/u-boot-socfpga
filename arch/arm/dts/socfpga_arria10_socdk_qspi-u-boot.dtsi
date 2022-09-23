@@ -19,7 +19,7 @@
 	fs_loader0: fs-loader {
 		bootph-all;
 		compatible = "u-boot,fs-loader";
-		sfconfig = <0 0 100000000 3>;
+		sfconfig = <0 0>;
 	};
 };
 
