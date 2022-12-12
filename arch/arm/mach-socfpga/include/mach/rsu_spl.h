@@ -8,7 +8,7 @@
 #define _RSU_S10_SPL_H_
 #include <asm/arch/rsu_s10.h>
 
-u32 rsu_spl_ssbl_address(void);
-u32 rsu_spl_ssbl_size(void);
+u32 rsu_spl_ssbl_address(bool is_qspi_imge_check);
+u32 rsu_spl_ssbl_size(bool is_qspi_imge_check);
 
 #endif /* _RSU_S10_SPL__H_ */

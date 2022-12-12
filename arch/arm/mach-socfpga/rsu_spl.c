@@ -3,6 +3,7 @@
  * Copyright (C) 2022 Intel Corporation <www.intel.com>
  *
  */
+#define DEBUG
 #include <common.h>
 #include <linux/errno.h>
 #include <spi.h>
@@ -15,19 +16,23 @@
 #define SSBL_PART_PREFIX	"SSBL."
 #define RSU_ADDR_MASK	0xFFFFFFFF
 #define RSU_ADDR_SHIFT	32
+#define SSBL_PART_PREFIX   "SSBL."
+#define UBOOT_ENV_EXT ".env"
+#define UBOOT_IMG_EXT ".img"
+#define UBOOT_ITB_EXT ".itb"
+#define UBOOT_ENV_PREFIX "u-boot_"
+#define UBOOT_ENV_REDUND_PREFIX "u-boot-redund_"
+#define UBOOT_PREFIX "u-boot_"
+#define FACTORY_IMG_NAME "FACTORY_IM"
 
-static int get_ssbl_slot(struct socfpga_rsu_s10_spt_slot *rsu_ssbl_slot)
+static int get_spl_slot(struct socfpga_rsu_s10_spt *rsu_spt,
+			size_t rsu_spt_size, int *crt_spt_index)
 {
-	struct socfpga_rsu_s10_spt rsu_spt = {0};
 	u32 rsu_spt0_offset = 0, rsu_spt1_offset = 0;
-	u32 spt_offset[4];
-	struct rsu_status_info rsu_status;
-	int crt_spt_index = -EINVAL;
-	char *result;
+	u32 spt_offset[4] = {0};
+	struct rsu_status_info rsu_status = {0};
 	struct spi_flash *flash;
 	int i;
-
-	rsu_ssbl_slot->offset[0] = -EINVAL;
 
 	/* get rsu status */
 	if (mbox_rsu_status((u32 *)&rsu_status, sizeof(rsu_status) / 4)) {
@@ -55,23 +60,23 @@ static int get_ssbl_slot(struct socfpga_rsu_s10_spt_slot *rsu_ssbl_slot)
 	}
 
 	/* read spt0 */
-	if (spi_flash_read(flash, rsu_spt0_offset, sizeof(rsu_spt), &rsu_spt)) {
+	if (spi_flash_read(flash, rsu_spt0_offset, rsu_spt_size, rsu_spt)) {
 		puts("RSU: Error - spi_flash_read failed!\n");
 		return -EINVAL;
 	}
 
 	/* if spt0 does not have the correct magic number */
-	if (rsu_spt.magic_number != RSU_S10_SPT_MAGIC_NUMBER) {
+	if (rsu_spt->magic_number != RSU_S10_SPT_MAGIC_NUMBER) {
 		/* read spt1 */
-		if (spi_flash_read(flash, rsu_spt1_offset, sizeof(rsu_spt), &rsu_spt)) {
+		if (spi_flash_read(flash, rsu_spt1_offset, rsu_spt_size, rsu_spt)) {
 			printf("RSU: Error - spi_flash_read failed!\n");
 			return -EINVAL;
 		}
 
 		/* bail out if spt1 does not have the correct magic number */
-		if (rsu_spt.magic_number != RSU_S10_SPT_MAGIC_NUMBER) {
+		if (rsu_spt->magic_number != RSU_S10_SPT_MAGIC_NUMBER) {
 			printf("RSU: Error: spt table magic number not match 0x%08x!\n",
-			       rsu_spt.magic_number);
+			       rsu_spt->magic_number);
 			return -EINVAL;
 		}
 	}
@@ -83,24 +88,38 @@ static int get_ssbl_slot(struct socfpga_rsu_s10_spt_slot *rsu_ssbl_slot)
 	debug("RSU error details:  0x%08x\n", rsu_status.error_details);
 
 	/* display partitions */
-	for (i = 0; i < rsu_spt.entries; i++) {
+	for (i = 0; i < rsu_spt->entries; i++) {
 		debug("RSU: Partition '%s' start=0x%08x length=0x%08x\n",
-		      rsu_spt.spt_slot[i].name, rsu_spt.spt_slot[i].offset[0],
-		      rsu_spt.spt_slot[i].length);
+		      rsu_spt->spt_slot[i].name, rsu_spt->spt_slot[i].offset[0],
+		      rsu_spt->spt_slot[i].length);
 	}
 
 	/* locate the SPT entry for currently loaded image */
-	for (i = 0; i < rsu_spt.entries; i++) {
+	for (i = 0; i < rsu_spt->entries; i++) {
 		if (((rsu_status.current_image & RSU_ADDR_MASK) ==
-			rsu_spt.spt_slot[i].offset[0]) &&
+			rsu_spt->spt_slot[i].offset[0]) &&
 		   ((rsu_status.current_image >> RSU_ADDR_SHIFT) ==
-			rsu_spt.spt_slot[i].offset[1])) {
-			crt_spt_index = i;
-			break;
+			rsu_spt->spt_slot[i].offset[1])) {
+			*crt_spt_index = i;
+			return 0;
 		}
 	}
 
-	if (crt_spt_index == -EINVAL) {
+	puts("RSU: Error - could not locate SPL partition in the SPT table!\n");
+	return -EINVAL;
+}
+
+static int get_ssbl_slot(struct socfpga_rsu_s10_spt_slot *rsu_ssbl_slot)
+{
+	struct socfpga_rsu_s10_spt rsu_spt = {0};
+	int crt_spt_index = -EINVAL;
+	char *result;
+	int i, ret;
+
+	rsu_ssbl_slot->offset[0] = -EINVAL;
+
+	ret = get_spl_slot(&rsu_spt, sizeof(rsu_spt), &crt_spt_index);
+	if (ret) {
 		puts("RSU: Error - could not locate partition in the SPT table!\n");
 		return -EINVAL;
 	}
@@ -121,7 +140,9 @@ static int get_ssbl_slot(struct socfpga_rsu_s10_spt_slot *rsu_ssbl_slot)
 
 			/* compare SPL's spt name after the prefix */
 			if (!strncmp(result, rsu_spt.spt_slot[crt_spt_index].name,
-				     MAX_PART_NAME_LENGTH - strlen(SSBL_PART_PREFIX))) {
+				     MAX_PART_NAME_LENGTH - strlen(SSBL_PART_PREFIX)) ||
+			    !strncmp(result, rsu_spt.spt_slot[crt_spt_index].name,
+				     strlen(FACTORY_IMG_NAME))) {
 				printf("RSU: found SSBL partition %s at address 0x%08x.\n",
 				       result, (int)rsu_spt.spt_slot[i].offset[0]);
 				memcpy(rsu_ssbl_slot, &rsu_spt.spt_slot[i],
@@ -139,7 +160,100 @@ static int get_ssbl_slot(struct socfpga_rsu_s10_spt_slot *rsu_ssbl_slot)
 	return -EINVAL;
 }
 
-u32 rsu_spl_ssbl_address(void)
+int rsu_spl_mmc_filename(char *filename, int max_size)
+{
+	struct socfpga_rsu_s10_spt rsu_spt = {0};
+	int crt_spt_index = -EINVAL;
+	int ret, len;
+
+	if (!filename) {
+		printf("RSU: filename is NULL!\n");
+		return -ENOENT;
+	}
+
+	if ((strlen(UBOOT_PREFIX) + MAX_PART_NAME_LENGTH + strlen(UBOOT_ITB_EXT))
+	     > max_size)
+		return -ENAMETOOLONG;
+
+	ret = get_spl_slot(&rsu_spt, sizeof(rsu_spt), &crt_spt_index);
+	if (ret) {
+		if (ret == -EOPNOTSUPP) {
+			puts("RSU: Error - mbox_rsu_status failed! Check for RSU image.\n");
+			return -EOPNOTSUPP;
+		}
+
+		/* should throw error if cannot find u-boot proper(SSBL) in MMC */
+		panic("ERROR: could not find u-boot proper(SSBL): SSBL.%s!",
+		      rsu_spt.spt_slot[crt_spt_index].name);
+	}
+
+	/* add 1 to the length to copy for NULL terminated string */
+	strlcat(filename, UBOOT_PREFIX, strlen(UBOOT_PREFIX) + 1);
+	strlcat(filename + strlen(UBOOT_PREFIX),
+		rsu_spt.spt_slot[crt_spt_index].name,
+		strlen(rsu_spt.spt_slot[crt_spt_index].name) + 1);
+	len = strlen(UBOOT_PREFIX) + strlen(rsu_spt.spt_slot[crt_spt_index].name);
+#if IS_ENABLED(CONFIG_SPL_LOAD_FIT)
+	strlcat(filename + len,
+		UBOOT_ITB_EXT, strlen(UBOOT_ITB_EXT) + 1);
+#else
+	strlcat(filename + len,
+		UBOOT_IMG_EXT, strlen(UBOOT_IMG_EXT) + 1);
+#endif
+	printf("%s, filename: %s\n", __func__, filename);
+	return 0;
+}
+
+int rsu_spl_mmc_env_name(char *filename, int max_size, bool redund)
+{
+	struct socfpga_rsu_s10_spt rsu_spt = {0};
+	int crt_spt_index = -EINVAL;
+	int ret, len;
+
+	if (!filename) {
+		printf("RSU: filename is NULL!\n");
+		return -ENOENT;
+	}
+
+	if ((strlen(UBOOT_ENV_REDUND_PREFIX) + strlen(UBOOT_ENV_PREFIX) +
+	    MAX_PART_NAME_LENGTH + strlen(UBOOT_ENV_EXT)) > max_size)
+		return -ENAMETOOLONG;
+
+	ret = get_spl_slot(&rsu_spt, sizeof(rsu_spt), &crt_spt_index);
+	if (ret) {
+		if (ret == -EOPNOTSUPP) {
+			puts("RSU: Error - mbox_rsu_status failed! Check for RSU image.\n");
+			return -EOPNOTSUPP;
+		}
+
+		/* should throw error if cannot find u-boot proper(SSBL) in MMC */
+		printf("ERROR: could not find u-boot.env!");
+		return ret;
+	}
+
+	if (redund) {
+		strlcat(filename, UBOOT_ENV_REDUND_PREFIX,
+			strlen(UBOOT_ENV_REDUND_PREFIX) + 1);
+		strlcat(filename + strlen(UBOOT_ENV_REDUND_PREFIX),
+			rsu_spt.spt_slot[crt_spt_index].name,
+			strlen(rsu_spt.spt_slot[crt_spt_index].name) + 1);
+		len = strlen(UBOOT_ENV_REDUND_PREFIX) +
+		      strlen(rsu_spt.spt_slot[crt_spt_index].name);
+	} else {
+		strlcat(filename, UBOOT_ENV_PREFIX, strlen(UBOOT_ENV_PREFIX) + 1);
+		strlcat(filename + strlen(UBOOT_ENV_PREFIX),
+			rsu_spt.spt_slot[crt_spt_index].name,
+			strlen(rsu_spt.spt_slot[crt_spt_index].name) + 1);
+		len = strlen(UBOOT_ENV_PREFIX) +
+		      strlen(rsu_spt.spt_slot[crt_spt_index].name);
+	}
+	strlcat(filename + len, UBOOT_ENV_EXT, strlen(UBOOT_ENV_EXT) + 1);
+
+	printf("%s, filename: %s\n", __func__, filename);
+	return 0;
+}
+
+u32 rsu_spl_ssbl_address(bool is_qspi_imge_check)
 {
 	int ret;
 	struct socfpga_rsu_s10_spt_slot rsu_ssbl_slot = {0};
@@ -152,33 +266,53 @@ u32 rsu_spl_ssbl_address(void)
 		}
 
 		/* should throw error if cannot find u-boot proper(SSBL) address */
-		panic("ERROR: could not find u-boot proper(SSBL) address!");
+		if (is_qspi_imge_check) {
+			panic("ERROR: could not find u-boot proper(SSBL) address!");
+		} else {
+			printf("ERROR: could not find u-boot env address!");
+			return ret;
+		}
 	}
 
-	printf("RSU: Success found SSBL at offset: %08x.\n", rsu_ssbl_slot.offset[0]);
+	printf("RSU: Success found SSBL at offset: %08x.\n",
+	       rsu_ssbl_slot.offset[0]);
 	return rsu_ssbl_slot.offset[0];
 }
 
-u32 rsu_spl_ssbl_size(void)
+u32 rsu_spl_ssbl_size(bool is_qspi_imge_check)
 {
+	int ret;
 	struct socfpga_rsu_s10_spt_slot rsu_ssbl_slot = {0};
 
 	/* check for valid u-boot proper(SSBL) address for the size */
-	if (get_ssbl_slot(&rsu_ssbl_slot) == -EOPNOTSUPP) {
-		printf("ERROR: Invalid address, could not retrieve SSBL size!");
-		return 0;
+	ret = get_ssbl_slot(&rsu_ssbl_slot);
+	if (ret) {
+		if (ret == -EOPNOTSUPP) {
+			printf("ERROR: Invalid address, could not retrieve SSBL size!");
+			return 0;
+		}
+
+		/* should throw error if cannot find u-boot proper(SSBL) address */
+		if (is_qspi_imge_check) {
+			panic("ERROR: could not find u-boot proper(SSBL) address!");
+		} else {
+			printf("ERROR: could not find u-boot env address!");
+			return ret;
+		}
 	}
 
 	if (!rsu_ssbl_slot.length) {
 		/* throw error if cannot find u-boot proper(SSBL) size */
-		panic("ERROR: could not retrieve u-boot proper(SSBL) size!");
+		printf("ERROR: could not retrieve u-boot proper(SSBL) size!");
+		return ret;
 	}
 
-	printf("RSU: Success found SSBL with length: %08x.\n", rsu_ssbl_slot.length);
+	printf("RSU: Success found SSBL with length: %08x.\n",
+	       rsu_ssbl_slot.length);
 	return rsu_ssbl_slot.length;
 }
 
 unsigned int spl_spi_get_uboot_offs(struct spi_flash *flash)
 {
-	return rsu_spl_ssbl_address();
+	return rsu_spl_ssbl_address(true);
 }

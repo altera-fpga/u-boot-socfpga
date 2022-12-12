@@ -23,6 +23,7 @@
 #include <asm/cache.h>
 #include <asm/global_data.h>
 #include <linux/stddef.h>
+#include <linux/sizes.h>
 
 #ifdef CONFIG_XPL_BUILD
 /* TODO(sjg@chromium.org): Figure out why this is needed */
@@ -34,6 +35,10 @@
 #endif
 
 DECLARE_GLOBAL_DATA_PTR;
+__weak int rsu_spl_mmc_env_name(char *filename, int max_size, bool redund)
+{
+	return -ENOENT;
+}
 
 __weak const char *env_fat_get_intf(void)
 {
@@ -57,17 +62,42 @@ __weak char *env_fat_get_dev_part(void)
 #endif
 }
 
+static int get_env_filename(char *env_file, bool redund)
+{
+	int ret;
+
+	ret = rsu_spl_mmc_env_name(env_file, SZ_256, redund);
+	if (ret) {
+		printf("RSU: Multiboot env. filename is not found\n");
+		return ret;
+	}
+
+	return 0;
+}
+
 static int env_fat_save(void)
 {
 	env_t __aligned(ARCH_DMA_MINALIGN) env_new;
 	struct blk_desc *dev_desc = NULL;
-	struct disk_partition info;
 	const char *file = CONFIG_ENV_FAT_FILE;
+	struct disk_partition info;
 	int dev, part;
 	int err;
 	loff_t size;
 	const char *ifname = env_fat_get_intf();
 	const char *dev_and_part = env_fat_get_dev_part();
+#if IS_ENABLED(CONFIG_SOCFPGA_RSU_MULTIBOOT)
+	char env_file[SZ_256] = {0};
+	int ret;
+
+	ret = get_env_filename(env_file, false);
+	if (ret) {
+		printf("RSU: Multiboot env. filename is not found\n");
+		return ret;
+	}
+
+	file = env_file;
+#endif
 
 	err = env_export(&env_new);
 	if (err)
@@ -90,7 +120,17 @@ static int env_fat_save(void)
 
 #ifdef CONFIG_ENV_REDUNDANT
 	if (gd->env_valid == ENV_VALID)
+#if IS_ENABLED(CONFIG_SOCFPGA_RSU_MULTIBOOT)
+		ret = get_env_filename(env_file, true);
+		if (ret) {
+			printf("RSU: Multiboot env. filename is not found\n");
+			return ret;
+		}
+
+		file = env_file;
+#else
 		file = CONFIG_ENV_FAT_FILE_REDUND;
+#endif
 #endif
 
 	err = file_fat_write(file, (void *)&env_new, 0, sizeof(env_t), &size);
@@ -124,6 +164,11 @@ static int env_fat_load(void)
 	int err1;
 	const char *ifname = env_fat_get_intf();
 	const char *dev_and_part = env_fat_get_dev_part();
+#if IS_ENABLED(CONFIG_SOCFPGA_RSU_MULTIBOOT)
+	const char *file;
+	char env_file[SZ_256] = {0};
+	int ret;
+#endif
 
 #ifdef CONFIG_MMC
 	if (!strcmp(ifname, "mmc"))
@@ -162,9 +207,32 @@ static int env_fat_load(void)
 		goto err_env_relocate;
 	}
 
+#if IS_ENABLED(CONFIG_SOCFPGA_RSU_MULTIBOOT)
+	ret = get_env_filename(env_file, false);
+	if (ret) {
+		printf("RSU: Multiboot env. filename is not found\n");
+		return ret;
+	}
+
+	file = env_file;
+	err1 = file_fat_read(file, buf1, CONFIG_ENV_SIZE);
+#else
 	err1 = file_fat_read(CONFIG_ENV_FAT_FILE, buf1, CONFIG_ENV_SIZE);
+#endif
+
 #ifdef CONFIG_ENV_REDUNDANT
+#if IS_ENABLED(CONFIG_SOCFPGA_RSU_MULTIBOOT)
+	ret = get_env_filename(env_file, true);
+	if (ret) {
+		printf("RSU: Multiboot env. filename is not found\n");
+		return ret;
+	}
+
+	file = env_file;
+	err2 = file_fat_read(file, buf2, CONFIG_ENV_SIZE);
+#else
 	err2 = file_fat_read(CONFIG_ENV_FAT_FILE_REDUND, buf2, CONFIG_ENV_SIZE);
+#endif
 
 	err1 = (err1 >= 0) ? 0 : -1;
 	err2 = (err2 >= 0) ? 0 : -1;
@@ -175,8 +243,13 @@ static int env_fat_load(void)
 		 * This printf is embedded in the messages from env_save that
 		 * will calling it. The missing \n is intentional.
 		 */
-		printf("Unable to read \"%s\" from %s%d:%d... \n",
-			CONFIG_ENV_FAT_FILE, ifname, dev, part);
+#if IS_ENABLED(CONFIG_SOCFPGA_RSU_MULTIBOOT)
+		printf("Unable to read \"%s\" from %s%d:%d...\n",
+		       file, ifname, dev, part);
+#else
+		printf("Unable to read \"%s\" from %s%d:%d...\n",
+		       CONFIG_ENV_FAT_FILE, ifname, dev, part);
+#endif
 		goto err_env_relocate;
 	}
 

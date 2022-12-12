@@ -41,8 +41,8 @@ static ulong env_new_offset	= CONFIG_ENV_OFFSET_REDUND;
 
 #if (CONFIG_IS_ENABLED(SOCFPGA_RSU_MULTIBOOT))
 #undef CONFIG_ENV_OFFSET
-#define CONFIG_ENV_OFFSET (rsu_spl_ssbl_address() +\
-					       rsu_spl_ssbl_size() -\
+#define CONFIG_ENV_OFFSET (rsu_spl_ssbl_address(false) +\
+					       rsu_spl_ssbl_size(false) -\
 					       CONFIG_ENV_SIZE)
 #endif
 

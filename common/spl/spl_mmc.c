@@ -456,14 +456,37 @@ int spl_mmc_load(struct spl_image_info *spl_image,
 	return ret;
 }
 
+__weak int rsu_spl_mmc_filename(char *filename, int max_size)
+{
+	return -ENOENT;
+}
+
 int spl_mmc_load_image(struct spl_image_info *spl_image,
 		       struct spl_boot_device *bootdev)
 {
+#if IS_ENABLED(CONFIG_SOCFPGA_RSU_MULTIBOOT)
+	const char *file;
+	char filename[SZ_256] = {0};
+	int ret;
+
+	ret = rsu_spl_mmc_filename(filename, SZ_256);
+	if (ret) {
+		printf("RSU: Multiboot filename is not found\n");
+		return ret;
+	}
+
+	file = filename;
+	printf("%s: Boot from filename: %s\n", __func__, filename);
+#endif
 	return spl_mmc_load(spl_image, bootdev,
+#if IS_ENABLED(CONFIG_SOCFPGA_RSU_MULTIBOOT)
+				file,
+#else
 #ifdef CONFIG_SPL_FS_LOAD_PAYLOAD_NAME
 			    CONFIG_SPL_FS_LOAD_PAYLOAD_NAME,
 #else
 			    NULL,
+#endif
 #endif
 #ifdef CONFIG_SYS_MMCSD_RAW_MODE_U_BOOT_PARTITION
 			    spl_mmc_boot_partition(bootdev->boot_device),
