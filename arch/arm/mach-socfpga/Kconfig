@@ -9,7 +9,7 @@ config NR_DRAM_BANKS
 config SOCFPGA_RSU_MULTIBOOT
 	bool "Enable RSU Multiboot Selection Feature"
 	depends on ARCH_SOCFPGA_SOC64 && SPI_FLASH
-	default y
+	default n
 	help
 	 Multiboot u-boot proper image (SSBL) selection feature for RSU.
 	 SPL will select the respective SSBL based on the partition it resides
