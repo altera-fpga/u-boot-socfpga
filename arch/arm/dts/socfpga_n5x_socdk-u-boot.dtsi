@@ -48,6 +48,10 @@
 	status = "okay";
 };
 
+&nand {
+	u-boot,dm-pre-reloc;
+};
+
 &mmc {
 	drvsel = <3>;
 	smplsel = <0>;
