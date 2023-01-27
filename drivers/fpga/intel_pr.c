@@ -99,7 +99,7 @@ static int intel_freeze_br_req_ack(fdt_addr_t addr, u32 req_ack)
 			break;
 
 		udelay(1);
-		WATCHDOG_RESET();
+		schedule();
 	}
 
 	return ret;
