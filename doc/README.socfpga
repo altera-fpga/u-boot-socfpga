@@ -362,3 +362,26 @@ Table of Contents
 		socfpga_agilex_atf_defconfig    -> socfpga_agilex_defconfig
 		socfpga_n5x_atf_defconfig       -> socfpga_n5x_defconfig
 		socfpga_stratix10_atf_defconfig -> socfpga_stratix10_defconfig
+
+10. FPGA full reconfig flow for SoC64 devices
+---------------------------------------------------------------------
+	Bridges should be disabled before running any FPGA reconfiguration,
+	this ensures that all outstanding traffic between MPFE to bridge and
+	FPGA to bridge are completed.
+
+	Bridges should be enabled after FPGA is successfully programmed
+	and entered user mode.
+
+	Legacy and official boot flow:
+	If you are running fpga load command in U-Boot console, you are required
+	to run below steps to gracefully shutdown the bridges before running FPGA
+	reconfiguration:
+		1. bridge disable command
+		2. fpga load command
+		3. bridge enable command after FPGA is successfully programmed
+
+	If you are running bootm to program FPGA with bitstream loading from
+	FIT, you are required to run below steps before running bootm command.
+		1. bridge disable command (can be done in U-Boot script)
+		2. bootm, the bridge would be enabled automaticaly once FPGA is
+		is successfully programmed.
