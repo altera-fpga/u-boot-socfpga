@@ -469,6 +469,32 @@ static enum reset_type get_reset_type(u32 reg)
 		ALT_SYSMGR_SCRATCH_REG_0_DDR_RESET_TYPE_SHIFT;
 }
 
+void reset_type_debug_print(u32 boot_scratch_cold0_reg)
+{
+	switch (get_reset_type(boot_scratch_cold0_reg)) {
+	case POR_RESET:
+		debug("%s: POR is triggered\n", __func__);
+		break;
+	case WARM_RESET:
+		debug("%s: Warm reset is triggered\n", __func__);
+		break;
+	case COLD_RESET:
+		debug("%s: Cold reset is triggered\n", __func__);
+		break;
+	case NCONFIG:
+		printf("%s: NCONFIG is triggered\n", __func__);
+		break;
+	case JTAG_CONFIG:
+		printf("%s: JTAG_CONFIG is triggered\n", __func__);
+		break;
+	case RSU_RECONFIG:
+		printf("%s: RSU_RECONFIG is triggered\n", __func__);
+		break;
+	default:
+		debug("%s: Invalid reset type\n", __func__);
+	}
+}
+
 bool is_ddr_init(bool is_ddr_hang_be4_rst)
 {
 	u32 reg = readl(socfpga_get_sysmgr_addr() +
@@ -2756,32 +2782,6 @@ static int ddr_post_config(struct ddr_handoff *handoff, bool *need_calibrate)
 					      need_calibrate);
 
 	return ret;
-}
-
-void reset_type_debug_print(u32 boot_scratch_cold0_reg)
-{
-	switch (get_reset_type(boot_scratch_cold0_reg)) {
-	case POR_RESET:
-		debug("%s: POR is triggered\n", __func__);
-		break;
-	case WARM_RESET:
-		debug("%s: Warm reset is triggered\n", __func__);
-		break;
-	case COLD_RESET:
-		debug("%s: Cold reset is triggered\n", __func__);
-		break;
-	case NCONFIG:
-		printf("%s: NCONFIG is triggered\n", __func__);
-		break;
-	case JTAG_CONFIG:
-		printf("%s: JTAG_CONFIG is triggered\n", __func__);
-		break;
-	case RSU_RECONFIG:
-		printf("%s: RSU_RECONFIG is triggered\n", __func__);
-		break;
-	default:
-		debug("%s: Invalid reset type\n", __func__);
-	}
 }
 
 int sdram_mmr_init_full(struct udevice *dev)
