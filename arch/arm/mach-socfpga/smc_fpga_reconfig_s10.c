@@ -14,9 +14,9 @@
 #include <linux/intel-smc.h>
 #include <asm/arch/reset_manager.h>
 
-#define FPGA_CONFIG_RESEVED_MEM_START		(CONFIG_SYS_SDRAM_BASE + \
+#define FPGA_CONFIG_RESEVED_MEM_START		(CFG_SYS_SDRAM_BASE + \
 						 0x400000)
-#define FPGA_CONFIG_RESERVED_MEM_END		(CONFIG_SYS_SDRAM_BASE + \
+#define FPGA_CONFIG_RESERVED_MEM_END		(CFG_SYS_SDRAM_BASE + \
 						 0xFFFFFF)
 
 #define FPGA_CONFIG_BUF_MAX			16
