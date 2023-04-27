@@ -24,9 +24,16 @@
 #include <linux/io.h>
 #include <linux/sizes.h>
 #include <linux/kconfig.h>
+#include <asm/arch/reset_manager.h>
 
-#define BANK_INCREMENT		4
-#define NR_BANKS		8
+#define BANK_INCREMENT				4
+#define NR_BANKS				8
+#define RSTMGR_PER0MODRST_NAND			BIT(5)
+#define RSTMGR_PER0MODRST_DMA			BIT(16)
+#define RSTMGR_PER0MODRST_DMAIF			GENMASK(31,24)
+#define RSTMGR_PER0MODRST_NAND_DMA_DEASSERT	RSTMGR_PER0MODRST_NAND \
+						| RSTMGR_PER0MODRST_DMA \
+						| RSTMGR_PER0MODRST_DMAIF
 
 struct socfpga_reset_data {
 	void __iomem *modrst_base;
@@ -111,6 +118,16 @@ static int socfpga_reset_probe(struct udevice *dev)
 static int socfpga_reset_remove(struct udevice *dev)
 {
 	struct socfpga_reset_data *data = dev_get_priv(dev);
+
+/*
+ * TODO: This is temporary solution for NAND/DMA deaasert.
+ * When NAND/DMA driver is ready, the deassert shall be done
+ * from NAND/DMA driver.
+ */
+#if defined(CONFIG_ARCH_SOCFPGA_AGILEX5)
+	clrbits_le32(socfpga_get_rstmgr_addr() + RSTMGR_SOC64_PER0MODRST, \
+		     RSTMGR_PER0MODRST_NAND_DMA_DEASSERT);
+#endif
 
 	if (socfpga_reset_keep_enabled()) {
 		puts("Deasserting all peripheral resets\n");
