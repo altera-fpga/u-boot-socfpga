@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2018 Intel Corporation
+ *  Copyright (C) 2018-2023 Intel Corporation
  *
  * SPDX-License-Identifier:	GPL-2.0
  */
@@ -1075,6 +1075,7 @@ static const struct func_t rsu_func_t[] = {
 	{"check_running_factory", check_running_factory}
 };
 
+#if CONFIG_IS_ENABLED(CADENCE_QSPI)
 int do_rsu(struct cmd_tbl *cmdtp, int flag, int argc, char * const argv[])
 {
 	const char *cmd;
@@ -1094,6 +1095,13 @@ int do_rsu(struct cmd_tbl *cmdtp, int flag, int argc, char * const argv[])
 
 	return CMD_RET_USAGE;
 }
+#else
+int do_rsu(struct cmd_tbl *cmdtp, int flag, int argc, char * const argv[])
+{
+	printf("Skip: RSU is not enabled\n");
+	return CMD_RET_FAILURE;
+}
+#endif  /*CONFIG_CADENCE_QSPI*/
 
 U_BOOT_CMD(
 	rsu, 5, 1, do_rsu,

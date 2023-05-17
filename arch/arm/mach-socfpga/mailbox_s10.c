@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2017-2018 Intel Corporation <www.intel.com>
+ * Copyright (C) 2017-2023 Intel Corporation <www.intel.com>
  *
  */
 
@@ -392,24 +392,6 @@ error:
 
 	return ret;
 }
-#endif /* CONFIG_CADENCE_QSPI */
-
-int mbox_reset_cold(void)
-{
-#if !defined(CONFIG_XPL_BUILD) && defined(CONFIG_SPL_ATF)
-	psci_system_reset();
-#else
-	int ret;
-
-	ret = mbox_send_cmd(MBOX_ID_UBOOT, MBOX_REBOOT_HPS, MBOX_CMD_DIRECT,
-			    0, NULL, 0, 0, NULL);
-	if (ret) {
-		/* mailbox sent failure, wait for watchdog to kick in */
-		hang();
-	}
-#endif
-	return 0;
-}
 
 int mbox_rsu_get_spt_offset(u32 *resp_buf, u32 resp_buf_len)
 {
@@ -495,6 +477,54 @@ int __secure mbox_rsu_update_psci(u32 *flash_offset)
 				  0, 0, NULL);
 }
 #endif
+
+#else
+int mbox_rsu_get_spt_offset(u32 *resp_buf, u32 resp_buf_len)
+{
+	return MBOX_FUNC_NOT_SUPPORTED;
+}
+
+int mbox_rsu_status(u32 *resp_buf, u32 resp_buf_len)
+{
+	return MBOX_FUNC_NOT_SUPPORTED;
+}
+
+#if CONFIG_IS_ENABLED(ARMV8_PSCI)
+int __secure mbox_rsu_status_psci(u32 *resp_buf, u32 resp_buf_len)
+{
+	return MBOX_FUNC_NOT_SUPPORTED;
+}
+#endif
+
+int mbox_rsu_update(u32 *flash_offset)
+{
+	return MBOX_FUNC_NOT_SUPPORTED;
+}
+
+#if CONFIG_IS_ENABLED(ARMV8_PSCI)
+int __secure mbox_rsu_update_psci(u32 *flash_offset)
+{
+	return MBOX_FUNC_NOT_SUPPORTED;
+}
+#endif
+#endif /*CONFIG_CADENCE_QSPI*/
+
+int mbox_reset_cold(void)
+{
+#if !CONFIG_IS_ENABLED(SPL_BUILD) && CONFIG_IS_ENABLED(SPL_ATF)
+	psci_system_reset();
+#else
+	int ret;
+
+	ret = mbox_send_cmd(MBOX_ID_UBOOT, MBOX_REBOOT_HPS, MBOX_CMD_DIRECT,
+			    0, NULL, 0, 0, NULL);
+	if (ret) {
+		/* mailbox sent failure, wait for watchdog to kick in */
+		hang();
+	}
+#endif
+	return 0;
+}
 
 /* Accepted commands: CONFIG_STATUS or RECONFIG_STATUS */
 static __always_inline int mbox_get_fpga_config_status_common(u32 cmd)

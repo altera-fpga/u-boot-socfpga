@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0
  *
- * Copyright (C) 2017-2018 Intel Corporation <www.intel.com>
+ * Copyright (C) 2017-2023 Intel Corporation <www.intel.com>
  *
  */
 
@@ -92,6 +92,8 @@ enum ALT_SDM_MBOX_RESP_CODE {
 	MBOX_RESP_TIMEOUT = 0xB,
 	/* HW (i.e. QSPI) is not ready (initialized or configured) */
 	MBOX_RESP_HW_NOT_RDY = 0xC,
+	/* Function is not supported in this firmware */
+	MBOX_FUNC_NOT_SUPPORTED = 0xF,
 	/* Invalid license for IID registration */
 	MBOX_RESP_PUF_ACCCES_FAILED = 0x80,
 	MBOX_PUF_ENROLL_DISABLE = 0x81,
