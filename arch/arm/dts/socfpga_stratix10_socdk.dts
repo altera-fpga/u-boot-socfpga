@@ -113,14 +113,14 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 
-			qspi_boot: partition@2000000 {
+			qspi_boot: partition@0 {
 				label = "u-boot";
-				reg = <0x2000000 0x200000>;
+				reg = <0x0 0x04200000>;
 			};
 
-			qspi_rootfs: partition@2200000 {
+			root: partition@4200000 {
 				label = "root";
-				reg = <0x2200000 0x0DC00000>;
+				reg = <0x04200000 0x0BE00000>;
 			};
 		};
 	};
