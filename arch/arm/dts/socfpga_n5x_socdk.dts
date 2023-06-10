@@ -91,6 +91,23 @@
 	bus-width = <4>;
 };
 
+&uart0 {
+	status = "okay";
+};
+
+&usb0 {
+	status = "okay";
+	disable-over-current;
+};
+
+&usb1 {
+	status = "okay";
+};
+
+&watchdog0 {
+	status = "okay";
+};
+
 &qspi {
 	status = "okay";
 	flash0: flash@0 {
@@ -124,16 +141,4 @@
 			};
 		};
 	};
-};
-
-&uart0 {
-	status = "okay";
-};
-
-&usb0 {
-	status = "okay";
-};
-
-&usb1 {
-	status = "okay";
 };
