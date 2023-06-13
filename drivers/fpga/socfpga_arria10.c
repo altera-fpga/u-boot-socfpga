@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2017-2019 Intel Corporation <www.intel.com>
+ * Copyright (C) 2017-2023 Intel Corporation <www.intel.com>
  */
 #include <image.h>
 #include <log.h>
@@ -532,8 +532,6 @@ static void get_rbf_image_info(struct rbf_info *rbf, u16 *buffer)
 
 		rbf->section = unknown;
 		break;
-
-		schedule();
 	}
 }
 
