@@ -223,7 +223,7 @@ static void socfpga_a10_handoff_workaround(struct udevice *dev)
 
 	ret = clk_request(dev, &bulk->clks[0]);
 	if (ret)
-		free(bulk->clks);
+		devm_kfree(dev, bulk->clks);
 }
 
 static int socfpga_a10_clk_bind(struct udevice *dev)
