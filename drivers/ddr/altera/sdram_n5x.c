@@ -1476,7 +1476,7 @@ static bool is_ddrconfig_hash_match(const void *buffer)
 
 static ofnode get_ddr_ofnode(ofnode from)
 {
-	return ofnode_by_compatible(from, "intel,sdr-ctl-dm");
+	return ofnode_by_compatible(from, "intel,sdr-ctl-n5x");
 }
 
 static const char *get_ddrcal_ddr_offset(void)
