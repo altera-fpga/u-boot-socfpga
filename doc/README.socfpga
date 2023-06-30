@@ -25,11 +25,11 @@ Table of Contents
 	Processor			SOCFPGA Device Family		Intel Quartus Prime Pro Edition		Intel Quartus Prime Standard Edition	
 	--------------------------------------------------------------------------------------------------------------------------------------------
 	Dual-core ARM Cortex-A9		Cyclone V			N/A					22.1
-					Arria 10			23.1					N/A
+					Arria 10			23.2					N/A
 
-	Quad-core ARM Cortex-A53	Stratix 10			23.1					N/A
-					Agilex				23.1					N/A
-					eASIC N5X			23.1					N/A
+	Quad-core ARM Cortex-A53	Stratix 10			23.2					N/A
+					Agilex				23.2					N/A
+					eASIC N5X			23.2					N/A
 
 
 2. Feature Support
@@ -70,7 +70,7 @@ Table of Contents
 3. Major Changes and Known Issues 
 ---------------------------------------------------------------------
 
-	3.1 Upgraded U-boot to version v2023.01
+	3.1 Upgraded U-boot to version v2023.04
 
 
 
