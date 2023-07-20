@@ -48,6 +48,7 @@
 	spi-tx-bus-width = <4>;
 	spi-rx-bus-width = <4>;
 	bootph-all;
+	/delete-property/ cdns,read-delay;
 };
 
 &sysmgr {
