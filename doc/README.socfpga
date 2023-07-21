@@ -42,13 +42,13 @@ Table of Contents
 	HPS bridge (LWH2F, H2F, F2S)		Yes		Yes		Yes		Yes		Yes
 	HPS cold/warm reset			Yes		Yes		Yes		Yes		Yes
 	FPGA configuration			Yes		Yes		Yes		Yes		No
-	Partial reconfiguration			No		No		Yes		No		No
+	Partial reconfiguration			No		No		Yes		Yes		No
 	Ethernet (Synopsys EMAC controller)	Yes		Yes		Yes		Yes		Yes
 	Synopsys GPIO controller		Yes		Yes		Yes		Yes		Yes
 	Synopsys UART controller		Yes		Yes		Yes		Yes		Yes
 	Synopsys USB controller			Yes		Yes		Yes		Yes		Yes
 	Synopsys Watchdog timer			Yes		Yes		Yes		Yes		Yes
-	Synopsys I2C master controller		Yes		No		Yes		Yes		Yes
+	Synopsys I2C master controller		Yes		Yes		Yes		Yes		Yes
 	Synopsys SDMMC controller		Yes		Yes		Yes		Yes		Yes
 	Cadence QSPI controller			Yes		Yes		Yes		Yes		Yes
 	Denali NAND controller			No		Yes		Yes		Yes		Yes
