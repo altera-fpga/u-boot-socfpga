@@ -107,6 +107,12 @@ config ARCH_SOCFPGA_AGILEX5
 config TARGET_SOCFPGA_AGILEX5_EMU
 	bool "Enable build that bootable only on Agilex5 Emulator"
 
+config TARGET_SOCFPGA_AGILEX5_OOBE2
+	bool "Enable build that bootable only on Agilex5 OOBE2 DevKit"
+
+config TARGET_SOCFPGA_AGILEX5_DEBUG2
+	bool "Enable build that bootable only on Agilex5 DEBUG2 DevKit"
+
 config ARCH_SOCFPGA_ARRIA5
 	bool
 	select ARCH_SOCFPGA_GEN5
