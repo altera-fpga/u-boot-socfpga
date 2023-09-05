@@ -15,9 +15,11 @@
 #include <asm/arch/misc.h>
 #include <asm/arch/reset_manager.h>
 #include <asm/arch/smc_api.h>
+#include <asm/arch/smmuv3_dv.h>
 #include <asm/arch/system_manager.h>
 #include <asm/io.h>
 #include <asm/system.h>
+#include <linux/bitfield.h>
 #include <mach/clock_manager.h>
 
 #define RSU_DEFAULT_LOG_LEVEL  7
@@ -132,9 +134,33 @@ int arch_early_init_r(void)
 	return 0;
 }
 
+#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5)
+static bool is_agilex5_reva_workaround_required(void)
+{
+	u32 reg;
+	bool status;
+
+	reg = readl(socfpga_get_sysmgr_addr() + SYSMGR_SOC64_BOOT_SCRATCH_POR1);
+	debug("%s: SYSMGR_SOC64_BOOT_SCRATCH_POR1: 0x%x\n", __func__, reg);
+
+	status = FIELD_GET(ALT_SYSMGR_SCRATCH_REG_POR_1_REVA_WORKAROUND_MASK, reg);
+	debug("%s: Agilex 5 Rev A workaround status: 0x%x\n", __func__, status);
+
+	return status;
+}
+#endif
+
 /* Return 1 if FPGA is ready otherwise return 0 */
 int is_fpga_config_ready(void)
 {
+#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5)
+	if (is_agilex5_reva_workaround_required()) {
+		return (readl(socfpga_get_sysmgr_addr() +
+				SYSMGR_SOC64_BOOT_SCRATCH_POR1) &
+				ALT_SYSMGR_SCRATCH_REG_POR_1_REVA_WORKAROUND_USER_MODE_MASK);
+	}
+#endif
+
 	return (readl(socfpga_get_sysmgr_addr() + SYSMGR_SOC64_FPGA_CONFIG) &
 		SYSMGR_FPGACONFIG_READY_MASK) == SYSMGR_FPGACONFIG_READY_MASK;
 }
@@ -166,8 +192,19 @@ void do_qspi_ownership_quirk(void)
 	}
 }
 
+
 void arch_preboot_os(void)
 {
 	do_qspi_ownership_quirk();
 	mbox_hps_stage_notify(HPS_EXECUTION_STATE_OS);
+}
+
+int misc_init_r(void)
+{
+#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5)
+	if (is_agilex5_reva_workaround_required())
+		return smmu_sdm_init();
+#endif
+
+	return 0;
 }
