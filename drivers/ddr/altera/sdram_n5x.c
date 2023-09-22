@@ -38,8 +38,9 @@ DECLARE_GLOBAL_DATA_PTR;
 
 /* DDR handoff SHA384 attribute */
 #define DDR_HANDOFF_IMG_ADDR	0xFFE44000
-#define DDR_HANDOFF_IMG_LEN	0x1A000
+#define DDR_HANDOFF_IMG_LEN	0x1A200
 #define CHUNKSZ_PER_WD_RESET	(256 * 1024)
+#define MEMCLK_HANDOFF_SIZE 0x2C
 
 /* MPFE NOC registers */
 #define FPGA2SDRAM_MGR_MAIN_SIDEBANDMGR_FLAGOUTSET0	0xF8024050
@@ -1107,6 +1108,28 @@ static void phy_ocram(phys_addr_t phy_base, phys_addr_t phy_offset,
 	}
 }
 
+static int populate_memclk_handoff(void *handoff_base, u32 *mclk_table, u32 size)
+{
+	u32 length = MEMCLK_HANDOFF_SIZE - 4;
+	u32 offset = length - 8;
+	u32 handoff_table[length];
+	u32 i;
+	int ret = 0;
+
+	ret = socfpga_handoff_read((void *)handoff_base, handoff_table, length);
+	if (ret) {
+		debug("%s: handoff read failed. ret: %d\n", __func__, ret);
+		return ret;
+	}
+
+	for (i = 0; i < size; i++) {
+		mclk_table[i] = handoff_table[offset + i];
+		debug("mclk_table[%d]: 0x%x\n", i, mclk_table[i]);
+	}
+
+	return ret;
+}
+
 static int cal_data_ocram(phys_addr_t phy_base, u32 addr,
 			  enum data_process proc)
 {
@@ -1392,6 +1415,11 @@ static int cal_data_ocram(phys_addr_t phy_base, u32 addr,
 	size_t phybak_num;
 	u32 *phybak_p = phybak;
 	u16 *data;
+	u32 memclk_table[4];
+	u32 size = sizeof(memclk_table) / sizeof(memclk_table[0]);
+	u8 *memclk_hash_offset = (u8 *)(SOC64_OCRAM_PHY_BACKUP_BASE - SZ_1K);
+	int ret = 0;
+
 	struct bac_cal_data_t *cal = (struct bac_cal_data_t *)
 					((uintptr_t)addr);
 
@@ -1426,6 +1454,17 @@ static int cal_data_ocram(phys_addr_t phy_base, u32 addr,
 	};
 
 	if (proc == STORE) {
+		ret = populate_memclk_handoff((void *)SOC64_HANDOFF_CLOCK,
+					      memclk_table, size);
+		if (ret) {
+			debug("%s: Memclks config Magic Number miss match. ret :%d\n",
+			      __func__, ret);
+			return -EFAULT;
+		}
+
+		sha384_csum_wd((u8 *)memclk_table, 4 * size,
+			       memclk_hash_offset, CHUNKSZ_PER_WD_RESET);
+
 		/* Creating header */
 		/* Generate HASH384 from the DDR config */
 		sha384_csum_wd((u8 *)DDR_HANDOFF_IMG_ADDR,
@@ -1456,9 +1495,27 @@ static bool is_ddrconfig_hash_match(const void *buffer)
 {
 	int ret;
 	u8 hash[SHA384_SUM_LEN];
+	u32 memclk_table[4];
+	u32 size = sizeof(memclk_table) / sizeof(memclk_table[0]);
 
 	/* Magic symbol in first 4 bytes of header */
 	struct cal_header_t *header = (struct cal_header_t *)buffer;
+
+	/*
+	 * Read and generate the hash for the Mem clk values and store before
+	 * calcuting the HASH384 generation before Image.
+	 */
+	ret = populate_memclk_handoff((void *)SOC64_HANDOFF_CLOCK,
+				      memclk_table, size);
+	if (ret) {
+		debug("%s: Memclks config Magic Number miss match. ret : %d\n",
+		      __func__, ret);
+		return -EFAULT;
+	}
+
+	sha384_csum_wd((u8 *)memclk_table, (4 * sizeof(u32)),
+		       (u8 *)DDR_HANDOFF_IMG_ADDR + DDR_HANDOFF_IMG_LEN - SZ_512,
+		       CHUNKSZ_PER_WD_RESET);
 
 	/* Generate HASH384 from the image */
 	sha384_csum_wd((u8 *)DDR_HANDOFF_IMG_ADDR, DDR_HANDOFF_IMG_LEN,
@@ -1650,9 +1707,10 @@ static int init_phy(struct ddr_handoff *ddr_handoff_info,
 
 	if (*need_calibrate) {
 		/* Execute PHY configuration handoff */
-		handoff_process(ddr_handoff_info, ddr_handoff_info->phy_handoff_base,
-			ddr_handoff_info->phy_handoff_length,
-			ddr_handoff_info->phy_base);
+		handoff_process(ddr_handoff_info,
+				ddr_handoff_info->phy_handoff_base,
+				ddr_handoff_info->phy_handoff_length,
+				ddr_handoff_info->phy_base);
 	} else {
 		ret = cal_data_ocram(ddr_handoff_info->phy_base,
 				     SOC64_OCRAM_PHY_BACKUP_BASE, LOADING);
@@ -2884,8 +2942,8 @@ int sdram_mmr_init_full(struct udevice *dev)
 			 */
 			if (is_ddr_retention_enabled(reg)) {
 				ret = cal_data_ocram(ddr_handoff_info.phy_base,
-						   SOC64_OCRAM_PHY_BACKUP_BASE,
-						   STORE);
+						     SOC64_OCRAM_PHY_BACKUP_BASE,
+						     STORE);
 
 				if (ret)
 					return ret;
