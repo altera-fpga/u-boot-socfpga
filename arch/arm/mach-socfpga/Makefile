@@ -94,6 +94,8 @@ obj-y	+= ccu_ncore3.o
 obj-y	+= system_manager_soc64.o
 obj-y	+= timer_s10.o
 obj-$(CONFIG_SOCFPGA_SECURE_VAB_AUTH)	+= secure_vab.o
+obj-y	+= smmu_agilex5_dv.o
+obj-y	+= smmuv3_dv.o
 obj-$(CONFIG_SOCFPGA_SECURE_VAB_AUTH)	+= vab.o
 ifndef CONFIG_SPL_BUILD
 obj-y   += rsu.o
