@@ -14,6 +14,7 @@
 #include <asm/arch/mailbox_s10.h>
 #include <asm/arch/misc.h>
 #include <asm/arch/reset_manager.h>
+#include <asm/arch/smc_api.h>
 #include <asm/arch/system_manager.h>
 #include <asm/io.h>
 #include <asm/system.h>
@@ -149,7 +150,24 @@ void do_bridge_reset(int enable, unsigned int mask)
 	socfpga_bridges_reset(enable, mask);
 }
 
+void do_qspi_ownership_quirk(void)
+{
+	if (IS_ENABLED(CONFIG_CADENCE_QSPI) && IS_ENABLED(CONFIG_SPL_ATF)) {
+		int ret = 0;
+
+		ret = env_get_yesno("returnQSPI");
+		if (ret == 1) {
+			/* FCS Attestation:return QSPI ownership to SDM if needed */
+			ret = smc_send_mailbox(MBOX_QSPI_CLOSE, 0, NULL,
+					       0, 0, NULL);
+			if (ret)
+				printf("close QSPI failed, (err=%d)\n", ret);
+		}
+	}
+}
+
 void arch_preboot_os(void)
 {
+	do_qspi_ownership_quirk();
 	mbox_hps_stage_notify(HPS_EXECUTION_STATE_OS);
 }
