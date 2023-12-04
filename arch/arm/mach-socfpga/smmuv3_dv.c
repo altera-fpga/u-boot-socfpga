@@ -1428,10 +1428,7 @@ printf("after entry\n");
 	}
 printf("after for_command\n");
 printf("smmuAddCommand:: Command is:\n 0x%02x%02x%02x%02x \n 0x%02x%02x%02x%02x \n 0x%02x%02x%02x%02x \n 0x%02x%02x%02x%02x\n", entry[3], entry[2], entry[1], entry[0], entry[7], entry[6], entry[5], entry[4], entry[11], entry[10], entry[9], entry[8], entry[15], entry[14], entry[13], entry[12]);
-// isb();
-// dsb();
- // dsb();
-	flush_dcache_range((unsigned long)entry, (unsigned long)(entry + COMMAND_SIZE));
+
 	printf("after flushing 0x%lx - 0x%lx\n", (unsigned long)entry, (unsigned long)(entry + COMMAND_SIZE));
 printf("smmu1_S_IDR1.secure : 0x%lx\n", smmu1->SMMU_S_IDR1 & BIT(31));
 

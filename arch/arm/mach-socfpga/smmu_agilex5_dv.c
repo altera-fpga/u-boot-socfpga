@@ -10,6 +10,7 @@
 #include <asm/arch/firewall.h>
 #include <asm/arch/smmu_agilex5.h>
 #include <asm/arch/system_manager.h>
+#include <linux/sizes.h>
 
 /* TF SMMU workaround */
 #include <asm/arch/smmuv3_dv.h>
@@ -53,29 +54,29 @@ DECLARE_GLOBAL_DATA_PTR;
 #define zero  (0x00000000)
 #define SMMU_CD_SIZEOF (0x40)
 
-/*
-#define CDBase  (void*)0x0079400
-#define CQBase  (void*)0x0079800
-#define EQBase  (void*)0x0079C00
-#define STBase  (void*)0x007A000
-#define TTlv0  (uintptr_t)0x007C000
-#define TTlv1  (uintptr_t)0x007D000
-#define TTlv2  (uintptr_t)0x007E000
-*/
+#define SDM_ID                      0x000A
+#define STE_SDM_SZ	(SZ_512 * SDM_ID)
 
+#define CD_SZ             			SZ_1K
+#define EQ_SZ                       SZ_512
+#define CMDQ_SZ                     SZ_512
 
-#define CDBase  (void*)0xC0106000
-#define CQBase  (void*)0xC0114000
-//#define STBase  (void*)0x00018000
-#define EQBase  (void*)0xC0110000
-                         //200000
-#define STBase  (void*)0xC0100000
+#define TT_3LV                      3
+#define TT_SZ                       (SZ_4K * TT_3LV)
 
-#define TTlv0  (uintptr_t)0xC0120000
-#define TTlv1  (uintptr_t)0xC0121000
-#define TTlv2  (uintptr_t)0xC0122000
-#define TTlv3  (uintptr_t)0xC0123000
+#define STBase  (void*)0x73000
+/* 0x74400 */
+#define EQBase  (void*)(STBase + STE_SDM_SZ)
+/* 0x74600 */
+#define CQBase  (void*)(EQBase +  EQ_SZ)
+/* 0x74800 */
+#define CDBase  (void*)(CQBase + CMDQ_SZ)
 
+#define TTlv0  (uintptr_t)0x75000
+/* 0x78000 */
+#define TTlv1  (uintptr_t)(TTlv0 + TT_SZ)
+/* 0x7b000 */
+#define TTlv2  (uintptr_t)(TTlv1 + TT_SZ)
 
 #define PAGE_4KB        (0x1000)
 #define BLOCK_64KB       (0x10000)
