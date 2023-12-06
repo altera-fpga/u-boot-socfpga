@@ -54,8 +54,9 @@ DECLARE_GLOBAL_DATA_PTR;
 #define zero  (0x00000000)
 #define SMMU_CD_SIZEOF (0x40)
 
-#define SDM_ID                      0x000A
-#define STE_SDM_SZ	(SZ_512 * SDM_ID)
+#define SMMU_MASTER_MAX 0xB
+#define SDM_ID          0x000A
+#define STE_SDM_SZ	(SZ_512 * SMMU_MASTER_MAX)
 
 #define CD_SZ             			SZ_1K
 #define EQ_SZ                       SZ_512
@@ -65,11 +66,11 @@ DECLARE_GLOBAL_DATA_PTR;
 #define TT_SZ                       (SZ_4K * TT_3LV)
 
 #define STBase  (void*)0x73000
-/* 0x74400 */
-#define EQBase  (void*)(STBase + STE_SDM_SZ)
 /* 0x74600 */
-#define CQBase  (void*)(EQBase +  EQ_SZ)
+#define EQBase  (void*)(STBase + STE_SDM_SZ)
 /* 0x74800 */
+#define CQBase  (void*)(EQBase +  EQ_SZ)
+/* 0x74A00 */
 #define CDBase  (void*)(CQBase + CMDQ_SZ)
 
 #define TTlv0  (uintptr_t)0x75000
@@ -93,6 +94,7 @@ DECLARE_GLOBAL_DATA_PTR;
 #define SMMU_CD_IPS_32               (0x0)
 #define SMMU_CD_IPS_40               (0x2)
 #define SMMU_CD_TERMINATE            (0x6)
+#define SMMU_ST_BYPASS				 (0x4)
 #define SMMU_ST_STAGE1_ONLY          (0x5)
 #define SMMUBase  	       (void*)0x16000000
 
@@ -222,7 +224,7 @@ static void tt_init(void)
 // }
 int smmu_sdm_init(void)
 {
-
+	int i;
     //HANDLE_t SysMgr;
     //HANDLE_t RstMgr;
     
@@ -309,7 +311,7 @@ int smmu_sdm_init(void)
     printf("sdm_tbu_stream_ctrl_reg_1_sdm : 0x%x\n", readl(0x10D12184));
    printf("smmuSetBaseAddr()\n"); 
     smmuSetBaseAddr(SMMUBase);
-     memset(STBase, 0, 1024);
+     memset(STBase, 0, STE_SDM_SZ);
      //memset(STBase, 0, 512);
      printf("smmuInitStreamTable()\n"); 
      smmuInitStreamTable(STBase /*Base addr of stream table*/,
@@ -319,7 +321,7 @@ int smmu_sdm_init(void)
 
      // Set up event queue
      printf("main(): Installing Event Queue\n");
-     memset(EQBase, 0, 512);
+     memset(EQBase, 0, EQ_SZ);
      smmuInitEventQueue(EQBase /*Base addr of event queue*/,
                         SMMU_EQ_WRITE_ALLOCATE,
                         4 /*Log2 of CQ size, 2^4=>16 entries*/); //32B in size
@@ -327,7 +329,7 @@ int smmu_sdm_init(void)
 
      // Set up command queue
      printf("main(): Installing Command Queue\n");
-     memset(CQBase, 0, 512);
+     memset(CQBase, 0, CMDQ_SZ);
      smmuInitCommandQueue(CQBase /*Base addr of command queue*/,
                           SMMU_CQ_READ_ALLOCATE,
                           5 /*Log2 of CQ size, 2^5=>32 entries*/); //16B in size
@@ -353,7 +355,7 @@ int smmu_sdm_init(void)
    printf("smmuEnableTranslation()\n"); 
     
   printf("main(): Intializing a context descriptor\n");  
-  memset(CDBase, 0, SMMU_CD_SIZEOF);
+  memset(CDBase, 0, CD_SZ);
   smmuInitBasicCD(CDBase,
                   TTBase,
                   TCR_T0SZ_1TiB, 
@@ -367,7 +369,23 @@ int smmu_sdm_init(void)
   
   printf("main(): Initializing Stream Table entry as S1, referencing the context descriptor.\n");
   
-  smmuInitBasicSTE(10 /* 65535 StreamID */,
+	for (i = 1; i < SMMU_MASTER_MAX + 1; i++)
+	{
+		  smmuInitBasicSTE(i /* 65535 StreamID */,
+                   SMMU_ST_BYPASS,
+                   CDBase /*S1ContextPtr*/,
+                   0 /*S1CDMax*/,
+                   SMMU_ST_NO_STALLS,
+                   SMMU_ST_STRW_EL2, //SMMU_ST_STRW_EL1,
+                   0 /*S2VMID*/,
+                   0 /*S2T0SZ*/,
+                   0 /*S2TTB*/,
+                   0 /*SL0*/,
+                   0 /*S2TG*/,
+                   0 /*S2PS*/);   
+	}
+
+  smmuInitBasicSTE(SDM_ID /* SDM StreamID */,
                    SMMU_ST_STAGE1_ONLY,
                    CDBase /*S1ContextPtr*/,
                    0 /*S1CDMax*/,
@@ -382,8 +400,6 @@ int smmu_sdm_init(void)
 
   //write DMA TBU stream ID same as we configure in TCU
 
-printf("trigger point writing to boot scratch cold reg 4\n");
-writel(0x1a2b3c4d, 0x10d12210);
 
  printf("main(): Finish Streme table setup\n");
 //  smmuInvalidateSTE(SMM_CMD_NS_QUEUE, 0 /*StreamID*/, SMMU_CMD_SSEC_NS, SMMU_CMD_BRANCH);
