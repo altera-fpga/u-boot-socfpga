@@ -135,6 +135,10 @@ enum ALT_SDM_MBOX_RESP_CODE {
 #define MBOX_RSU_STATUS			91
 #define MBOX_RSU_UPDATE			92
 #define MBOX_HPS_STAGE_NOTIFY		93
+#define MBOX_QSPI_GET_DEVICE_INFO	116 /* get QSPI size and erasesize */
+
+/* Mailbox response len */
+#define QSPI_GET_DEVICE_INFO_RESP_LEN	8
 
 /* Mailbox registers */
 #define MBOX_CIN			0	/* command valid offset */
@@ -408,6 +412,7 @@ int mbox_init(void);
 
 int mbox_qspi_close(void);
 int mbox_qspi_open(void);
+int mbox_qspi_get_device_info(u32 *resp_buf, u32 resp_buf_len);
 
 int mbox_reset_cold(void);
 int mbox_rsu_get_spt_offset(u32 *resp_buf, u32 resp_buf_len);

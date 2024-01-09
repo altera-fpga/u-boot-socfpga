@@ -393,6 +393,29 @@ error:
 	return ret;
 }
 
+/* get QSPI size and erasesize */
+int mbox_qspi_get_device_info(u32 *resp_buf, u32 resp_buf_len)
+{
+	int ret;
+
+	if (!IS_ENABLED(CONFIG_SPL_BUILD) && IS_ENABLED(CONFIG_SPL_ATF)) {
+		ret = smc_send_mailbox(MBOX_QSPI_GET_DEVICE_INFO, 0, NULL, 0,
+				       (u32 *)&resp_buf_len, (u32 *)resp_buf);
+	} else {
+		ret = mbox_send_cmd(MBOX_ID_UBOOT, MBOX_QSPI_GET_DEVICE_INFO,
+				    MBOX_CMD_DIRECT, 0, NULL, 0, (u32 *)&resp_buf_len,
+				    (u32 *)resp_buf);
+	}
+
+	if (ret) {
+		debug("%s: Failed to retrieve QSPI Device INFO: %d\n", __func__, ret);
+		return ret;
+	}
+
+	debug("Successfully retrieve QSPI Device INFO.\n");
+	return 0;
+}
+
 int mbox_rsu_get_spt_offset(u32 *resp_buf, u32 resp_buf_len)
 {
 #if !defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_ATF)
