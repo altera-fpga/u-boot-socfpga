@@ -15,6 +15,15 @@ config SOCFPGA_RSU_MULTIBOOT
 	 SPL will select the respective SSBL based on the partition it resides
 	 inside RSU QSPI flash layout.
 
+config SOCFPGA_RSU_MULTIFLASH
+	bool "Enable RSU Multiflash Feature"
+	depends on ARCH_SOCFPGA_SOC64 && SPI_FLASH
+	default n
+	help
+	 Multiflash selection feature for RSU.
+	 RSU will be able to perform operations on multiple flash on the platform
+	 given multiple flash configuration in programmer tool.
+
 config SOCFPGA_SECURE_VAB_AUTH
 	bool "Enable boot image authentication with Secure Device Manager"
 	depends on ARCH_SOCFPGA_AGILEX || ARCH_SOCFPGA_N5X || \
