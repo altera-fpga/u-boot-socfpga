@@ -136,6 +136,16 @@ void swap_bits(char *data, int len)
 	}
 }
 
+int pow(u32 x, u32 y)
+{
+	if (y == 0)
+		return 1;
+	else if ((y % 2) == 0)
+		return pow(x, y / 2) * pow(x, y / 2);
+	else
+		return x * pow(x, y / 2) * pow(x, y / 2);
+}
+
 /**
  * rsu_misc_is_rsvd_name() - check if a reserved name
  *
