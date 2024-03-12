@@ -36,6 +36,8 @@ cdns_nand_chip *to_cdns_nand_chip(struct nand_chip *chip)
 	return container_of(chip, struct cdns_nand_chip, chip);
 }
 
+extern bool is_agilex5_reva_workaround_required(void);
+
 static inline struct
 cadence_nand_info *to_cadence_nand_info(struct nand_hw_control *controller)
 {
@@ -779,7 +781,12 @@ cadence_nand_cdma_transfer(struct cadence_nand_info *cadence, u8 chip_nr,
 	else
 		ctype = CDMA_CT_WR;
 
+#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5)
+	if (!is_agilex5_reva_workaround_required())
+		cadence_nand_set_ecc_enable(cadence, with_ecc);
+#else
 	cadence_nand_set_ecc_enable(cadence, with_ecc);
+#endif
 
 	dma_buf = dma_map_single(buf, buf_size, dir);
 	if (dma_mapping_error(cadence->dev, dma_buf)) {
