@@ -199,6 +199,69 @@
 
 #else
 
+#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5)
+#define CFG_EXTRA_ENV_SETTINGS \
+	"kernel_comp_addr_r=0x9000000\0" \
+	"kernel_comp_size=0x01000000\0" \
+	"qspibootimageaddr=0x020E0000\0" \
+	"qspifdtaddr=0x020D0000\0" \
+	"bootimagesize=0x01F00000\0" \
+	"fdtimagesize=0x00010000\0" \
+	"qspiload=sf read ${loadaddr} ${qspibootimageaddr} ${bootimagesize};" \
+		"sf read ${fdt_addr} ${qspifdtaddr} ${fdtimagesize}\0" \
+	"qspiboot=setenv bootargs earlycon root=/dev/mtdblock1 rw " \
+		"rootfstype=jffs2 rootwait;booti ${loadaddr} - ${fdt_addr}\0" \
+	"qspifitload=sf read ${loadaddr} ${qspibootimageaddr} ${bootimagesize}\0" \
+	"qspifitboot=setenv bootargs earlycon root=/dev/mtdblock1 rw " \
+		"rootfstype=jffs2 rootwait;bootm ${loadaddr}\0" \
+	"loadaddr=" __stringify(CONFIG_SYS_LOAD_ADDR) "\0" \
+	"bootfile=" CONFIG_BOOTFILE  "\0" \
+	"fdt_addr=86000000\0" \
+	"fdtimage=" CONFIG_DEFAULT_DEVICE_TREE ".dtb\0" \
+	"mmcroot=/dev/mmcblk0p2\0" \
+	"mmcboot=setenv bootargs " CONFIG_BOOTARGS \
+		" root=${mmcroot} rw rootwait;" \
+		"booti ${loadaddr} - ${fdt_addr}\0" \
+	"mmcload=mmc rescan;" \
+		"load mmc 0:1 ${loadaddr} ${bootfile};" \
+		"load mmc 0:1 ${fdt_addr} ${fdtimage}\0" \
+	"mmcfitboot=setenv bootargs " CONFIG_BOOTARGS \
+		" root=${mmcroot} rw rootwait;" \
+		"bootm ${loadaddr}\0" \
+	"mmcfitload=mmc rescan;" \
+		"load mmc 0:1 ${loadaddr} ${bootfile}\0" \
+	"mtdids=" CONFIG_MTDIDS_DEFAULT "\0" \
+	"mtdparts=" CONFIG_MTDPARTS_DEFAULT "\0" \
+	"linux_qspi_enable=if sf probe; then " \
+		"echo Enabling QSPI at Linux DTB...;" \
+		"fdt addr ${fdt_addr}; fdt resize;" \
+		"fdt set /soc/spi@108d2000 status okay;" \
+		"if fdt set /soc/clocks/qspi-clk clock-frequency" \
+		" ${qspi_clock}; then echo QSPI clock frequency updated;" \
+		" elif fdt set /soc/clkmgr/clocks/qspi_clk clock-frequency" \
+		" ${qspi_clock}; then echo QSPI clock frequency updated;" \
+		" else fdt set /clocks/qspi-clk clock-frequency" \
+		" ${qspi_clock}; echo QSPI clock frequency updated; fi; fi\0" \
+	"scriptaddr=0x02100000\0" \
+	"scriptfile=u-boot.scr\0" \
+	"fatscript=if fatload mmc 0:1 ${scriptaddr} ${scriptfile};" \
+		   "then source ${scriptaddr}:script; fi\0" \
+	"nandroot=ubi0:rootfs\0" \
+	"nandload=ubi part root; ubi readvol ${loadaddr} kernel; ubi readvol ${fdt_addr} dtb\0" \
+	"nandboot=setenv bootargs " CONFIG_BOOTARGS \
+			" root=${nandroot} rw rootwait rootfstype=ubifs ubi.mtd=1; " \
+			"booti ${loadaddr} - ${fdt_addr}\0" \
+	"nandfitboot=setenv bootargs " CONFIG_BOOTARGS \
+			" root=${nandroot} rw rootwait rootfstype=ubifs ubi.mtd=1; " \
+			"bootm ${loadaddr}\0" \
+	"nandfitload=ubi part root; ubi readvol ${loadaddr} kernel\0" \
+	"socfpga_legacy_reset_compat=1\0" \
+	"rsu_status=rsu dtb; rsu display_dcmf_version; "\
+		"rsu display_dcmf_status; rsu display_max_retry\0" \
+	"smc_fid_rd=0xC2000007\0" \
+	"smc_fid_wr=0xC2000008\0" \
+	"smc_fid_upd=0xC2000009\0 "
+#else
 #define CFG_EXTRA_ENV_SETTINGS \
 	"kernel_comp_addr_r=0x9000000\0" \
 	"kernel_comp_size=0x01000000\0" \
@@ -255,6 +318,8 @@
 	"smc_fid_rd=0xC2000007\0" \
 	"smc_fid_wr=0xC2000008\0" \
 	"smc_fid_upd=0xC2000009\0 "
+
+#endif /* IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5)  no distro boot */
 #endif /*#if IS_ENABLED(CONFIG_DISTRO_DEFAULTS)*/
 
 /*
