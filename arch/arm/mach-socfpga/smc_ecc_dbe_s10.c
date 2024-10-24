@@ -4,7 +4,6 @@
  * SPDX-License-Identifier:    GPL-2.0
  */
 
-#include <common.h>
 #include <asm/io.h>
 #include <asm/arch/smc_s10.h>
 #include <asm/arch/system_manager.h>

@@ -4,8 +4,6 @@
  * SPDX-License-Identifier:    GPL-2.0
  */
 
-#include <common.h>
-
 #define SMC_ARG0		0
 #define SMC_ARG1		(SMC_ARG0 + 1)
 #define SMC_ARG2		(SMC_ARG1 + 1)

@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: GPL-2.0
  */
 
-#include <common.h>
 #include <env.h>
 #include <linux/errno.h>
 #include <asm/arch/mailbox_s10.h>

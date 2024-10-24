@@ -3,7 +3,6 @@
  * Copyright (C) 2022 Intel Corporation <www.intel.com>
  */
 
-#include <common.h>
 #include <command.h>
 #include <malloc.h>
 #include <net.h>

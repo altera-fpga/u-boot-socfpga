@@ -5,8 +5,6 @@
 #ifndef _PLLDATA_H_
 #define _PLLDATA_H_
 
-#include <common.h>
-
 typedef struct
 {
     char cmd;

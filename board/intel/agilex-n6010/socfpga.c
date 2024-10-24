@@ -12,7 +12,6 @@
 #include <asm/io.h>
 #include <asm/u-boot.h>
 #include <asm/utils.h>
-#include <common.h>
 #include <command.h>
 #include <dm.h>
 #include <init.h>

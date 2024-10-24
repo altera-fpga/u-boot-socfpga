@@ -4,7 +4,6 @@
  * SPDX-License-Identifier:	GPL-2.0
  */
 
-#include <common.h>
 #include <linux/errno.h>
 #include <asm/arch/mailbox_s10.h>
 #include <asm/arch/rsu.h>
@@ -12,6 +11,7 @@
 #include <command.h>
 #include <spi.h>
 #include <spi_flash.h>
+#include <env.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 

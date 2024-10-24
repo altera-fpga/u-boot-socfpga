@@ -4,7 +4,6 @@
  *
  */
 
-#include <common.h>
 #include <asm/cache.h>
 #include <asm/io.h>
 #include <asm/arch/fpga_manager.h>

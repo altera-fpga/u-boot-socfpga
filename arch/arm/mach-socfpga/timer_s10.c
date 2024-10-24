@@ -4,6 +4,7 @@
  *
  */
 
+#include <mach/base_addr_soc64.h>
 #include <asm/io.h>
 
 /*

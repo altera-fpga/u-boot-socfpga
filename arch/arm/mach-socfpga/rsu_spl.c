@@ -4,7 +4,6 @@
  *
  */
 #define DEBUG
-#include <common.h>
 #include <linux/errno.h>
 #include <spi.h>
 #include <spi_flash.h>

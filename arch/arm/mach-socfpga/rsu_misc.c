@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: GPL-2.0
  */
 
-#include <common.h>
 #include <linux/compat.h>
 #include <linux/compiler.h>
 #include <linux/errno.h>

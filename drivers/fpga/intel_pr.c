@@ -4,7 +4,6 @@
  * SPDX-License-Identifier:	GPL-2.0
  */
 
-#include <common.h>
 #include <command.h>
 #include <errno.h>
 #include <wait_bit.h>
