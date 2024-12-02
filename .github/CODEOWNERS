@@ -1,0 +1,5 @@
+# Specify reviewers for all files except the CODEOWNERS file 
+* @zamrimuh-intel @ngboonkhai @kk-hea @tienfong @dineshmaniyam @CindyMengTingting @drosdi @alifzakuan
+
+# Specify reviewers for the CODEOWNERS file
+/.github/CODEOWNERS @vvijayak-devops
