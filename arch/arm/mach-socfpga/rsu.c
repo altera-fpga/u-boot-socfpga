@@ -881,7 +881,7 @@ extern u32 smc_rsu_dcmf_version[4];
 
 static int copy_dcmf_version_to_smc(u32 *versions)
 {
-#if !defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_ATF)
+#if !defined(CONFIG_XPL_BUILD) && defined(CONFIG_SPL_ATF)
 	u64 args[2];
 #else
 	void *dcmf_versions;
@@ -890,7 +890,7 @@ static int copy_dcmf_version_to_smc(u32 *versions)
 	if (!versions)
 		return -EINVAL;
 
-#if !defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_ATF)
+#if !defined(CONFIG_XPL_BUILD) && defined(CONFIG_SPL_ATF)
 	args[0] = ((u64)versions[1] << 32) | versions[0];
 	args[1] = ((u64)versions[3] << 32) | versions[2];
 
@@ -947,7 +947,7 @@ int rsu_dcmf_version(u32 *versions)
  */
 int rsu_max_retry(u8 *value)
 {
-#if !defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_ATF)
+#if !defined(CONFIG_XPL_BUILD) && defined(CONFIG_SPL_ATF)
 	u64 arg;
 #endif
 	int ret;
@@ -962,7 +962,7 @@ int rsu_max_retry(u8 *value)
 	if (ret)
 		return ret;
 
-#if !defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_ATF)
+#if !defined(CONFIG_XPL_BUILD) && defined(CONFIG_SPL_ATF)
 	arg = *value;
 	if (invoke_smc(INTEL_SIP_SMC_RSU_COPY_MAX_RETRY, &arg, 1, NULL, 0))
 		return -EINVAL;
@@ -976,7 +976,7 @@ extern u16 smc_rsu_dcmf_status[4];
 
 static int copy_dcmf_status_to_smc(u16 *status)
 {
-#if !defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_ATF)
+#if !defined(CONFIG_XPL_BUILD) && defined(CONFIG_SPL_ATF)
 	u64 arg;
 #else
 	void *dcmf_status;
@@ -985,7 +985,7 @@ static int copy_dcmf_status_to_smc(u16 *status)
 	if (!status)
 		return -EINVAL;
 
-#if !defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_ATF)
+#if !defined(CONFIG_XPL_BUILD) && defined(CONFIG_SPL_ATF)
 	arg = ((u64)status[3] << 48) | ((u64)status[2] << 32) |
 	      ((u64)status[1] << 16) | status[0];
 	if (invoke_smc(INTEL_SIP_SMC_RSU_COPY_DCMF_STATUS, &arg, 1, NULL, 0))

@@ -36,7 +36,7 @@ static int altr_sysmgr_read_generic(struct udevice *dev, u32 *addr, u32 *value)
 	if (current_el() == 3) {
 		ret_arg = readl((uintptr_t)addr);
 	} else {
-		if (!(IS_ENABLED(CONFIG_SPL_BUILD)) && IS_ENABLED(CONFIG_SPL_ATF)) {
+		if (!(IS_ENABLED(CONFIG_XPL_BUILD)) && IS_ENABLED(CONFIG_SPL_ATF)) {
 			args[0] = (u64)(uintptr_t)addr;
 			ret = invoke_smc(INTEL_SIP_SMC_REG_READ, args, 1, &ret_arg, 1);
 		} else {
@@ -61,7 +61,7 @@ static int altr_sysmgr_write_generic(struct udevice *dev, u32 *addr, u32 value)
 	if (current_el() == 3) {
 		writel(value, (uintptr_t)addr);
 	} else {
-		if (!(IS_ENABLED(CONFIG_SPL_BUILD)) && IS_ENABLED(CONFIG_SPL_ATF)) {
+		if (!(IS_ENABLED(CONFIG_XPL_BUILD)) && IS_ENABLED(CONFIG_SPL_ATF)) {
 			args[0] = (u64)(uintptr_t)(addr);
 			args[1] = value;
 			ret = invoke_smc(INTEL_SIP_SMC_REG_WRITE, args, 2, NULL, 0);
