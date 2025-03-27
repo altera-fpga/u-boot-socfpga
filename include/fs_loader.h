@@ -48,6 +48,20 @@ enum data_flags {
 };
 
 /**
+ * enum storage_types - Storage type to indicate block device, SPI device
+ *			and NAND device.
+ *
+ * BLOCK_DEV: BLock device.
+ * SPI_DEV: SPI/NOR flash.
+ * NAND_DEV: NAND flash.
+ */
+enum storage_types {
+	BLOCK_DEV, /* BLock device such as SDMMC */
+	SPI_DEV,  /* SPI/NOR flash */
+	NAND_DEV,  /* NAND flash */
+};
+
+/**
  * struct phandle_part - A place for storing all supported storage devices
  *
  * This holds information about all supported storage devices for driver use.
@@ -64,6 +78,7 @@ struct device_plat {
 	char *mtdpart;
 	char *ubivol;
 	enum data_flags data_type;
+	enum storage_types storage_type;
 	struct sf_config sfconfig;
 	struct udevice *flash;
 };
