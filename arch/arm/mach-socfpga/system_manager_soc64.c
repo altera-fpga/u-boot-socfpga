@@ -10,6 +10,13 @@
 #include <linux/bitfield.h>
 
 #if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5)
+#define PMUX_I3C0_USEFPGA_OFFSET_READ  40
+#define PMUX_I3C1_USEFPGA_OFFSET_READ  42
+#define PMUX_I3C0_USEFPGA_OFFSET  0x1c0
+#define PMUX_I3C1_USEFPGA_OFFSET  0x1c4
+#endif
+
+#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5)
 
 /*
  * Setting RESET_PULSE_OVERRIDE bit for successful reset staggering pulse
@@ -122,6 +129,14 @@ void populate_sysmgr_pinmux(void)
 	len = (len_fpga < SOC64_HANDOFF_FPGA_LEN) ? len_fpga : SOC64_HANDOFF_FPGA_LEN;
 	socfpga_handoff_read((void *)SOC64_HANDOFF_FPGA, handoff_table, len);
 	for (i = 0; i < len; i = i + 2) {
+#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5)
+		/* check for valid I3C0 and I3C1 offset values for Agilex5 */
+		if ((i == PMUX_I3C0_USEFPGA_OFFSET_READ &&
+		     handoff_table[i] != PMUX_I3C0_USEFPGA_OFFSET) ||
+		    (i == PMUX_I3C1_USEFPGA_OFFSET_READ &&
+		     handoff_table[i] != PMUX_I3C1_USEFPGA_OFFSET))
+			continue;
+#endif
 		writel(handoff_table[i + 1],
 		       handoff_table[i] +
 		       (u8 *)socfpga_get_sysmgr_addr() +
