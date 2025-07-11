@@ -73,7 +73,7 @@
 		      <0x0 0xfffc6000 0x0 0x2000>;
 	};
 
-	soc {
+	soc@0 {
 		#address-cells = <1>;
 		#size-cells = <1>;
 		compatible = "simple-bus";
