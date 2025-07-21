@@ -40,8 +40,8 @@ jobs:
       - name: Checkpatch.pl
         run: |
           git config --global --add safe.directory /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}
-          git clone https://${{ secrets.GIT_USER }}:${{ secrets.GIT_TOKEN }}@github.com/intel-sandbox/application.devops.github.pr.workflow
-          cd application.devops.github.pr.workflow
+          git clone https://${{ secrets.GIT_USER }}:${{ secrets.GIT_TOKEN }}@github.com/altera-innersource/applications.devops.build-bot.github-pr-workflow
+          cd applications.devops.build-bot.github-pr-workflow
           git checkout master
           bash workflow_Checkpatch.sh ../ ${{ github.event.repository.name }} ${{ secrets.GITHUB_TOKEN }} ${{ github.event.pull_request.number }} ${{ github.head_ref }} ${{ github.base_ref }}
 
@@ -53,8 +53,8 @@ jobs:
       run: |
         tmp_dir=$(mktemp -d -t get-prerequisite-binary-XXXX)
         cd $tmp_dir
-        git clone https://${{ secrets.GIT_USER }}:${{ secrets.GIT_TOKEN }}@github.com/intel-sandbox/application.devops.github.pr.workflow
-        cd application.devops.github.pr.workflow
+        git clone https://${{ secrets.GIT_USER }}:${{ secrets.GIT_TOKEN }}@github.com/altera-innersource/applications.devops.build-bot.github-pr-workflow
+        cd applications.devops.build-bot.github-pr-workflow
         git checkout master
         bash workflow_Prerequisite.sh
         cp pre-requisite_output.tar ${{ github.workspace }}
@@ -95,8 +95,8 @@ jobs:
         run: |
           DIR=$(pwd)
           git config --global credential.helper store
-          git clone https://${{ secrets.GIT_USER }}:${{ secrets.GIT_TOKEN }}@github.com/intel-sandbox/application.devops.github.pr.workflow
-          cd application.devops.github.pr.workflow
+          git clone https://${{ secrets.GIT_USER }}:${{ secrets.GIT_TOKEN }}@github.com/altera-innersource/applications.devops.build-bot.github-pr-workflow
+          cd applications.devops.build-bot.github-pr-workflow
           git checkout master
           bash workflow_Build.sh $DIR ${{ github.event.repository.name }} uboot-socfpga-github-workflow
 
@@ -118,7 +118,7 @@ jobs:
      steps:
       - name: Cleaning workspace
         run: |
-          rm -rf application.devops.github.pr.workflow
+          rm -rf applications.devops.build-bot.github-pr-workflow
           rm -rf ${GITHUB_WORKSPACE}/.git*
 
       - name: Download Uboot artifacts
@@ -132,8 +132,8 @@ jobs:
 
       - name: Simics Regtest
         run: |
-          git clone https://github.com/intel-sandbox/application.devops.github.pr.workflow
-          cd application.devops.github.pr.workflow
+          git clone https://${{ secrets.GIT_USER }}:${{ secrets.GIT_TOKEN }}@github.com/altera-innersource/applications.devops.build-bot.github-pr-workflow
+          cd applications.devops.build-bot.github-pr-workflow
           git checkout master
           bash workflow_Regtest.sh ${{ github.workspace }} ${{ github.event.repository.name }} ${{ github.event.pull_request.number }}
 
@@ -147,10 +147,10 @@ jobs:
        run: |
           tmp_dir=$(mktemp -d -t get-prerequisite-binary-XXXX)
           cd $tmp_dir
-          rm -rf application.devops.github.pr.workflow
+          rm -rf applications.devops.build-bot.github-pr-workflow
           git config --global credential.helper store
-          git clone https://${{ secrets.GIT_USER }}:${{ secrets.GIT_TOKEN }}@github.com/intel-sandbox/application.devops.github.pr.workflow
-          cd application.devops.github.pr.workflow
+          git clone https://${{ secrets.GIT_USER }}:${{ secrets.GIT_TOKEN }}@github.com/altera-innersource/applications.devops.build-bot.github-pr-workflow
+          cd applications.devops.build-bot.github-pr-workflow
           git checkout master
           bash workflow_Check_Unaddressed_Change_Request.sh ${{ github.workspace }} ${{ github.repository }} ${{ secrets.GITHUB_TOKEN }} ${{ github.event.pull_request.number }}
           rm -fr $tmp_dir
@@ -166,10 +166,10 @@ jobs:
        run: |
           tmp_dir=$(mktemp -d -t get-prerequisite-binary-XXXX)
           cd $tmp_dir
-          rm -rf application.devops.github.pr.workflow
+          rm -rf applications.devops.build-bot.github-pr-workflow
           git config --global credential.helper store
-          git clone https://${{ secrets.GIT_USER }}:${{ secrets.GIT_TOKEN }}@github.com/intel-sandbox/application.devops.github.pr.workflow
-          cd application.devops.github.pr.workflow
+          git clone https://${{ secrets.GIT_USER }}:${{ secrets.GIT_TOKEN }}@github.com/altera-innersource/applications.devops.build-bot.github-pr-workflow
+          cd applications.devops.build-bot.github-pr-workflow
           git checkout master
           bash workflow_Check_Unaddressed_Change_Request.sh ${{ github.workspace }} ${{ github.repository }} ${{ secrets.GITHUB_TOKEN }} ${{ github.event.pull_request.number }}
           rm -rf $tmp_dir
