@@ -5,6 +5,7 @@
  *
  */
 
+#include <console.h>
 #include <init.h>
 #include <asm/io.h>
 #include <hang.h>
@@ -81,8 +82,8 @@ void board_init_f(ulong dummy)
 		if (CONFIG_IS_ENABLED(WDT))
 			initr_watchdog();
 	}
-
 	preloader_console_init();
+	console_init_f();
 	print_reset_info();
 	cm_print_clock_quick_summary();
 

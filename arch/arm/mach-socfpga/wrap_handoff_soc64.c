@@ -4,11 +4,11 @@
  * Copyright (C) 2025 Altera Corporation <www.altera.com>
  *
  */
-
 #include <errno.h>
+#include <inttypes.h>
 #include <asm/arch/handoff_soc64.h>
 #include <asm/io.h>
-#include "log.h"
+#include <linux/printk.h>
 
 #ifndef __ASSEMBLY__
 #include <asm/types.h>
@@ -36,24 +36,19 @@ static enum endianness check_endianness(u32 handoff)
 		return BIG_ENDIAN;
 	case SOC64_HANDOFF_MAGIC_CLOCK:
 #if IS_ENABLED(CONFIG_ARCH_SOCFPGA_N5X)
-		debug("%s: mem clk  handoff data\n", __func__);
 		return LITTLE_ENDIAN;
 #else
 		return BIG_ENDIAN;
 #endif
 #if IS_ENABLED(CONFIG_ARCH_SOCFPGA_N5X)
 	case SOC64_HANDOFF_DDR_UMCTL2_MAGIC:
-		debug("%s: umctl2 handoff data\n", __func__);
 		return LITTLE_ENDIAN;
 	case SOC64_HANDOFF_DDR_PHY_MAGIC:
-		debug("%s: PHY handoff data\n", __func__);
 		return LITTLE_ENDIAN;
 	case SOC64_HANDOFF_DDR_PHY_INIT_ENGINE_MAGIC:
-		debug("%s: PHY engine handoff data\n", __func__);
 		return LITTLE_ENDIAN;
 #endif
 	default:
-		debug("%s: Unknown endianness!!\n", __func__);
 		return UNKNOWN_ENDIANNESS;
 	}
 }
@@ -67,8 +62,9 @@ static int getting_endianness(void *handoff_address, enum endianness *endian_t)
 		/* Trying to check handoff data is big endian? */
 		*endian_t = check_endianness(swab32(readl(handoff_address)));
 		if (*endian_t == UNKNOWN_ENDIANNESS) {
-			debug("%s: Cannot find HANDOFF MAGIC ", __func__);
-			debug("at addr 0x%p\n", (u32 *)handoff_address);
+			pr_info("%s : line %d => Cannot find endianness ", __FILE__,
+				__LINE__);
+			pr_info("at addr 0x%p\n", (u32 *)handoff_address);
 			return -EPERM;
 		}
 	}
@@ -92,8 +88,8 @@ int socfpga_get_handoff_size(void *handoff_address)
 
 	size = (size - SOC64_HANDOFF_OFFSET_DATA) / sizeof(u32);
 
-	debug("%s: handoff address = 0x%p handoff size = 0x%08x\n", __func__,
-	      (u32 *)handoff_address, size);
+	pr_info("%s : line %d => handoff address = 0x%p handoff size = 0x%08x\n", __FILE__,
+		__LINE__, (u32 *)handoff_address, size);
 
 	return size;
 }
@@ -110,21 +106,27 @@ int socfpga_handoff_read(void *handoff_address, void *table, u32 table_len)
 	if (ret)
 		return ret;
 
+	pr_info("%s : line %d => Handoff table address = 0x%p, ", __FILE__,
+		__LINE__, table_x32);
+	pr_info("Table length = 0x%x\n\n", table_len);
+
+	temp = readl(handoff_address);
+	pr_info("%s : line %d => Handoff section : [%c%c%c%c] at 0x%08lx\n\n",
+		__FILE__, __LINE__, (temp >> 0) & 0xff, (temp >> 8) & 0xff,
+		(temp >> 16) & 0xff, (temp >> 24) & 0xff,
+		(uintptr_t)handoff_address);
+
+	pr_info("%s: Handoff data =\n{\n", __func__);
+
 	temp = readl(handoff_address + SOC64_HANDOFF_OFFSET_DATA +
 		    (i * sizeof(u32)));
 
-	if (endian_t == BIG_ENDIAN) {
-		debug("%s: Handoff addr = 0x%p ", __func__, (u32 *)handoff_address);
-		debug("Handoff table address = 0x%p ", table_x32);
-		debug("table length = 0x%x\n", table_len);
-		debug("%s: handoff data =\n{\n", __func__);
+	if (endian_t == BIG_ENDIAN)
 		*table_x32 = swab32(temp);
-	} else if (endian_t == LITTLE_ENDIAN) {
-		debug(" {\n");
+	else if (endian_t == LITTLE_ENDIAN)
 		*table_x32 = temp;
-	}
 
-	debug(" No.%d Addr 0x%08x: ", i, *table_x32);
+	pr_info(" 0x%08x -> 0x%08x ", i, *table_x32);
 
 	for (i = 1; i < table_len; i++) {
 		table_x32++;
@@ -139,12 +141,12 @@ int socfpga_handoff_read(void *handoff_address, void *table, u32 table_len)
 			*table_x32 = temp;
 
 		if (!(i % 2))
-			debug(" No.%d Addr 0x%08x: ", i,
-			      *table_x32);
+			pr_info(" 0x%08x -> 0x%08x ", i,
+				*table_x32);
 		else
-			debug(" 0x%08x\n", *table_x32);
+			pr_info("0x%08x\n", *table_x32);
 	}
-	debug("\n}\n");
+	pr_info("}\n");
 
 	return 0;
 }

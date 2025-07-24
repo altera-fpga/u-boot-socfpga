@@ -10,6 +10,7 @@
 #include <command.h>
 #include <init.h>
 #include <wait_bit.h>
+#include <linux/printk.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -17,6 +18,10 @@ void cm_wait_for_lock(u32 mask)
 {
 	u32 inter_val;
 	u32 retry = 0;
+
+	pr_info("%s : line %d => Is clock PLL locked? Checking ...\n",
+		__FILE__, __LINE__);
+
 	do {
 #if defined(CONFIG_ARCH_SOCFPGA_GEN5)
 		inter_val = readl(socfpga_get_clkmgr_addr() +
@@ -33,6 +38,9 @@ void cm_wait_for_lock(u32 mask)
 		if (retry >= 10)
 			break;
 	} while (1);
+
+	pr_info("%s : line %d => Clock PLL is locked !\n",
+		__FILE__, __LINE__);
 }
 
 /* function to poll in the fsm busy bit */

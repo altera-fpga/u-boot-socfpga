@@ -9,6 +9,7 @@
 #include <asm/global_data.h>
 #include <cpu_func.h>
 #include <stdint.h>
+#include <linux/printk.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -57,11 +58,17 @@ long get_ram_size(long *base, long maxsize)
 	if (!CONFIG_IS_ENABLED(SYS_DCACHE_OFF))
 		dcache_en = dcache_status();
 
+	pr_info("\n%s : Func %s - line %d => Start backup original content\n",
+		__FILE__, __func__, __LINE__);
 	for (cnt = (maxsize / sizeof(long)) >> 1; cnt > 0; cnt >>= 1) {
 		addr = base + cnt;	/* pointer arith! */
 		sync();
+		pr_info("Backup 0x%lx -> 0x%lx\n", (ulong)addr,
+			(ulong)save[i]);
 		save[i++] = *addr;
 		sync();
+		pr_info("Address : 0x%lx, Value written : 0x%lx\n",
+			(ulong)addr, ~cnt);
 		*addr = ~cnt;
 		if (dcache_en)
 			dcache_flush_invalidate(addr);
@@ -77,13 +84,20 @@ long get_ram_size(long *base, long maxsize)
 	if (dcache_en)
 		dcache_flush_invalidate(addr);
 
+	pr_info("\nFunc %s - line %d => Testing memory ...\n ", __func__,
+		__LINE__);
 	if ((val = *addr) != 0) {
+		pr_info("Error! Content of 0x%lx is not 0x0, expect 0x0\n",
+			(ulong)addr);
 		/* Restore the original data before leaving the function. */
 		sync();
 		*base = save_base;
+		pr_info("Original content restore start ...\n");
 		for (cnt = 1; cnt < maxsize / sizeof(long); cnt <<= 1) {
 			addr  = base + cnt;
 			sync();
+			pr_info("Address : 0x%lx -> 0x%lx\n", (ulong)addr,
+				(ulong)save[i - 1]);
 			*addr = save[--i];
 			if (dcache_en)
 				dcache_flush_invalidate(addr);
@@ -91,22 +105,30 @@ long get_ram_size(long *base, long maxsize)
 		return (0);
 	}
 
+	pr_info("Memory test reading at ...\n");
 	for (cnt = 1; cnt < maxsize / sizeof(long); cnt <<= 1) {
 		addr = base + cnt;	/* pointer arith! */
 		val = *addr;
+		pr_info("Address : 0x%lx -> 0x%lx\n", (ulong)addr,
+			(ulong)val);
 		*addr = save[--i];
 		if (dcache_en)
 			dcache_flush_invalidate(addr);
 		if (val != ~cnt) {
+			pr_info("Error! Addr 0x%lx val 0x%lx != ~cnt 0x%lx\n",
+				(ulong)addr, val, ~cnt);
 			size = cnt * sizeof(long);
 			/*
 			 * Restore the original data
 			 * before leaving the function.
 			 */
+			pr_info("Original content restore start ...\n");
 			for (cnt <<= 1;
 			     cnt < maxsize / sizeof(long);
 			     cnt <<= 1) {
 				addr  = base + cnt;
+				pr_info("Address : 0x%lx -> 0x%lx\n",
+					(ulong)addr, (ulong)save[i - 1]);
 				*addr = save[--i];
 				if (dcache_en)
 					dcache_flush_invalidate(addr);
@@ -124,6 +146,8 @@ long get_ram_size(long *base, long maxsize)
 	if (dcache_en)
 		dcache_flush_invalidate(base);
 
+	pr_info("\n%s : Func %s - line %d => Memory test passed!\n ",
+		__FILE__, __func__, __LINE__);
 	return (maxsize);
 }
 

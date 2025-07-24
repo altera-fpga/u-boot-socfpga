@@ -8,6 +8,7 @@
 #include <asm/io.h>
 #include <asm/arch/handoff_soc64.h>
 #include <asm/arch/system_manager.h>
+#include <linux/printk.h>
 
 const struct cm_config * const cm_get_default_config(void)
 {
@@ -17,6 +18,17 @@ const struct cm_config * const cm_get_default_config(void)
 	u32 *conversion = (u32 *)cm_handoff_cfg;
 	u32 i;
 	u32 handoff_clk = readl(SOC64_HANDOFF_CLOCK);
+
+	pr_info("%s : line %d => Handoff section : [%c%c%c%c] at 0x%08lx\n\n",
+		__FILE__, __LINE__, (handoff_clk >> 0) & 0xff,
+		(handoff_clk >> 8) & 0xff, (handoff_clk >> 16) & 0xff,
+		(handoff_clk >> 24) & 0xff, (uintptr_t)SOC64_HANDOFF_CLOCK);
+
+	pr_info("%s: Handoff data =\n{\n", __func__);
+	for (i = 0; i < (sizeof(*cm_handoff_cfg) / sizeof(u32)); i++)
+		pr_info(" 0x%08x -> 0x%08x\n", i, readl(conversion + i));
+
+	pr_info("}\n");
 
 	if (swab32(handoff_clk) == SOC64_HANDOFF_MAGIC_CLOCK) {
 		writel(swab32(handoff_clk), SOC64_HANDOFF_CLOCK);
