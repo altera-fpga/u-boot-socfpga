@@ -11,6 +11,7 @@
 #include <spl.h>
 #include <asm/arch/base_addr_soc64.h>
 #include <asm/arch/clock_manager.h>
+#include <asm/arch/firewall.h>
 #include <asm/arch/mailbox_s10.h>
 #include <asm/arch/misc.h>
 #include <asm/arch/reset_manager.h>
@@ -109,6 +110,19 @@ void board_init_f(ulong dummy)
 			debug("DRAM init failed: %d\n", ret);
 			hang();
 		}
+	}
+
+	/*
+	 * Below condition code needs to be removed once DFI Select is moved to
+	 * the correct place.
+	 */
+	if (IS_ENABLED(CONFIG_SPL_MMC)) {
+		u32 tmp = SYSMGR_SOC64_COMBOPHY_DFISEL_SDMMC;
+		/* configure DFI_SEL for SDMMC */
+		writel(tmp, socfpga_get_sysmgr_addr() + SYSMGR_SOC64_COMBOPHY_DFISEL);
+
+		/* Dinesh to confirm for NAND, whether secure transaction are required. */
+		writel(SECURE_TRANS_SET, SECURE_TRANS_REG);
 	}
 
 	if (IS_ENABLED(CONFIG_CADENCE_QSPI))
