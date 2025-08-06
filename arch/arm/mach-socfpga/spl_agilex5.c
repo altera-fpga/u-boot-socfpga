@@ -113,17 +113,11 @@ void board_init_f(ulong dummy)
 	}
 
 	/*
-	 * Below condition code needs to be removed once DFI Select is moved to
-	 * the correct place.
+	 * Set secure transaction for mmc, so ATF image from mmc can be loaded
+	 * to secure region reserved for ATF in DDR.
 	 */
-	if (IS_ENABLED(CONFIG_SPL_MMC)) {
-		u32 tmp = SYSMGR_SOC64_COMBOPHY_DFISEL_SDMMC;
-		/* configure DFI_SEL for SDMMC */
-		writel(tmp, socfpga_get_sysmgr_addr() + SYSMGR_SOC64_COMBOPHY_DFISEL);
-
-		/* Dinesh to confirm for NAND, whether secure transaction are required. */
+	if (IS_ENABLED(CONFIG_SPL_MMC))
 		writel(SECURE_TRANS_SET, SECURE_TRANS_REG);
-	}
 
 	if (IS_ENABLED(CONFIG_CADENCE_QSPI))
 		mbox_qspi_open();

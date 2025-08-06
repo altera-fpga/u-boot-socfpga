@@ -24,6 +24,9 @@
 #include <dt-bindings/clock/agilex5-clock.h>
 #include <wait_bit.h>
 #include <clk-uclass.h>
+#include <asm/arch/system_manager.h>
+#include <asm/arch/system_manager_soc64.h>
+#include <asm/arch/firewall.h>
 
 #define CLKMGR_CTRL_SWCTRLBTCLKEN_MASK		BIT(8)
 #define CLKMGR_CTRL_SWCTRLBTCLKSEL_MASK		BIT(9)
@@ -241,9 +244,14 @@ static void clk_basic_init(struct udevice *dev,
 	struct socfpga_clk_plat *plat = dev_get_plat(dev);
 	u32 vcocalib;
 	uintptr_t base_addr = (uintptr_t)plat->regs;
+	u32 len = SOC64_HANDOFF_PERI_LEN;
+	u32 handoff_table[len];
 
 	if (!cfg)
 		return;
+
+	/* Read handoff for PWRGATE configuration */
+	socfpga_handoff_read((void *)SOC64_HANDOFF_PERI, handoff_table, len);
 
 	if (IS_ENABLED(CONFIG_TARGET_SOCFPGA_AGILEX5_EMU)) {
 		/* Take both PLL out of reset and power up */
@@ -319,6 +327,14 @@ static void clk_basic_init(struct udevice *dev,
 		CM_REG_WRITEL(plat, cfg->per_pll_pllm, CLKMGR_PERPLL_PLLM);
 		CM_REG_WRITEL(plat, cfg->per_pll_emacctl, CLKMGR_PERPLL_EMACCTL);
 		CM_REG_WRITEL(plat, cfg->per_pll_gpiodiv, CLKMGR_PERPLL_GPIODIV);
+
+		/* Combophy Selection for SDMMC */
+		if (!(handoff_table[0] & SOC64_HANDOFF_COMBOPHY_SEL_MASK))
+			writel(SYSMGR_SOC64_COMBOPHY_DFISEL_SDMMC,
+			       socfpga_get_sysmgr_addr() + SYSMGR_SOC64_COMBOPHY_DFISEL);
+		else
+			writel(SYSMGR_SOC64_COMBOPHY_DFISEL_NAND,
+			       socfpga_get_sysmgr_addr() + SYSMGR_SOC64_COMBOPHY_DFISEL);
 
 		/* Configure ping pong counters in control group */
 		CM_REG_WRITEL(plat, cfg->ctl_emacactr, CLKMGR_CTL_EMACACTR);
