@@ -155,7 +155,9 @@ struct socfpga_firwall_l4_sys {
 					SECURE_TRANS_OFFS
 #define SECURE_TRANS_RESET		0x0
 #define SECURE_TRANS_SET		0x33
-
+#define OCRAM_SECURE_REGION0_OFFS	0x18
+#define OCRAM_SECURE_REGION0_REG	SOCFPGA_OCRAM_FIREWALL_ADDRESS +\
+					OCRAM_SECURE_REGION0_OFFS
 #define NON_SECURE_ACCESS		0x0
 
 void firewall_setup(void);
