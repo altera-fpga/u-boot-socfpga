@@ -197,6 +197,7 @@ lowlevel_in_el1:
 	str	x5, [x4]
 #endif
 
+#if defined(CONFIG_ARCH_SOCFPGA_STRATIX10) || defined(CONFIG_ARCH_SOCFPGA_N5X)
 #ifdef CONFIG_XPL_BUILD
 	branch_if_slave x0, 3f
 
@@ -232,6 +233,7 @@ copy_loop:
 	cmp	x1, x2
 	b.ne	copy_loop
 3:
+#endif
 #endif
 	mov	lr, x29			/* Restore LR */
 	ret
