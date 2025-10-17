@@ -107,6 +107,12 @@ config ARCH_SOCFPGA_AGILEX5
 config TARGET_SOCFPGA_AGILEX5_EMU
 	bool "Enable build that bootable only on Agilex5 Emulator"
 
+config TARGET_SOCFPGA_AGILEX5_MODULAR
+	bool "Enable build that bootable only on Agilex5 Modular DevKit"
+	help
+	  Enable build configuration specifically optimized for Agilex5
+	  Modular DevKit with SD card support.
+
 config TARGET_SOCFPGA_AGILEX5_013B
 	bool "Enable build that bootable only on Agilex5 ESeries_013B DevKit"
 
