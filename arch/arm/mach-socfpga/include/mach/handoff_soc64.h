@@ -145,5 +145,6 @@
 #include <asm/types.h>
 int socfpga_get_handoff_size(void *handoff_address);
 int socfpga_handoff_read(void *handoff_address, void *table, u32 table_len);
+void socfpga_pinmux_init(void);
 #endif
 #endif /* _HANDOFF_SOC64_H_ */

@@ -52,7 +52,7 @@ void board_init_f(ulong dummy)
 
 	mbox_hps_stage_notify(HPS_EXECUTION_STATE_FSBL);
 
-	sysmgr_pinmux_init();
+	socfpga_pinmux_init();
 
 	ret = uclass_get_device(UCLASS_CLK, 0, &dev);
 	if (ret) {

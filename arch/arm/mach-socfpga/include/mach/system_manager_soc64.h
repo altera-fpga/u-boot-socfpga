@@ -8,9 +8,6 @@
 #define _SYSTEM_MANAGER_SOC64_H_
 
 #include <linux/bitops.h>
-void sysmgr_pinmux_init(void);
-void populate_sysmgr_fpgaintf_module(void);
-void populate_sysmgr_pinmux(void);
 
 #if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5)
 #include <asm/arch/system_manager_soc64_agilex5.h>

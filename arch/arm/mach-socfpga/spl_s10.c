@@ -55,7 +55,7 @@ void board_init_f(ulong dummy)
 
 	mbox_hps_stage_notify(HPS_EXECUTION_STATE_FSBL);
 
-	sysmgr_pinmux_init();
+	socfpga_pinmux_init();
 
 	/* configuring the HPS clocks */
 	cm_basic_init(cm_default_cfg);
