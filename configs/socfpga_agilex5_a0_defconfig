@@ -1,0 +1,5 @@
+#include <configs/socfpga_agilex5_defconfig>
+
+CONFIG_DEFAULT_DEVICE_TREE="socfpga_agilex5_socdk_a0"
+# CONFIG_SPL_MMC_UHS_SUPPORT is not set
+# CONFIG_MMC_UHS_SUPPORT is not set
