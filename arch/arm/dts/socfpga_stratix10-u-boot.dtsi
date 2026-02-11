@@ -155,3 +155,7 @@
 		bootph-all;
 	};
 };
+
+&mmc {
+	fifo-mode;
+};
