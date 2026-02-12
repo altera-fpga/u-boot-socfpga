@@ -18,6 +18,7 @@
 };
 
 &mmc {
+	/delete-property/ sd-uhs-sdr104;
 	status = "okay";
 
 	no-sd;
