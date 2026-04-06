@@ -1275,6 +1275,19 @@ config CMD_FPGAD
 	  fpga_get_reg() function. This functions similarly to the 'md'
 	  command.
 
+config CMD_SOCFPGA_RSU
+	bool "rsu - Intel SoC FPGA Remote System Update"
+	default y
+	depends on CMDLINE
+	depends on CADENCE_QSPI
+	depends on TARGET_SOCFPGA_STRATIX10 || TARGET_SOCFPGA_AGILEX || \
+		  TARGET_SOCFPGA_AGILEX5 || TARGET_SOCFPGA_AGILEX7M || \
+		  TARGET_SOCFPGA_N5X
+	help
+	  Remote System Update for Stratix 10 / Agilex family SoCs: inspect
+	  flash images and SPT/CPB, manage configuration slots, trigger
+	  firmware updates, and adjust the Linux DTB QSPI layout.
+
 config CMD_FUSE
 	bool "fuse - support for the fuse subssystem"
 	depends on !COMPILE_TEST
