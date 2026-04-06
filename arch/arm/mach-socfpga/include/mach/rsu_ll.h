@@ -32,6 +32,8 @@
  */
 struct rsu_ll_intf {
 	void (*exit)(void);
+	/** @priv: backend private data (e.g. QSPI session); NULL if unused */
+	void *priv;
 
 	struct {
 		int (*count)(void);

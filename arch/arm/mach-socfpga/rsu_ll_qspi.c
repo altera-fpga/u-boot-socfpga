@@ -5,16 +5,21 @@
  */
 
 #include <env.h>
-#include <linux/errno.h>
+#include <malloc.h>
+#include <spi.h>
+#include <spi_flash.h>
+#include <stdio.h>
 #include <asm/arch/mailbox_s10.h>
 #include <asm/arch/rsu.h>
 #include <asm/arch/rsu_misc.h>
-#include <spi.h>
-#include <spi_flash.h>
-#include <linux/sizes.h>
-#include <u-boot/zlib.h>
 #include <asm/arch/smc_api.h>
+#include <linux/errno.h>
 #include <linux/intel-smc.h>
+#include <linux/kconfig.h>
+#include <linux/kernel.h>
+#include <linux/sizes.h>
+#include <linux/string.h>
+#include <u-boot/zlib.h>
 
 #define SPT_MAGIC_NUMBER	0x57713427
 #define SPT_FLAG_RESERVED	1
@@ -119,21 +124,32 @@ struct flash_info {
 	u32 erasesize;
 };
 
-static union cmf_pointer_block cpb;
-static struct sub_partition_table spt;
-static u64 *cpb_slots;
-struct spi_flash **flashlist;
-struct spi_flash *flash;
-static u32 spt0_offset;
-static u32 spt1_offset;
+/**
+ * struct rsu_qspi_priv - per-session QSPI RSU backend state
+ *
+ * Allocated in rsu_ll_qspi_init(), released in ll_exit(); SPT/CPB cached
+ * copies are memset before free to shorten sensitive data lifetime in RAM.
+ */
+struct rsu_qspi_priv {
+	union cmf_pointer_block cpb;
+	struct sub_partition_table spt;
+	u64 *cpb_slots;
+	struct spi_flash **flashlist;
+	struct spi_flash *flash;
+	u32 spt0_offset;
+	u32 spt1_offset;
+	int cpb0_part;
+	int cpb1_part;
+	int num_flash;
+	bool cpb_corrupted;
+	bool cpb_fixed;
+	bool spt_corrupted;
+};
 
-static int cpb0_part = -1;
-static int cpb1_part = -1;
-/* maximum supported QSPI, retrieved from mailbox */
-static int num_flash = -1;
-static bool cpb_corrupted;
-static bool cpb_fixed;
-static bool spt_corrupted;
+static struct rsu_qspi_priv *qspi_ctx;
+
+#define P (qspi_ctx)
+
 static int load_cpb(void);
 
 /**
@@ -145,10 +161,10 @@ static int load_cpb(void);
  */
 static int get_part_offset(int part_num, u64 *offset)
 {
-	if (part_num < 0 || part_num >= spt.partitions)
+	if (part_num < 0 || part_num >= P->spt.partitions)
 		return -1;
 
-	*offset = spt.partition[part_num].offset;
+	*offset = P->spt.partition[part_num].offset;
 
 	return 0;
 }
@@ -175,9 +191,9 @@ static int get_current_flash_offset(u64 offset, int *current_offset, int *curren
 	if (!current_offset || !current_flash)
 		return -EINVAL;
 
-	for (int j = 0; j < num_flash; j++) {
-		if (relative_offset > flashlist[j]->size) {
-			relative_offset -= flashlist[j]->size;
+	for (int j = 0; j < P->num_flash; j++) {
+		if (relative_offset > P->flashlist[j]->size) {
+			relative_offset -= P->flashlist[j]->size;
 			continue;
 		} else {
 			*current_flash = j;
@@ -207,18 +223,18 @@ static int read_dev(u64 offset, void *buf, int len)
 	if (ret)
 		return ret;
 
-	for (int i = current_flash; i < num_flash; i++) {
+	for (int i = current_flash; i < P->num_flash; i++) {
 		/* break if total data length is done */
 		if (count == len)
 			break;
 
 		/* check how many bytes to write to current_flash */
-		if (len + current_offset - count > flashlist[i]->size)
-			current_len = flashlist[i]->size - current_offset;
+		if (len + current_offset - count > P->flashlist[i]->size)
+			current_len = P->flashlist[i]->size - current_offset;
 		else
 			current_len = len - count;
 
-		ret = spi_flash_read(flashlist[i], (u32)current_offset,
+		ret = spi_flash_read(P->flashlist[i], (u32)current_offset,
 				     current_len, buf);
 		if (ret) {
 			rsu_log(RSU_ERR, "read flash error=%i\n", ret);
@@ -251,18 +267,18 @@ static int write_dev(u64 offset, void *buf, int len)
 	if (ret)
 		return ret;
 
-	for (int i = current_flash; i < num_flash; i++) {
+	for (int i = current_flash; i < P->num_flash; i++) {
 		/* break if total data length is done */
 		if (count == len)
 			break;
 
 		/* check how many bytes to write to current_flash */
-		if (len + current_offset - count > flashlist[i]->size)
-			current_len = flashlist[i]->size - current_offset;
+		if (len + current_offset - count > P->flashlist[i]->size)
+			current_len = P->flashlist[i]->size - current_offset;
 		else
 			current_len = len - count;
 
-		ret = spi_flash_write(flashlist[i], (u32)current_offset,
+		ret = spi_flash_write(P->flashlist[i], (u32)current_offset,
 				      current_len, buf);
 		if (ret) {
 			rsu_log(RSU_ERR, "write flash error=%i\n", ret);
@@ -294,18 +310,18 @@ static int erase_dev(u64 offset, int len)
 	if (ret)
 		return ret;
 
-	for (int i = current_flash; i < num_flash; i++) {
+	for (int i = current_flash; i < P->num_flash; i++) {
 		/* break if total data length is done */
 		if (count == len)
 			break;
 
 		/* check how many bytes to write to current_flash */
-		if (len + current_offset - count > flashlist[i]->size)
-			current_len = flashlist[i]->size - current_offset;
+		if (len + current_offset - count > P->flashlist[i]->size)
+			current_len = P->flashlist[i]->size - current_offset;
 		else
 			current_len = len - count;
 
-		ret = spi_flash_erase(flashlist[i], (u32)current_offset, current_len);
+		ret = spi_flash_erase(P->flashlist[i], (u32)current_offset, current_len);
 		if (ret) {
 			rsu_log(RSU_ERR, "erase flash error=%i\n", ret);
 			return ret;
@@ -336,7 +352,7 @@ static int read_part(int part_num, u64 offset, void *buf, int len)
 		return -1;
 
 	if (offset < 0 || len < 0 ||
-	    (offset + len) > spt.partition[part_num].length)
+	    (offset + len) > P->spt.partition[part_num].length)
 		return -1;
 
 	return read_dev(part_offset + offset, buf, len);
@@ -359,7 +375,7 @@ static int write_part(int part_num, u64 offset, void *buf, int len)
 		return -1;
 
 	if (offset < 0 || len < 0 ||
-	    (offset + len) > spt.partition[part_num].length)
+	    (offset + len) > P->spt.partition[part_num].length)
 		return -1;
 
 	return write_dev(part_offset + offset, buf, len);
@@ -378,7 +394,7 @@ static int erase_part(int part_num)
 	if (get_part_offset(part_num, &part_offset))
 		return -1;
 
-	return erase_dev(part_offset, spt.partition[part_num].length);
+	return erase_dev(part_offset, P->spt.partition[part_num].length);
 }
 
 /**
@@ -405,7 +421,7 @@ static int save_spt_to_address(u64 address)
 		return -ENOMEM;
 	}
 
-	ret = read_dev(spt0_offset, spt_data_src, SPT_SIZE);
+	ret = read_dev(P->spt0_offset, spt_data_src, SPT_SIZE);
 	if (ret) {
 		rsu_log(RSU_ERR, "failed to read SPT data\n");
 		free(spt_data_src);
@@ -431,7 +447,7 @@ static int save_spt_to_address(u64 address)
  */
 static int corrupted_spt(void)
 {
-	return spt_corrupted;
+	return P->spt_corrupted;
 }
 
 /**
@@ -446,9 +462,9 @@ static int writeback_spt(void)
 	char *spt_data;
 	u32 calc_crc;
 
-	for (x = 0; x < spt.partitions; x++) {
-		if (strcmp(spt.partition[x].name, "SPT0") &&
-		    strcmp(spt.partition[x].name, "SPT1"))
+	for (x = 0; x < P->spt.partitions; x++) {
+		if (strcmp(P->spt.partition[x].name, "SPT0") &&
+		    strcmp(P->spt.partition[x].name, "SPT1"))
 			continue;
 
 		if (erase_part(x)) {
@@ -456,7 +472,7 @@ static int writeback_spt(void)
 			return -1;
 		}
 
-		if (spt.version > SPT_VERSION &&
+		if (P->spt.version > SPT_VERSION &&
 		    rsu_misc_spt_checksum_enabled()) {
 			rsu_log(RSU_DEBUG, "update SPT checksum...\n");
 			spt_data = (char *)malloc(SPT_SIZE);
@@ -466,44 +482,44 @@ static int writeback_spt(void)
 				return -ENOMEM;
 			}
 
-			spt.checksum = (u32)0xFFFFFFFF;
+			P->spt.checksum = (u32)0xFFFFFFFF;
 			if (write_part(x, SPT_CHECKSUM_OFFSET,
-				       &spt.checksum,
-				       sizeof(spt.checksum))) {
+				       &P->spt.checksum,
+				       sizeof(P->spt.checksum))) {
 				rsu_log(RSU_ERR,
 					"failed to write SPTx table");
 				free(spt_data);
 				return -EINVAL;
 			}
 
-			memcpy(spt_data, &spt, SPT_SIZE);
+			memcpy(spt_data, &P->spt, SPT_SIZE);
 			memset(spt_data + SPT_CHECKSUM_OFFSET, 0,
-			       sizeof(spt.checksum));
+			       sizeof(P->spt.checksum));
 
 			swap_bits(spt_data, SPT_SIZE);
 			calc_crc = crc32(0, (void *)spt_data, SPT_SIZE);
-			spt.checksum = be32_to_cpu(calc_crc);
+			P->spt.checksum = be32_to_cpu(calc_crc);
 			swap_bits(spt_data, SPT_SIZE);
 			free(spt_data);
 
 			if (write_part(x, SPT_CHECKSUM_OFFSET,
-				       &spt.checksum,
-				       sizeof(spt.checksum))) {
+				       &P->spt.checksum,
+				       sizeof(P->spt.checksum))) {
 				rsu_log(RSU_ERR,
 					"failed to write SPTx table");
 				return -EINVAL;
 			}
 		}
 
-		spt.magic_number = (u32)0xFFFFFFFF;
-		if (write_part(x, 0, &spt, sizeof(spt))) {
+		P->spt.magic_number = (u32)0xFFFFFFFF;
+		if (write_part(x, 0, &P->spt, sizeof(P->spt))) {
 			rsu_log(RSU_ERR, "failed to write SPTx table");
 			return -1;
 		}
 
-		spt.magic_number = (u32)SPT_MAGIC_NUMBER;
-		if (write_part(x, 0, &spt.magic_number,
-			       sizeof(spt.magic_number))) {
+		P->spt.magic_number = (u32)SPT_MAGIC_NUMBER;
+		if (write_part(x, 0, &P->spt.magic_number,
+			       sizeof(P->spt.magic_number))) {
 			rsu_log(RSU_ERR, "failed to write SPTx magic #");
 			return -1;
 		}
@@ -559,18 +575,18 @@ static int restore_spt_from_address(u64 address)
 		return -EINVAL;
 	}
 
-	memcpy(&spt, spt_data, SPT_SIZE);
+	memcpy(&P->spt, spt_data, SPT_SIZE);
 	ret = writeback_spt();
 	if (ret) {
 		rsu_log(RSU_ERR, "failed to write back spt\n");
 		return ret;
 	}
 
-	spt_corrupted = false;
+	P->spt_corrupted = false;
 
 	/* try to reload CPB, as we have a new SPT */
-	cpb_corrupted = false;
-	if (load_cpb() && !cpb_corrupted)
+	P->cpb_corrupted = false;
+	if (load_cpb() && !P->cpb_corrupted)
 		rsu_log(RSU_ERR, "Bad CPB\n");
 
 	return 0;
@@ -585,7 +601,7 @@ static int check_spt(void)
 {
 	int x;
 	int y;
-	int max_len = sizeof(spt.partition[0].name);
+	int max_len = sizeof(P->spt.partition[0].name);
 	int spt0_found = 0;
 	int spt1_found = 0;
 	int cpb0_found = 0;
@@ -603,7 +619,7 @@ static int check_spt(void)
 	rsu_log(RSU_DEBUG,
 		"MAX length of a name = %i bytes\n", max_len - 1);
 
-	if (spt.version > SPT_VERSION &&
+	if (P->spt.version > SPT_VERSION &&
 	    rsu_misc_spt_checksum_enabled()) {
 		rsu_log(RSU_DEBUG, "check SPT checksum...\n");
 
@@ -613,13 +629,13 @@ static int check_spt(void)
 			return -ENOMEM;
 		}
 
-		memcpy(spt_data, &spt, SPT_SIZE);
+		memcpy(spt_data, &P->spt, SPT_SIZE);
 		memset(spt_data + SPT_CHECKSUM_OFFSET, 0,
-		       sizeof(spt.checksum));
+		       sizeof(P->spt.checksum));
 
 		swap_bits(spt_data, SPT_SIZE);
 		calc_crc = crc32(0, (void *)spt_data, SPT_SIZE);
-		if (be32_to_cpu(spt.checksum) != calc_crc) {
+		if (be32_to_cpu(P->spt.checksum) != calc_crc) {
 			rsu_log(RSU_ERR, "Error, bad SPT checksum\n");
 			free(spt_data);
 			return -EINVAL;
@@ -628,26 +644,26 @@ static int check_spt(void)
 		free(spt_data);
 	}
 
-	if (spt.partitions > SPT_MAX_PARTITIONS) {
+	if (P->spt.partitions > SPT_MAX_PARTITIONS) {
 		rsu_log(RSU_ERR, "bigger than max partition\n");
 		return -EINVAL;
 	}
 
-	for (x = 0; x < spt.partitions; x++) {
-		if (strnlen(spt.partition[x].name, max_len) >= max_len)
-			spt.partition[x].name[max_len - 1] = '\0';
+	for (x = 0; x < P->spt.partitions; x++) {
+		if (strnlen(P->spt.partition[x].name, max_len) >= max_len)
+			P->spt.partition[x].name[max_len - 1] = '\0';
 
 		rsu_log(RSU_DEBUG, "RSU %-16s %016llX - %016llX (%X)\n",
-			spt.partition[x].name, spt.partition[x].offset,
-			(spt.partition[x].offset +
-			spt.partition[x].length - 1),
-			spt.partition[x].flags);
+			P->spt.partition[x].name, P->spt.partition[x].offset,
+			(P->spt.partition[x].offset +
+			P->spt.partition[x].length - 1),
+			P->spt.partition[x].flags);
 
 		/* check if the partition is overlap */
-		u64 s_start = spt.partition[x].offset;
-		u64 s_end = spt.partition[x].offset + spt.partition[x].length;
+		u64 s_start = P->spt.partition[x].offset;
+		u64 s_end = P->spt.partition[x].offset + P->spt.partition[x].length;
 
-		for (y = 0; y < spt.partitions; y++) {
+		for (y = 0; y < P->spt.partitions; y++) {
 			if (x == y)
 				continue;
 
@@ -655,16 +671,16 @@ static int check_spt(void)
 			 * don't allow the same partition name to appear
 			 * more than once
 			 */
-			if (!(strcmp(spt.partition[x].name,
-				     spt.partition[y].name))) {
+			if (!(strcmp(P->spt.partition[x].name,
+				     P->spt.partition[y].name))) {
 				rsu_log(RSU_ERR, "partition name ");
 				rsu_log(RSU_ERR, "appears more than once\n");
 				return -EINVAL;
 			}
 
-			u64 d_start = spt.partition[y].offset;
-			u64 d_end = spt.partition[y].offset +
-				    spt.partition[y].length;
+			u64 d_start = P->spt.partition[y].offset;
+			u64 d_end = P->spt.partition[y].offset +
+				    P->spt.partition[y].length;
 
 			if (s_start < d_end && s_end > d_start) {
 				rsu_log(RSU_ERR, "partition overlap\n");
@@ -672,13 +688,13 @@ static int check_spt(void)
 			}
 		}
 
-		if (strcmp(spt.partition[x].name, "SPT0") == 0)
+		if (strcmp(P->spt.partition[x].name, "SPT0") == 0)
 			spt0_found = 1;
-		else if (strcmp(spt.partition[x].name, "SPT1") == 0)
+		else if (strcmp(P->spt.partition[x].name, "SPT1") == 0)
 			spt1_found = 1;
-		else if (strcmp(spt.partition[x].name, "CPB0") == 0)
+		else if (strcmp(P->spt.partition[x].name, "CPB0") == 0)
 			cpb0_found = 1;
-		else if (strcmp(spt.partition[x].name, "CPB1") == 0)
+		else if (strcmp(P->spt.partition[x].name, "CPB1") == 0)
 			cpb1_found = 1;
 	}
 
@@ -714,13 +730,13 @@ static int check_both_spt(void)
 		return -ENOMEM;
 	}
 
-	ret = read_dev(spt0_offset, spt0_data, SPT_SIZE);
+	ret = read_dev(P->spt0_offset, spt0_data, SPT_SIZE);
 	if (ret) {
 		rsu_log(RSU_ERR, "failed to read spt0_data\n");
 		goto ops_error;
 	}
 
-	ret = read_dev(spt1_offset, spt1_data, SPT_SIZE);
+	ret = read_dev(P->spt1_offset, spt1_data, SPT_SIZE);
 	if (ret) {
 		rsu_log(RSU_ERR, "failed to read spt1_data\n");
 		goto ops_error;
@@ -743,36 +759,36 @@ static int load_spt(void)
 {
 	int spt0_good = 0;
 	int spt1_good = 0;
-	int spt_size = spt1_offset - spt0_offset;
+	int spt_size = P->spt1_offset - P->spt0_offset;
 
 	rsu_log(RSU_DEBUG, "reading SPT1\n");
-	if (read_dev(spt1_offset, &spt, sizeof(spt)) == 0 &&
-	    spt.magic_number == SPT_MAGIC_NUMBER) {
+	if (read_dev(P->spt1_offset, &P->spt, sizeof(P->spt)) == 0 &&
+	    P->spt.magic_number == SPT_MAGIC_NUMBER) {
 		if (check_spt() == 0)
 			spt1_good = 1;
 		else
 			rsu_log(RSU_ERR, "SPT1 validity check failed\n");
 	} else {
 		rsu_log(RSU_ERR, "Bad SPT1 magic number 0x%08X\n",
-			spt.magic_number);
+			P->spt.magic_number);
 	}
 
 	rsu_log(RSU_DEBUG, "reading SPT0\n");
-	if (read_dev(spt0_offset, &spt, sizeof(spt)) == 0 &&
-	    spt.magic_number == SPT_MAGIC_NUMBER) {
+	if (read_dev(P->spt0_offset, &P->spt, sizeof(P->spt)) == 0 &&
+	    P->spt.magic_number == SPT_MAGIC_NUMBER) {
 		if (check_spt() == 0)
 			spt0_good = 1;
 		else
 			rsu_log(RSU_ERR, "SPT0 validity check failed\n");
 	} else {
 		rsu_log(RSU_ERR, "Bad SPT0 magic number 0x%08X\n",
-			spt.magic_number);
+			P->spt.magic_number);
 	}
 
 	if (spt0_good && spt1_good) {
 		if (check_both_spt()) {
 			rsu_log(RSU_ERR, "unmatched SPT0/1 data");
-			spt_corrupted = true;
+			P->spt_corrupted = true;
 			return -EINVAL;
 		}
 		rsu_log(RSU_INFO, "SPTs are GOOD!!!\n");
@@ -781,20 +797,20 @@ static int load_spt(void)
 
 	if (spt0_good) {
 		rsu_log(RSU_WARNING, "warning: Restoring SPT1\n");
-		if (erase_dev(spt1_offset, spt_size)) {
+		if (erase_dev(P->spt1_offset, spt_size)) {
 			rsu_log(RSU_ERR, "Erase SPT1 region failed\n");
 			return -1;
 		}
 
-		spt.magic_number = (u32)0xFFFFFFFF;
-		if (write_dev(spt1_offset, &spt, sizeof(spt))) {
+		P->spt.magic_number = (u32)0xFFFFFFFF;
+		if (write_dev(P->spt1_offset, &P->spt, sizeof(P->spt))) {
 			rsu_log(RSU_ERR, "Unable to write SPT1 table\n");
 			return -1;
 		}
 
-		spt.magic_number = (u32)SPT_MAGIC_NUMBER;
-		if (write_dev(spt1_offset, &spt.magic_number,
-			      sizeof(spt.magic_number))) {
+		P->spt.magic_number = (u32)SPT_MAGIC_NUMBER;
+		if (write_dev(P->spt1_offset, &P->spt.magic_number,
+			      sizeof(P->spt.magic_number))) {
 			rsu_log(RSU_ERR, "Unable to wr SPT1 magic #\n");
 			return -1;
 		}
@@ -803,28 +819,28 @@ static int load_spt(void)
 	}
 
 	if (spt1_good) {
-		if (read_dev(spt1_offset, &spt, sizeof(spt)) ||
-		    spt.magic_number != SPT_MAGIC_NUMBER || check_spt()) {
+		if (read_dev(P->spt1_offset, &P->spt, sizeof(P->spt)) ||
+		    P->spt.magic_number != SPT_MAGIC_NUMBER || check_spt()) {
 			rsu_log(RSU_ERR, "Failed to load SPT1\n");
 			return -1;
 		}
 
 		rsu_log(RSU_WARNING, "Restoring SPT0");
 
-		if (erase_dev(spt0_offset, spt_size)) {
+		if (erase_dev(P->spt0_offset, spt_size)) {
 			rsu_log(RSU_ERR, "Erase SPT0 region failed\n");
 			return -1;
 		}
 
-		spt.magic_number = (u32)0xFFFFFFFF;
-		if (write_dev(spt0_offset, &spt, sizeof(spt))) {
+		P->spt.magic_number = (u32)0xFFFFFFFF;
+		if (write_dev(P->spt0_offset, &P->spt, sizeof(P->spt))) {
 			rsu_log(RSU_ERR, "Unable to write SPT0 table\n");
 			return -1;
 		}
 
-		spt.magic_number = (u32)SPT_MAGIC_NUMBER;
-		if (write_dev(spt0_offset, &spt.magic_number,
-			      sizeof(spt.magic_number))) {
+		P->spt.magic_number = (u32)SPT_MAGIC_NUMBER;
+		if (write_dev(P->spt0_offset, &P->spt.magic_number,
+			      sizeof(P->spt.magic_number))) {
 			rsu_log(RSU_ERR, "Unable to wr SPT0 magic #\n");
 			return -1;
 		}
@@ -832,7 +848,7 @@ static int load_spt(void)
 		return 0;
 	}
 
-	spt_corrupted = true;
+	P->spt_corrupted = true;
 	rsu_log(RSU_ERR, "no valid SPT0 and SPT1 found\n");
 	return -1;
 }
@@ -846,33 +862,33 @@ static int check_cpb(void)
 {
 	int x, y;
 
-	if (cpb.header.header_size > CPB_HEADER_SIZE) {
+	if (P->cpb.header.header_size > CPB_HEADER_SIZE) {
 		rsu_log(RSU_WARNING,
 			"CPB header is larger than expected\n");
 		return -1;
 	}
 
-	for (x = 0; x < cpb.header.image_ptr_slots; x++) {
-		if (cpb_slots[x] == ERASED_ENTRY ||
-		    cpb_slots[x] == SPENT_ENTRY)
+	for (x = 0; x < P->cpb.header.image_ptr_slots; x++) {
+		if (P->cpb_slots[x] == ERASED_ENTRY ||
+		    P->cpb_slots[x] == SPENT_ENTRY)
 			continue;
 
-		for (y = 0; y < spt.partitions; y++) {
-			if (cpb_slots[x] == spt.partition[y].offset) {
+		for (y = 0; y < P->spt.partitions; y++) {
+			if (P->cpb_slots[x] == P->spt.partition[y].offset) {
 				rsu_log(RSU_DEBUG, "cpb_slots[%i] = %s\n",
-					x, spt.partition[y].name);
+					x, P->spt.partition[y].name);
 				break;
 			}
 		}
 
-		if (y >= spt.partitions) {
+		if (y >= P->spt.partitions) {
 			rsu_log(RSU_ERR, "CPB is not included in SPT\n");
 			rsu_log(RSU_DEBUG, "cpb_slots[%i] = %016llX ???",
-				x, cpb_slots[x]);
+				x, P->cpb_slots[x]);
 			return -EINVAL;
 		}
 
-		if (spt.partition[y].flags & SPT_FLAG_RESERVED) {
+		if (P->spt.partition[y].flags & SPT_FLAG_RESERVED) {
 			rsu_log(RSU_ERR, "CPB is included in SPT ");
 			rsu_log(RSU_ERR, "but it is reserved\n");
 			return -EINVAL;
@@ -906,13 +922,13 @@ static int check_both_cpb(void)
 		return -ENOMEM;
 	}
 
-	ret = read_part(cpb0_part, 0, cpb0_data, CPB_SIZE);
+	ret = read_part(P->cpb0_part, 0, cpb0_data, CPB_SIZE);
 	if (ret) {
 		rsu_log(RSU_ERR, "failed to read cpb0_data\n");
 		goto ops_error;
 	}
 
-	ret = read_part(cpb1_part, 0, cpb1_data, CPB_SIZE);
+	ret = read_part(P->cpb1_part, 0, cpb1_data, CPB_SIZE);
 	if (ret) {
 		rsu_log(RSU_ERR, "failed to read cpb1_data\n");
 		goto ops_error;
@@ -950,7 +966,7 @@ static int save_cpb_to_address(u64 address)
 		return -ENOMEM;
 	}
 
-	ret = read_part(cpb0_part, 0, cpb_data_src, CPB_SIZE);
+	ret = read_part(P->cpb0_part, 0, cpb_data_src, CPB_SIZE);
 	if (ret) {
 		rsu_log(RSU_ERR, "failed to read CPB data\n");
 		free(cpb_data_src);
@@ -976,7 +992,7 @@ static int save_cpb_to_address(u64 address)
  */
 static int corrupted_cpb(void)
 {
-	return cpb_corrupted;
+	return P->cpb_corrupted;
 }
 
 /**
@@ -998,38 +1014,38 @@ static int load_cpb(void)
 		return -EINVAL;
 	}
 
-	if (!cpb_fixed && status_info.state == STATE_CPB0_CPB1_CORRUPTED) {
+	if (!P->cpb_fixed && status_info.state == STATE_CPB0_CPB1_CORRUPTED) {
 		rsu_log(RSU_ERR, "FW detects both CPBs corrupted\n");
-		cpb_corrupted = true;
+		P->cpb_corrupted = true;
 		return -EINVAL;
 	}
 
-	if (!cpb_fixed && status_info.state == STATE_CPB0_CORRUPTED) {
+	if (!P->cpb_fixed && status_info.state == STATE_CPB0_CORRUPTED) {
 		rsu_log(RSU_ERR,
 			"FW detects corrupted CPB0 but CPB1 is fine\n");
 		cpb0_corrupted = 1;
 	}
 
-	for (x = 0; x < spt.partitions; x++) {
-		if (strcmp(spt.partition[x].name, "CPB0") == 0)
-			cpb0_part = x;
-		else if (strcmp(spt.partition[x].name, "CPB1") == 0)
-			cpb1_part = x;
+	for (x = 0; x < P->spt.partitions; x++) {
+		if (strcmp(P->spt.partition[x].name, "CPB0") == 0)
+			P->cpb0_part = x;
+		else if (strcmp(P->spt.partition[x].name, "CPB1") == 0)
+			P->cpb1_part = x;
 
-		if (cpb0_part >= 0 && cpb1_part >= 0)
+		if (P->cpb0_part >= 0 && P->cpb1_part >= 0)
 			break;
 	}
 
-	if (cpb0_part < 0 || cpb1_part < 0) {
+	if (P->cpb0_part < 0 || P->cpb1_part < 0) {
 		rsu_log(RSU_ERR, "Missing CPB0/1 partition\n");
 		return -1;
 	}
 
 	rsu_log(RSU_DEBUG, "Reading CPB1\n");
-	if (read_part(cpb1_part, 0, &cpb, sizeof(cpb)) == 0 &&
-	    cpb.header.magic_number == CPB_MAGIC_NUMBER) {
-		cpb_slots = (u64 *)
-			     &cpb.data[cpb.header.image_ptr_offset];
+	if (read_part(P->cpb1_part, 0, &P->cpb, sizeof(P->cpb)) == 0 &&
+	    P->cpb.header.magic_number == CPB_MAGIC_NUMBER) {
+		P->cpb_slots = (u64 *)
+			     &P->cpb.data[P->cpb.header.image_ptr_offset];
 		if (check_cpb() == 0)
 			cpb1_good = 1;
 	} else {
@@ -1038,10 +1054,10 @@ static int load_cpb(void)
 
 	if (!cpb0_corrupted) {
 		rsu_log(RSU_DEBUG, "Reading CPB0\n");
-		if (read_part(cpb0_part, 0, &cpb, sizeof(cpb)) == 0 &&
-		    cpb.header.magic_number == CPB_MAGIC_NUMBER) {
-			cpb_slots = (u64 *)
-				     &cpb.data[cpb.header.image_ptr_offset];
+		if (read_part(P->cpb0_part, 0, &P->cpb, sizeof(P->cpb)) == 0 &&
+		    P->cpb.header.magic_number == CPB_MAGIC_NUMBER) {
+			P->cpb_slots = (u64 *)
+				     &P->cpb.data[P->cpb.header.image_ptr_offset];
 			if (check_cpb() == 0)
 				cpb0_good = 1;
 		} else {
@@ -1052,70 +1068,70 @@ static int load_cpb(void)
 	if (cpb0_good && cpb1_good) {
 		if (check_both_cpb()) {
 			rsu_log(RSU_ERR, "unmatched CPB0/1 data");
-			cpb_corrupted = true;
+			P->cpb_corrupted = true;
 			return -EINVAL;
 		}
 		rsu_log(RSU_INFO, "CPBs are GOOD!!!\n");
-		cpb_slots = (u64 *)
-			     &cpb.data[cpb.header.image_ptr_offset];
+		P->cpb_slots = (u64 *)
+			     &P->cpb.data[P->cpb.header.image_ptr_offset];
 		return 0;
 	}
 
 	if (cpb0_good) {
 		rsu_log(RSU_WARNING, "Restoring CPB1\n");
-		if (erase_part(cpb1_part)) {
+		if (erase_part(P->cpb1_part)) {
 			rsu_log(RSU_ERR, "Failed erase CPB1\n");
 			return -1;
 		}
 
-		cpb.header.magic_number = (u32)0xFFFFFFFF;
-		if (write_part(cpb1_part, 0, &cpb, sizeof(cpb))) {
+		P->cpb.header.magic_number = (u32)0xFFFFFFFF;
+		if (write_part(P->cpb1_part, 0, &P->cpb, sizeof(P->cpb))) {
 			rsu_log(RSU_ERR, "Unable to write CPB1 table\n");
 			return -1;
 		}
 
-		cpb.header.magic_number = (u32)CPB_MAGIC_NUMBER;
-		if (write_part(cpb1_part, 0, &cpb.header.magic_number,
-			       sizeof(cpb.header.magic_number))) {
+		P->cpb.header.magic_number = (u32)CPB_MAGIC_NUMBER;
+		if (write_part(P->cpb1_part, 0, &P->cpb.header.magic_number,
+			       sizeof(P->cpb.header.magic_number))) {
 			rsu_log(RSU_ERR, "Unable to write CPB1 magic number\n");
 			return -1;
 		}
 
-		cpb_slots = (u64 *)&cpb.data[cpb.header.image_ptr_offset];
+		P->cpb_slots = (u64 *)&P->cpb.data[P->cpb.header.image_ptr_offset];
 		return 0;
 	}
 
 	if (cpb1_good) {
-		if (read_part(cpb1_part, 0, &cpb, sizeof(cpb)) ||
-		    cpb.header.magic_number != CPB_MAGIC_NUMBER) {
+		if (read_part(P->cpb1_part, 0, &P->cpb, sizeof(P->cpb)) ||
+		    P->cpb.header.magic_number != CPB_MAGIC_NUMBER) {
 			rsu_log(RSU_ERR, "Unable to load CPB1\n");
 			return -1;
 		}
 
 		rsu_log(RSU_WARNING, "Restoring CPB0\n");
-		if (erase_part(cpb0_part)) {
+		if (erase_part(P->cpb0_part)) {
 			rsu_log(RSU_ERR, "Failed erase CPB0\n");
 			return -1;
 		}
 
-		cpb.header.magic_number = (u32)0xFFFFFFFF;
-		if (write_part(cpb0_part, 0, &cpb, sizeof(cpb))) {
+		P->cpb.header.magic_number = (u32)0xFFFFFFFF;
+		if (write_part(P->cpb0_part, 0, &P->cpb, sizeof(P->cpb))) {
 			rsu_log(RSU_ERR, "Unable to write CPB0 table\n");
 			return -1;
 		}
 
-		cpb.header.magic_number = (u32)CPB_MAGIC_NUMBER;
-		if (write_part(cpb0_part, 0, &cpb.header.magic_number,
-			       sizeof(cpb.header.magic_number))) {
+		P->cpb.header.magic_number = (u32)CPB_MAGIC_NUMBER;
+		if (write_part(P->cpb0_part, 0, &P->cpb.header.magic_number,
+			       sizeof(P->cpb.header.magic_number))) {
 			rsu_log(RSU_ERR, "Unable to write CPB0 magic number\n");
 			return -1;
 		}
 
-		cpb_slots = (u64 *)&cpb.data[cpb.header.image_ptr_offset];
+		P->cpb_slots = (u64 *)&P->cpb.data[P->cpb.header.image_ptr_offset];
 		return 0;
 	}
 
-	cpb_corrupted = true;
+	P->cpb_corrupted = true;
 	rsu_log(RSU_ERR, "No valid CPB0 or CPB1 found\n");
 	return -1;
 }
@@ -1130,20 +1146,20 @@ static int update_cpb(int slot, u64 ptr)
 	int x;
 	int updates = 0;
 
-	if (slot < 0 || slot > cpb.header.image_ptr_slots)
+	if (slot < 0 || slot > P->cpb.header.image_ptr_slots)
 		return -1;
 
-	if ((cpb_slots[slot] & ptr) != ptr)
+	if ((P->cpb_slots[slot] & ptr) != ptr)
 		return -1;
 
-	cpb_slots[slot] = ptr;
+	P->cpb_slots[slot] = ptr;
 
-	for (x = 0; x < spt.partitions; x++) {
-		if (strcmp(spt.partition[x].name, "CPB0") &&
-		    strcmp(spt.partition[x].name, "CPB1"))
+	for (x = 0; x < P->spt.partitions; x++) {
+		if (strcmp(P->spt.partition[x].name, "CPB0") &&
+		    strcmp(P->spt.partition[x].name, "CPB1"))
 			continue;
 
-		if (write_part(x, 0, &cpb, sizeof(cpb)))
+		if (write_part(x, 0, &P->cpb, sizeof(P->cpb)))
 			return -1;
 
 		updates++;
@@ -1167,9 +1183,9 @@ static int writeback_cpb(void)
 	int x;
 	int updates = 0;
 
-	for (x = 0; x < spt.partitions; x++) {
-		if (strcmp(spt.partition[x].name, "CPB0") &&
-		    strcmp(spt.partition[x].name, "CPB1"))
+	for (x = 0; x < P->spt.partitions; x++) {
+		if (strcmp(P->spt.partition[x].name, "CPB0") &&
+		    strcmp(P->spt.partition[x].name, "CPB1"))
 			continue;
 
 		if (erase_part(x)) {
@@ -1177,15 +1193,15 @@ static int writeback_cpb(void)
 			return -1;
 		}
 
-		cpb.header.magic_number = (u32)0xFFFFFFFF;
-		if (write_part(x, 0, &cpb, sizeof(cpb))) {
+		P->cpb.header.magic_number = (u32)0xFFFFFFFF;
+		if (write_part(x, 0, &P->cpb, sizeof(P->cpb))) {
 			rsu_log(RSU_ERR, "Unable to write CPBx table\n");
 			return -1;
 		}
 
-		cpb.header.magic_number = (u32)CPB_MAGIC_NUMBER;
-		if (write_part(x, 0, &cpb.header.magic_number,
-			       sizeof(cpb.header.magic_number))) {
+		P->cpb.header.magic_number = (u32)CPB_MAGIC_NUMBER;
+		if (write_part(x, 0, &P->cpb.header.magic_number,
+			       sizeof(P->cpb.header.magic_number))) {
 			rsu_log(RSU_ERR,
 				"Unable to write CPBx magic number\n");
 			return -1;
@@ -1219,7 +1235,7 @@ static int empty_cpb(void)
 		u32 image_ptr_slots;
 	} *c_header;
 
-	if (spt_corrupted) {
+	if (P->spt_corrupted) {
 		rsu_log(RSU_ERR, "corrupted SPT ---");
 		rsu_log(RSU_ERR, "run rsu restore_spt <address> first\n");
 		return -EINVAL;
@@ -1238,8 +1254,8 @@ static int empty_cpb(void)
 	c_header->image_ptr_offset = CPB_IMAGE_PTR_OFFSET;
 	c_header->image_ptr_slots = CPB_IMAGE_PTR_NSLOTS;
 
-	memset(&cpb, -1, CPB_SIZE);
-	memcpy(&cpb, c_header, sizeof(*c_header));
+	memset(&P->cpb, -1, CPB_SIZE);
+	memcpy(&P->cpb, c_header, sizeof(*c_header));
 
 	ret = writeback_cpb();
 	if (ret) {
@@ -1247,9 +1263,9 @@ static int empty_cpb(void)
 		goto ops_error;
 	}
 
-	cpb_slots = (u64 *)&cpb.data[cpb.header.image_ptr_offset];
-	cpb_corrupted = false;
-	cpb_fixed = true;
+	P->cpb_slots = (u64 *)&P->cpb.data[P->cpb.header.image_ptr_offset];
+	P->cpb_corrupted = false;
+	P->cpb_fixed = true;
 
 ops_error:
 	free(c_header);
@@ -1270,7 +1286,7 @@ static int restore_cpb_from_address(u64 address)
 	u32 magic_number;
 	char *cpb_data = (char *)address;
 
-	if (spt_corrupted) {
+	if (P->spt_corrupted) {
 		rsu_log(RSU_ERR, "corrupted SPT --");
 		rsu_log(RSU_ERR, "run rsu restore_spt <address> first\n");
 		return -EINVAL;
@@ -1302,17 +1318,17 @@ static int restore_cpb_from_address(u64 address)
 		return -EINVAL;
 	}
 
-	memcpy(&cpb, cpb_data, CPB_SIZE);
+	memcpy(&P->cpb, cpb_data, CPB_SIZE);
 	ret = writeback_cpb();
 	if (ret) {
 		rsu_log(RSU_ERR, "failed to write back cpb\n");
 		return ret;
 	}
 
-	cpb_slots = (u64 *)&cpb.data[cpb.header.image_ptr_offset];
+	P->cpb_slots = (u64 *)&P->cpb.data[P->cpb.header.image_ptr_offset];
 
-	cpb_corrupted = false;
-	cpb_fixed = true;
+	P->cpb_corrupted = false;
+	P->cpb_fixed = true;
 	return 0;
 }
 
@@ -1323,7 +1339,7 @@ static int restore_cpb_from_address(u64 address)
  */
 static int partition_count(void)
 {
-	return spt.partitions;
+	return P->spt.partitions;
 }
 
 /**
@@ -1334,10 +1350,10 @@ static int partition_count(void)
  */
 static char *partition_name(int part_num)
 {
-	if (part_num < 0 || part_num >= spt.partitions)
+	if (part_num < 0 || part_num >= P->spt.partitions)
 		return "BAD";
 
-	return spt.partition[part_num].name;
+	return P->spt.partition[part_num].name;
 }
 
 /**
@@ -1348,10 +1364,10 @@ static char *partition_name(int part_num)
  */
 static u64 partition_offset(int part_num)
 {
-	if (part_num < 0 || part_num >= spt.partitions)
+	if (part_num < 0 || part_num >= P->spt.partitions)
 		return -1;
 
-	return spt.partition[part_num].offset;
+	return P->spt.partition[part_num].offset;
 }
 
 /**
@@ -1363,10 +1379,10 @@ static s64 factory_offset(void)
 {
 	int x;
 
-	for (x = 0; x < spt.partitions; x++)
-		if (strncmp(spt.partition[x].name, FACTORY_IMAGE_NAME,
-			    sizeof(spt.partition[0].name) - 1) == 0)
-			return spt.partition[x].offset;
+	for (x = 0; x < P->spt.partitions; x++)
+		if (strncmp(P->spt.partition[x].name, FACTORY_IMAGE_NAME,
+			    sizeof(P->spt.partition[0].name) - 1) == 0)
+			return P->spt.partition[x].offset;
 
 	return -1;
 }
@@ -1379,10 +1395,10 @@ static s64 factory_offset(void)
  */
 static u32 partition_size(int part_num)
 {
-	if (part_num < 0 || part_num >= spt.partitions)
+	if (part_num < 0 || part_num >= P->spt.partitions)
 		return -1;
 
-	return spt.partition[part_num].length;
+	return P->spt.partition[part_num].length;
 }
 
 /**
@@ -1393,10 +1409,10 @@ static u32 partition_size(int part_num)
  */
 static int partition_reserved(int part_num)
 {
-	if (part_num < 0 || part_num >= spt.partitions)
+	if (part_num < 0 || part_num >= P->spt.partitions)
 		return 0;
 
-	return (spt.partition[part_num].flags & SPT_FLAG_RESERVED) ? 1 : 0;
+	return (P->spt.partition[part_num].flags & SPT_FLAG_RESERVED) ? 1 : 0;
 }
 
 /**
@@ -1407,10 +1423,10 @@ static int partition_reserved(int part_num)
  */
 static int partition_readonly(int part_num)
 {
-	if (part_num < 0 || part_num >= spt.partitions)
+	if (part_num < 0 || part_num >= P->spt.partitions)
 		return 0;
 
-	return (spt.partition[part_num].flags & SPT_FLAG_READONLY) ? 1 : 0;
+	return (P->spt.partition[part_num].flags & SPT_FLAG_READONLY) ? 1 : 0;
 }
 
 /**
@@ -1424,29 +1440,29 @@ static int partition_rename(int part_num, char *name)
 {
 	int x;
 
-	if (part_num < 0 || part_num >= spt.partitions)
+	if (part_num < 0 || part_num >= P->spt.partitions)
 		return -1;
 
-	if (strnlen(name, sizeof(spt.partition[0].name)) >=
-	    sizeof(spt.partition[0].name)) {
+	if (strnlen(name, sizeof(P->spt.partition[0].name)) >=
+	    sizeof(P->spt.partition[0].name)) {
 		rsu_log(RSU_ERR,
 			"Partition name is too long - limited to %li",
-			sizeof(spt.partition[0].name) - 1);
+			sizeof(P->spt.partition[0].name) - 1);
 		return -1;
 	}
 
-	for (x = 0; x < spt.partitions; x++) {
-		if (strncmp(spt.partition[x].name, name,
-			    sizeof(spt.partition[0].name) - 1) == 0) {
+	for (x = 0; x < P->spt.partitions; x++) {
+		if (strncmp(P->spt.partition[x].name, name,
+			    sizeof(P->spt.partition[0].name) - 1) == 0) {
 			rsu_log(RSU_ERR,
 				"Partition rename already in use\n");
 			return -1;
 		}
 	}
 
-	rsu_misc_safe_strcpy(spt.partition[part_num].name,
-			     sizeof(spt.partition[0].name),
-			     name, sizeof(spt.partition[0].name));
+	rsu_misc_safe_strcpy(P->spt.partition[part_num].name,
+			     sizeof(P->spt.partition[0].name),
+			     name, sizeof(P->spt.partition[0].name));
 
 	if (writeback_spt())
 		return -1;
@@ -1467,15 +1483,15 @@ static int partition_delete(int part_num)
 {
 	int x;
 
-	if (part_num < 0 || part_num >= spt.partitions) {
+	if (part_num < 0 || part_num >= P->spt.partitions) {
 		rsu_log(RSU_ERR, "Invalid partition number\n");
 		return -1;
 	}
 
-	for (x = part_num; x < spt.partitions; x++)
-		spt.partition[x] = spt.partition[x + 1];
+	for (x = part_num; x < P->spt.partitions; x++)
+		P->spt.partition[x] = P->spt.partition[x + 1];
 
-	spt.partitions--;
+	P->spt.partitions--;
 
 	if (writeback_spt())
 		return -1;
@@ -1509,30 +1525,30 @@ static int partition_create(char *name, u64 start, unsigned int size)
 		return -1;
 	}
 
-	if (strnlen(name, sizeof(spt.partition[0].name)) >=
-	    sizeof(spt.partition[0].name)) {
+	if (strnlen(name, sizeof(P->spt.partition[0].name)) >=
+	    sizeof(P->spt.partition[0].name)) {
 		rsu_log(RSU_ERR, "Partition name is too long - limited to %i\n",
-			sizeof(spt.partition[0].name) - 1);
+			sizeof(P->spt.partition[0].name) - 1);
 		return -1;
 	}
 
-	for (x = 0; x < spt.partitions; x++) {
-		if (strncmp(spt.partition[x].name, name,
-			    sizeof(spt.partition[0].name) - 1) == 0) {
+	for (x = 0; x < P->spt.partitions; x++) {
+		if (strncmp(P->spt.partition[x].name, name,
+			    sizeof(P->spt.partition[0].name) - 1) == 0) {
 			rsu_log(RSU_ERR, "Partition name already in use\n");
 			return -1;
 		}
 	}
 
-	if (spt.partitions == SPT_MAX_PARTITIONS) {
+	if (P->spt.partitions == SPT_MAX_PARTITIONS) {
 		rsu_log(RSU_ERR, "Partition table is full\n");
 		return -1;
 	}
 
-	for (x = 0; x < spt.partitions; x++) {
-		u64 pstart = spt.partition[x].offset;
-		u64 pend = spt.partition[x].offset +
-			     spt.partition[x].length;
+	for (x = 0; x < P->spt.partitions; x++) {
+		u64 pstart = P->spt.partition[x].offset;
+		u64 pend = P->spt.partition[x].offset +
+			     P->spt.partition[x].length;
 
 		if (start < pend && end > pstart) {
 			rsu_log(RSU_ERR, "Partition overlap\n");
@@ -1540,14 +1556,14 @@ static int partition_create(char *name, u64 start, unsigned int size)
 		}
 	}
 
-	rsu_misc_safe_strcpy(spt.partition[spt.partitions].name,
-			     sizeof(spt.partition[0].name), name,
-			     sizeof(spt.partition[0].name));
-	spt.partition[spt.partitions].offset = start;
-	spt.partition[spt.partitions].length = size;
-	spt.partition[spt.partitions].flags = 0;
+	rsu_misc_safe_strcpy(P->spt.partition[P->spt.partitions].name,
+			     sizeof(P->spt.partition[0].name), name,
+			     sizeof(P->spt.partition[0].name));
+	P->spt.partition[P->spt.partitions].offset = start;
+	P->spt.partition[P->spt.partitions].length = size;
+	P->spt.partition[P->spt.partitions].flags = 0;
 
-	spt.partitions++;
+	P->spt.partitions++;
 
 	if (writeback_spt())
 		return -1;
@@ -1569,15 +1585,15 @@ static int priority_get(int part_num)
 	int x;
 	int priority = 0;
 
-	if (part_num < 0 || part_num >= spt.partitions)
+	if (part_num < 0 || part_num >= P->spt.partitions)
 		return -1;
 
-	for (x = cpb.header.image_ptr_slots; x > 0; x--) {
-		if (cpb_slots[x - 1] != ERASED_ENTRY &&
-		    cpb_slots[x - 1] != SPENT_ENTRY) {
+	for (x = P->cpb.header.image_ptr_slots; x > 0; x--) {
+		if (P->cpb_slots[x - 1] != ERASED_ENTRY &&
+		    P->cpb_slots[x - 1] != SPENT_ENTRY) {
 			priority++;
-			if (cpb_slots[x - 1] ==
-			    spt.partition[part_num].offset)
+			if (P->cpb_slots[x - 1] ==
+			    P->spt.partition[part_num].offset)
 				return priority;
 		}
 	}
@@ -1596,13 +1612,13 @@ static int priority_add(int part_num)
 	int x;
 	int y;
 
-	if (part_num < 0 || part_num >= spt.partitions)
+	if (part_num < 0 || part_num >= P->spt.partitions)
 		return -1;
 
-	for (x = 0; x < cpb.header.image_ptr_slots; x++) {
-		if (cpb_slots[x] == ERASED_ENTRY) {
+	for (x = 0; x < P->cpb.header.image_ptr_slots; x++) {
+		if (P->cpb_slots[x] == ERASED_ENTRY) {
 			if (update_cpb(x,
-				       spt.partition[part_num].offset)) {
+				       P->spt.partition[part_num].offset)) {
 				load_cpb();
 				return -1;
 			}
@@ -1612,20 +1628,20 @@ static int priority_add(int part_num)
 
 	rsu_log(RSU_DEBUG, "Compressing CPB\n");
 
-	for (x = 0, y = 0; x < cpb.header.image_ptr_slots; x++) {
-		if (cpb_slots[x] != ERASED_ENTRY &&
-		    cpb_slots[x] != SPENT_ENTRY) {
-			cpb_slots[y++] = cpb_slots[x];
+	for (x = 0, y = 0; x < P->cpb.header.image_ptr_slots; x++) {
+		if (P->cpb_slots[x] != ERASED_ENTRY &&
+		    P->cpb_slots[x] != SPENT_ENTRY) {
+			P->cpb_slots[y++] = P->cpb_slots[x];
 		}
 	}
 
-	if (y < cpb.header.image_ptr_slots)
-		cpb_slots[y++] = spt.partition[part_num].offset;
+	if (y < P->cpb.header.image_ptr_slots)
+		P->cpb_slots[y++] = P->spt.partition[part_num].offset;
 	else
 		return -1;
 
-	while (y < cpb.header.image_ptr_slots)
-		cpb_slots[y++] = ERASED_ENTRY;
+	while (y < P->cpb.header.image_ptr_slots)
+		P->cpb_slots[y++] = ERASED_ENTRY;
 
 	if (writeback_cpb() || load_cpb())
 		return -1;
@@ -1643,11 +1659,11 @@ static int priority_remove(int part_num)
 {
 	int x;
 
-	if (part_num < 0 || part_num >= spt.partitions)
+	if (part_num < 0 || part_num >= P->spt.partitions)
 		return -1;
 
-	for (x = 0; x < cpb.header.image_ptr_slots; x++) {
-		if (cpb_slots[x] == spt.partition[part_num].offset)
+	for (x = 0; x < P->cpb.header.image_ptr_slots; x++) {
+		if (P->cpb_slots[x] == P->spt.partition[part_num].offset)
 			if (update_cpb(x, SPENT_ENTRY)) {
 				load_cpb();
 				return -1;
@@ -1769,27 +1785,27 @@ static int dcmf_version(__u32 *versions)
 		return -1;
 
 	/* get the first flash since DCMF always located at first flash */
-	flash = flashlist[0];
+	P->flash = P->flashlist[0];
 
-	ret = spi_flash_read(flash, DCMF0_VERSION_OFFSET, 4, &versions[0]);
+	ret = spi_flash_read(P->flash, DCMF0_VERSION_OFFSET, 4, &versions[0]);
 	if (ret) {
 		rsu_log(RSU_ERR, "read flash error=%i\n", ret);
 		return ret;
 	}
 
-	ret = spi_flash_read(flash, DCMF1_VERSION_OFFSET, 4, &versions[1]);
+	ret = spi_flash_read(P->flash, DCMF1_VERSION_OFFSET, 4, &versions[1]);
 	if (ret) {
 		rsu_log(RSU_ERR, "read flash error=%i\n", ret);
 		return ret;
 	}
 
-	ret = spi_flash_read(flash, DCMF2_VERSION_OFFSET, 4, &versions[2]);
+	ret = spi_flash_read(P->flash, DCMF2_VERSION_OFFSET, 4, &versions[2]);
 	if (ret) {
 		rsu_log(RSU_ERR, "read flash error=%i\n", ret);
 		return ret;
 	}
 
-	ret = spi_flash_read(flash, DCMF3_VERSION_OFFSET, 4, &versions[3]);
+	ret = spi_flash_read(P->flash, DCMF3_VERSION_OFFSET, 4, &versions[3]);
 	if (ret) {
 		rsu_log(RSU_ERR, "read flash error=%i\n", ret);
 		return ret;
@@ -1820,7 +1836,7 @@ static int dcmf_status(u16 *status)
 	int idx;
 
 	/* get the first flash since DCMF always located at first flash */
-	flash = flashlist[0];
+	P->flash = P->flashlist[0];
 
 	ret = status_log(&rsu_status);
 	if (ret) {
@@ -1842,7 +1858,7 @@ static int dcmf_status(u16 *status)
 		goto ret_val;
 	}
 
-	ret = spi_flash_read(flash, crt_dcmf * DCMF_SIZE, DCMF_SIZE, buffa);
+	ret = spi_flash_read(P->flash, crt_dcmf * DCMF_SIZE, DCMF_SIZE, buffa);
 	if (ret) {
 		rsu_log(RSU_ERR, "read flash error=%i\n", ret);
 		goto ret_val;
@@ -1856,7 +1872,7 @@ static int dcmf_status(u16 *status)
 		if (idx == crt_dcmf)
 			continue;
 
-		ret = spi_flash_read(flash, idx * DCMF_SIZE, DCMF_SIZE, buffb);
+		ret = spi_flash_read(P->flash, idx * DCMF_SIZE, DCMF_SIZE, buffb);
 		if (ret) {
 			rsu_log(RSU_ERR, "read flash error=%i\n", ret);
 			goto ret_val;
@@ -1895,9 +1911,9 @@ static int max_retry(__u8 *value)
 		return -1;
 
 	/* get the first flash since DCMF always located at first flash */
-	flash = flashlist[0];
+	P->flash = P->flashlist[0];
 
-	ret = spi_flash_read(flash, DCIO_MAX_RETRY_OFFSET, 1, &tmp);
+	ret = spi_flash_read(P->flash, DCIO_MAX_RETRY_OFFSET, 1, &tmp);
 	if (ret) {
 		rsu_log(RSU_ERR, "read flash error=%i\n", ret);
 		return ret;
@@ -1909,29 +1925,49 @@ static int max_retry(__u8 *value)
 	return ret;
 }
 
+/* Forward declaration: qspi_ll_intf is defined below but referenced in ll_exit(). */
+static struct rsu_ll_intf qspi_ll_intf;
+
 static void ll_exit(void)
 {
-	cpb0_part = -1;
-	cpb1_part = -1;
-	cpb_corrupted = false;
-	cpb_fixed = false;
-	spt_corrupted = false;
+	struct rsu_qspi_priv *ctx = qspi_ctx;
 
-	/* free the flash list */
+	if (!ctx)
+		return;
+
+	ctx->cpb0_part = -1;
+	ctx->cpb1_part = -1;
+	ctx->cpb_corrupted = false;
+	ctx->cpb_fixed = false;
+	ctx->spt_corrupted = false;
+
 	for (int i = 0; i < QSPI_MAX_DEVICE; i++) {
-		if (flashlist && flashlist[i]) {
-			spi_flash_free(flashlist[i]);
-			flashlist[i] = NULL;
+		if (ctx->flashlist && ctx->flashlist[i]) {
+			spi_flash_free(ctx->flashlist[i]);
+			ctx->flashlist[i] = NULL;
 		}
 	}
 
-	/* free the remaining list struct */
-	free(flashlist);
-	flashlist = NULL;
+	free(ctx->flashlist);
+	ctx->flashlist = NULL;
+	ctx->flash = NULL;
+	ctx->cpb_slots = NULL;
+
+	memset(ctx, 0, sizeof(*ctx));
+	free(ctx);
+	qspi_ctx = NULL;
+
+	/*
+	 * qspi_ll_intf.priv is set to qspi_ctx during ll_init(). Clear it
+	 * in sync with the free above so any accidental future access via
+	 * the interface object cannot dereference freed memory.
+	 */
+	qspi_ll_intf.priv = NULL;
 }
 
 static struct rsu_ll_intf qspi_ll_intf = {
 	.exit = ll_exit,
+	.priv = NULL,
 
 	.partition.count = partition_count,
 	.partition.name = partition_name,
@@ -2022,6 +2058,16 @@ int rsu_ll_qspi_init(struct rsu_ll_intf **intf)
 
 	found = 0;
 
+	qspi_ctx = malloc(sizeof(*qspi_ctx));
+	if (!qspi_ctx)
+		return -ENOMEM;
+	memset(qspi_ctx, 0, sizeof(*qspi_ctx));
+	qspi_ctx->cpb0_part = -1;
+	qspi_ctx->cpb1_part = -1;
+	qspi_ctx->num_flash = -1;
+	/* Set for future per-session use; current backend reads qspi_ctx directly. */
+	qspi_ll_intf.priv = qspi_ctx;
+
 	/* get the offset from firmware */
 	if (mbox_rsu_get_spt_offset(spt_offset, 4)) {
 		rsu_log(RSU_ERR,
@@ -2034,19 +2080,20 @@ int rsu_ll_qspi_init(struct rsu_ll_intf **intf)
 	u32 flash_enabled[QSPI_MAX_DEVICE];
 
 	/* retrieve qspi info from mailbox */
-	num_flash = get_num_flash(flash_enabled);
-	printf("%s: MULTIFLASH_ENABLED: num_flash #%d\n", __func__, num_flash);
+	P->num_flash = get_num_flash(flash_enabled);
+	printf("%s: MULTIFLASH_ENABLED: num_flash #%d\n", __func__, P->num_flash);
 #else
-	num_flash = 1;
-	printf("%s: MULTIFLASH_DISABLED: num_flash #%d\n", __func__, num_flash);
+	P->num_flash = 1;
+	printf("%s: MULTIFLASH_DISABLED: num_flash #%d\n", __func__, P->num_flash);
 #endif
 
-	flashlist = (struct spi_flash **) malloc(sizeof(struct spi_flash *) *
+	P->flashlist = (struct spi_flash **) malloc(sizeof(struct spi_flash *) *
 						 QSPI_MAX_DEVICE);
 
-	if (!flashlist) {
+	if (!P->flashlist) {
 		rsu_log(RSU_ERR,
 			"RSU: Failed to allocate memory for flash list. Exiting.\n");
+		ll_exit();
 		return -ECOMM;
 	}
 
@@ -2055,51 +2102,49 @@ int rsu_ll_qspi_init(struct rsu_ll_intf **intf)
 		debug("%s: probe flash #%d\n", __func__, i);
 		if (flash_enabled[i] > 0) {
 			/* retrieve data from flash */
-			flash = spi_flash_probe(CONFIG_SF_DEFAULT_BUS,
-						i,
-						CONFIG_SF_DEFAULT_SPEED,
-						CONFIG_SF_DEFAULT_MODE);
-			if (!flash) {
+			P->flash = spi_flash_probe(CONFIG_SF_DEFAULT_BUS,
+						   i,
+						   CONFIG_SF_DEFAULT_SPEED,
+						   CONFIG_SF_DEFAULT_MODE);
+			if (!P->flash) {
 				rsu_log(RSU_ERR, "SPI probe failed.\n");
 				ll_exit();
-				/* return only if no flash found */
-				if (i == num_flash + 1 && found == 0)
-					return -ENODEV;
+				return -ENODEV;
 			}
 
-			/* store initialized flash into flashlist */
-			flashlist[i] = flash;
+			/* store initialized flash into P->flashlist */
+			P->flashlist[i] = P->flash;
 			found++;
 		}
 	}
 #else
 	/* retrieve data from flash */
-	flash = spi_flash_probe(CONFIG_SF_DEFAULT_BUS,
-				CONFIG_SF_DEFAULT_CS,
-				CONFIG_SF_DEFAULT_SPEED,
-				CONFIG_SF_DEFAULT_MODE);
-	if (!flash) {
+	P->flash = spi_flash_probe(CONFIG_SF_DEFAULT_BUS,
+				   CONFIG_SF_DEFAULT_CS,
+				   CONFIG_SF_DEFAULT_SPEED,
+				   CONFIG_SF_DEFAULT_MODE);
+	if (!P->flash) {
 		ll_exit();
 		rsu_log(RSU_ERR, "SPI probe failed.\n");
 		return -ENODEV;
 	}
 
-	flashlist[0] = flash;
+	P->flashlist[0] = P->flash;
 #endif
-	spt0_offset = spt_offset[1];
-	spt1_offset = spt_offset[3];
-	rsu_log(RSU_DEBUG, "SPT0 offset 0x%08x\n", spt0_offset);
-	rsu_log(RSU_DEBUG, "SPT1 offset 0x%08x\n", spt1_offset);
+	P->spt0_offset = spt_offset[1];
+	P->spt1_offset = spt_offset[3];
+	rsu_log(RSU_DEBUG, "SPT0 offset 0x%08x\n", P->spt0_offset);
+	rsu_log(RSU_DEBUG, "SPT1 offset 0x%08x\n", P->spt1_offset);
 
-	if (load_spt() && !spt_corrupted) {
+	if (load_spt() && !P->spt_corrupted) {
 		ll_exit();
 		rsu_log(RSU_ERR, "Bad SPT\n");
 		return -1;
 	}
 
-	if (spt_corrupted) {
-		cpb_corrupted = true;
-	} else if (load_cpb() && !cpb_corrupted) {
+	if (P->spt_corrupted) {
+		P->cpb_corrupted = true;
+	} else if (load_cpb() && !P->cpb_corrupted) {
 		ll_exit();
 		rsu_log(RSU_ERR, "Bad CPB\n");
 		return -1;

@@ -5,6 +5,7 @@
  */
 #define DEBUG
 #include <linux/errno.h>
+#include <log.h>
 #include <spi.h>
 #include <spi_flash.h>
 #include <asm/arch/mailbox_s10.h>
@@ -24,6 +25,17 @@
 #define UBOOT_PREFIX "u-boot_"
 #define FACTORY_IMG_NAME "FACTORY_IM"
 
+#define RSU_SPL_SPT_SLOT_MAX 127
+
+static unsigned int rsu_spl_spt_nentries(const struct socfpga_rsu_s10_spt *spt)
+{
+	if (spt->magic_number != RSU_S10_SPT_MAGIC_NUMBER)
+		return 0;
+	if (spt->entries > RSU_SPL_SPT_SLOT_MAX)
+		return RSU_SPL_SPT_SLOT_MAX;
+	return spt->entries;
+}
+
 static int get_spl_slot(struct socfpga_rsu_s10_spt *rsu_spt,
 			size_t rsu_spt_size, int *crt_spt_index)
 {
@@ -31,6 +43,7 @@ static int get_spl_slot(struct socfpga_rsu_s10_spt *rsu_spt,
 	u32 spt_offset[4] = {0};
 	struct rsu_status_info rsu_status = {0};
 	struct spi_flash *flash;
+	unsigned int nentries;
 	int i;
 
 	/* get rsu status */
@@ -80,6 +93,10 @@ static int get_spl_slot(struct socfpga_rsu_s10_spt *rsu_spt,
 		}
 	}
 
+	nentries = rsu_spl_spt_nentries(rsu_spt);
+	if (!nentries)
+		return -EINVAL;
+
 	/* display status */
 	debug("RSU current image:  0x%08x\n", (u32)rsu_status.current_image);
 	debug("RSU state:          0x%08x\n", rsu_status.state);
@@ -87,14 +104,14 @@ static int get_spl_slot(struct socfpga_rsu_s10_spt *rsu_spt,
 	debug("RSU error details:  0x%08x\n", rsu_status.error_details);
 
 	/* display partitions */
-	for (i = 0; i < rsu_spt->entries; i++) {
+	for (i = 0; i < (int)nentries; i++) {
 		debug("RSU: Partition '%s' start=0x%08x length=0x%08x\n",
 		      rsu_spt->spt_slot[i].name, rsu_spt->spt_slot[i].offset[0],
 		      rsu_spt->spt_slot[i].length);
 	}
 
 	/* locate the SPT entry for currently loaded image */
-	for (i = 0; i < rsu_spt->entries; i++) {
+	for (i = 0; i < (int)nentries; i++) {
 		if (((rsu_status.current_image & RSU_ADDR_MASK) ==
 			rsu_spt->spt_slot[i].offset[0]) &&
 		   ((rsu_status.current_image >> RSU_ADDR_SHIFT) ==
@@ -113,6 +130,7 @@ static int get_ssbl_slot(struct socfpga_rsu_s10_spt_slot *rsu_ssbl_slot)
 	struct socfpga_rsu_s10_spt rsu_spt = {0};
 	int crt_spt_index = -EINVAL;
 	char *result;
+	unsigned int nentries;
 	int i, ret;
 
 	rsu_ssbl_slot->offset[0] = -EINVAL;
@@ -123,8 +141,10 @@ static int get_ssbl_slot(struct socfpga_rsu_s10_spt_slot *rsu_ssbl_slot)
 		return -EINVAL;
 	}
 
+	nentries = rsu_spl_spt_nentries(&rsu_spt);
+
 	/* locate the u-boot proper(SSBL) partition and return its address */
-	for (i = 0; i < rsu_spt.entries; i++) {
+	for (i = 0; i < (int)nentries; i++) {
 		/* get the substring ptr to the first occurrence of SSBL. prefix */
 		result = strstr(rsu_spt.spt_slot[i].name, SSBL_PART_PREFIX);
 

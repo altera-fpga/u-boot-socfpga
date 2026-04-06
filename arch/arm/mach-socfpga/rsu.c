@@ -18,7 +18,18 @@
 #define RSU_NOTIFY_CLEAR_ERROR_STATUS   BIT(17)
 #define RSU_NOTIFY_RESET_RETRY_COUNTER  BIT(16)
 
-struct rsu_ll_intf *ll_intf;
+/**
+ * struct rsu_session - single active RSU high-level session
+ *
+ * Centralizes the low-level interface pointer; public rsu_* APIs unchanged.
+ */
+struct rsu_session {
+	struct rsu_ll_intf *ll;
+};
+
+static struct rsu_session rsu_session;
+
+#define ll_intf (rsu_session.ll)
 
 /**
  * rsu_init() - initialize flash driver, SPT and CPB data

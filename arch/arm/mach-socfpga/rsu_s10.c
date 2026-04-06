@@ -1,10 +1,12 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *  Copyright (C) 2018-2023 Intel Corporation
  *
- * SPDX-License-Identifier:	GPL-2.0
  */
 
+#include <linux/compiler.h>
 #include <linux/errno.h>
+#include <linux/kernel.h>
 #include <asm/arch/mailbox_s10.h>
 #include <asm/arch/rsu.h>
 #include <asm/arch/rsu_s10.h>
@@ -15,9 +17,16 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
-struct socfpga_rsu_s10_cpb rsu_cpb = {0};
-struct socfpga_rsu_s10_spt rsu_spt = {0};
-u32 rsu_spt0_offset = 0, rsu_spt1_offset = 0;
+#define RSU_S10_SPT_SLOT_MAX 127
+
+static unsigned int rsu_s10_spt_entry_count(const struct socfpga_rsu_s10_spt *spt)
+{
+	if (spt->magic_number != RSU_S10_SPT_MAGIC_NUMBER)
+		return 0;
+	if (spt->entries > RSU_S10_SPT_SLOT_MAX)
+		return RSU_S10_SPT_SLOT_MAX;
+	return spt->entries;
+}
 
 static int rsu_print_status(void)
 {
@@ -41,78 +50,97 @@ static int rsu_print_status(void)
 	return 0;
 }
 
-static void rsu_print_spt_slot(void)
+static void rsu_print_spt_slot(const struct socfpga_rsu_s10_spt *spt,
+			       unsigned int nentries)
 {
-	int i;
+	unsigned int i;
 
 	puts("RSU: Sub-partition table content\n");
-	for (i = 0; i < rsu_spt.entries; i++) {
+	for (i = 0; i < nentries; i++) {
 		printf("%16s\tOffset: 0x%08x%08x\tLength: 0x%08x\tFlag : 0x%08x\n",
-		       rsu_spt.spt_slot[i].name,
-		       rsu_spt.spt_slot[i].offset[1],
-		       rsu_spt.spt_slot[i].offset[0],
-		       rsu_spt.spt_slot[i].length,
-		       rsu_spt.spt_slot[i].flag);
+		       spt->spt_slot[i].name,
+		       spt->spt_slot[i].offset[1],
+		       spt->spt_slot[i].offset[0],
+		       spt->spt_slot[i].length,
+		       spt->spt_slot[i].flag);
 	}
 }
 
-static void rsu_print_cpb_slot(void)
+static void rsu_print_cpb_slot(const struct socfpga_rsu_s10_cpb *cpb)
 {
 	int i, j = 1;
+	unsigned int nslots = cpb->nslots;
+
+	if (nslots > ARRAY_SIZE(cpb->pointer_slot))
+		nslots = ARRAY_SIZE(cpb->pointer_slot);
 
 	puts("RSU: CMF pointer block's image pointer list\n");
-	for (i = rsu_cpb.nslots - 1; i >= 0; i--) {
-		if (rsu_cpb.pointer_slot[i] != ~0 &&
-		    rsu_cpb.pointer_slot[i] != 0) {
+	if (!nslots)
+		return;
+	for (i = (int)nslots - 1; i >= 0; i--) {
+		if (cpb->pointer_slot[i] != ~0ULL &&
+		    cpb->pointer_slot[i] != 0) {
 			printf("Priority %d Offset: 0x%016llx nslot: %d\n",
-			       j, rsu_cpb.pointer_slot[i], i);
+			       j, cpb->pointer_slot[i], i);
 			j++;
-		    }
+		}
 	}
 }
 
-static u32 rsu_spt_slot_find_cpb(void)
+static u32 rsu_spt_slot_find_cpb(const struct socfpga_rsu_s10_spt *spt,
+				 unsigned int nentries)
 {
-	int i;
+	unsigned int i;
 
-	for (i = 0; i < rsu_spt.entries; i++) {
-		if (strstr(rsu_spt.spt_slot[i].name, "CPB0") != NULL)
-			return rsu_spt.spt_slot[i].offset[0];
+	for (i = 0; i < nentries; i++) {
+		if (strstr(spt->spt_slot[i].name, "CPB0"))
+			return spt->spt_slot[i].offset[0];
 	}
 	puts("RSU: Cannot find SPT0 entry from sub-partition table\n");
 	return 0;
 }
 
-int rsu_spt_cpb_list(int argc, char * const argv[])
+/**
+ * rsu_spt_cpb_list_inner() - read mailbox SPT offsets, flash SPT/CPB, print
+ * @spt0_out: if non-NULL, set after successful mailbox read (for rsu dtb)
+ * @spt1_out: if non-NULL, set after successful mailbox read
+ */
+static int rsu_spt_cpb_list_inner(int argc, char * const argv[],
+				  u32 *spt0_out, u32 *spt1_out)
 {
 	u32 spt_offset[4];
 	u32 cpb_offset;
+	u32 spt0_off, spt1_off;
 	int err;
 	struct spi_flash *flash;
+	struct socfpga_rsu_s10_spt spt = { 0 };
+	struct socfpga_rsu_s10_cpb cpb = { 0 };
+	unsigned int nentries;
 
 	if (argc != 1)
 		return CMD_RET_USAGE;
 
-	/* print the RSU status */
 	err = rsu_print_status();
 	if (err)
 		return err;
 
-	/* retrieve the sub-partition table (spt) offset from firmware */
 	if (mbox_rsu_get_spt_offset(spt_offset, 4)) {
 		puts("RSU: Error from mbox_rsu_get_spt_offset\n");
 		return -ECOMM;
 	}
-	rsu_spt0_offset = spt_offset[SPT0_INDEX];
-	rsu_spt1_offset = spt_offset[SPT1_INDEX];
+	spt0_off = spt_offset[SPT0_INDEX];
+	spt1_off = spt_offset[SPT1_INDEX];
 
-	/* update into U-Boot env so we can update into DTS later */
-	env_set_hex("rsu_sbt0", rsu_spt0_offset);
-	env_set_hex("rsu_sbt1", rsu_spt1_offset);
-	printf("RSU: Sub-partition table 0 offset 0x%08x\n", rsu_spt0_offset);
-	printf("RSU: Sub-partition table 1 offset 0x%08x\n", rsu_spt1_offset);
+	if (spt0_out)
+		*spt0_out = spt0_off;
+	if (spt1_out)
+		*spt1_out = spt1_off;
 
-	/* retrieve sub-partition table (spt) from flash */
+	env_set_hex("rsu_sbt0", spt0_off);
+	env_set_hex("rsu_sbt1", spt1_off);
+	printf("RSU: Sub-partition table 0 offset 0x%08x\n", spt0_off);
+	printf("RSU: Sub-partition table 1 offset 0x%08x\n", spt1_off);
+
 	flash = spi_flash_probe(CONFIG_SF_DEFAULT_BUS,
 				CONFIG_SF_DEFAULT_CS,
 				CONFIG_SF_DEFAULT_SPEED,
@@ -121,44 +149,44 @@ int rsu_spt_cpb_list(int argc, char * const argv[])
 		puts("RSU: SPI probe failed.\n");
 		return -ENODEV;
 	}
-	if (spi_flash_read(flash, rsu_spt0_offset, sizeof(rsu_spt), &rsu_spt)) {
+	if (spi_flash_read(flash, spt0_off, sizeof(spt), &spt)) {
 		puts("RSU: spi_flash_read failed\n");
 		return -EIO;
 	}
 
-	/* valid the sub-partition table (spt) magic number */
-	if (rsu_spt.magic_number != RSU_S10_SPT_MAGIC_NUMBER) {
+	if (spt.magic_number != RSU_S10_SPT_MAGIC_NUMBER) {
 		printf("RSU: Sub-partition table magic number not match 0x%08x\n",
-		       rsu_spt.magic_number);
+		       spt.magic_number);
 		return -EFAULT;
 	}
 
-	/* list the sub-partition table (spt) content */
-	rsu_print_spt_slot();
+	nentries = rsu_s10_spt_entry_count(&spt);
+	rsu_print_spt_slot(&spt, nentries);
 
-	/* locate where is CMF pointer block (cpb) */
-	cpb_offset = rsu_spt_slot_find_cpb();
+	cpb_offset = rsu_spt_slot_find_cpb(&spt, nentries);
 	if (!cpb_offset)
 		return -ENXIO;
 	printf("RSU: CMF pointer block offset 0x%08x\n", cpb_offset);
 
-	/* retrieve CMF pointer block (cpb) from flash */
-	if (spi_flash_read(flash, cpb_offset, sizeof(rsu_cpb), &rsu_cpb)) {
+	if (spi_flash_read(flash, cpb_offset, sizeof(cpb), &cpb)) {
 		puts("RSU: spi_flash_read failed\n");
 		return -EIO;
 	}
 
-	/* valid the CMF pointer block (cpb) magic number */
-	if (rsu_cpb.magic_number != RSU_S10_CPB_MAGIC_NUMBER) {
+	if (cpb.magic_number != RSU_S10_CPB_MAGIC_NUMBER) {
 		printf("RSU: CMF pointer block magic number not match 0x%08x\n",
-		       rsu_cpb.magic_number);
+		       cpb.magic_number);
 		return -EFAULT;
 	}
 
-	/* list the CMF pointer block (cpb) content */
-	rsu_print_cpb_slot();
+	rsu_print_cpb_slot(&cpb);
 
 	return 0;
+}
+
+int rsu_spt_cpb_list(int argc, char * const argv[])
+{
+	return rsu_spt_cpb_list_inner(argc, argv, NULL, NULL);
 }
 
 int rsu_update(int argc, char * const argv[])
@@ -189,10 +217,20 @@ int rsu_dtb(int argc, char * const argv[])
 	const __be32 *rsu_handle = NULL;
 	u32 alt_phandle = 0;
 	u32 reg[2];
+	u32 spt0_off = 0;
+	u32 spt1_off __always_unused = 0;
 	int err;
 
 	/* Extracting RSU info from bitstream */
-	err = rsu_spt_cpb_list(argc, argv);
+	err = rsu_spt_cpb_list_inner(argc, argv, &spt0_off, &spt1_off);
+	/*
+	 * The shared inner helper returns CMD_RET_USAGE (positive) when
+	 * argv has extra tokens. Surface that to the command framework
+	 * directly instead of treating it as SPT/CPB corruption and
+	 * stomping on the live DTB.
+	 */
+	if (err == CMD_RET_USAGE)
+		return CMD_RET_USAGE;
 	if (err == -ENOTSUPP)
 		return 0;
 	else if ((err == -ECOMM) || (err == -ENODEV) || (err == -EIO))
@@ -273,8 +311,8 @@ int rsu_dtb(int argc, char * const argv[])
 	end = roundup(end, 64 * 1024);
 
 	/* assemble new reg value for boot partition */
-	reg[0] = cpu_to_fdt32(rsu_spt0_offset);
-	reg[1] = cpu_to_fdt32(end  - rsu_spt0_offset);
+	reg[0] = cpu_to_fdt32(spt0_off);
+	reg[1] = cpu_to_fdt32(end  - spt0_off);
 
 	/* update back to Linux DTB */
 	return fdt_setprop(working_fdt, nodeoffset, "reg", reg, sizeof(reg));

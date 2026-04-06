@@ -9,7 +9,7 @@
 #include <errno.h>
 #include <asm/arch/mailbox_s10.h>
 #include <asm/arch/reset_manager_soc64.h>
-#include <asm/arch/rsu_s10.h>
+#include <asm/arch/rsu_smc.h>
 #include <asm/secure.h>
 
 static u64 psci_cpu_on_64_cpuid __secure_data;
