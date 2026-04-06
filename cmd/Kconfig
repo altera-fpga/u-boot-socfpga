@@ -1280,9 +1280,9 @@ config CMD_SOCFPGA_RSU
 	default y
 	depends on CMDLINE
 	depends on CADENCE_QSPI
-	depends on TARGET_SOCFPGA_STRATIX10 || TARGET_SOCFPGA_AGILEX || \
-		  TARGET_SOCFPGA_AGILEX5 || TARGET_SOCFPGA_AGILEX7M || \
-		  TARGET_SOCFPGA_N5X
+	depends on ARCH_SOCFPGA_STRATIX10 || ARCH_SOCFPGA_AGILEX || \
+		  ARCH_SOCFPGA_AGILEX5 || ARCH_SOCFPGA_AGILEX7M || \
+		  ARCH_SOCFPGA_N5X
 	help
 	  Remote System Update for Stratix 10 / Agilex family SoCs: inspect
 	  flash images and SPT/CPB, manage configuration slots, trigger

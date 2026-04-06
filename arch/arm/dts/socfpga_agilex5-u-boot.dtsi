@@ -18,6 +18,11 @@
 	soc {
 		bootph-all;
 
+		socfpga-rsu {
+			compatible = "altr,socfpga-rsu";
+			bootph-all;
+		};
+
 		socfpga_ccu_config: socfpga-ccu-config {
 			compatible = "intel,socfpga-dtreg";
 			#address-cells = <1>;

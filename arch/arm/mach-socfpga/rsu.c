@@ -6,11 +6,16 @@
 
 #include <linux/bitops.h>
 #include <linux/errno.h>
+#include <linux/kconfig.h>
+#if IS_ENABLED(CONFIG_SOCFPGA_RSU_DM)
+#include <dm/device.h>
+#include <dm/ofnode.h>
+#include <asm/arch/socfpga_rsu_dm.h>
+#endif
 #include <asm/arch/rsu.h>
 #include <asm/arch/rsu_misc.h>
 #include <asm/arch/smc_api.h>
 #include <asm/system.h>
-#include <linux/errno.h>
 #include <linux/intel-smc.h>
 
 /* RSU Notify Bitmasks */
@@ -18,36 +23,87 @@
 #define RSU_NOTIFY_CLEAR_ERROR_STATUS   BIT(17)
 #define RSU_NOTIFY_RESET_RETRY_COUNTER  BIT(16)
 
-/**
- * struct rsu_session - single active RSU high-level session
- *
- * Centralizes the low-level interface pointer; public rsu_* APIs unchanged.
- */
+#if !IS_ENABLED(CONFIG_SOCFPGA_RSU_DM)
 struct rsu_session {
 	struct rsu_ll_intf *ll;
 };
 
 static struct rsu_session rsu_session;
+#endif
 
-#define ll_intf (rsu_session.ll)
+#if IS_ENABLED(CONFIG_SOCFPGA_RSU_DM)
+/* Cached anchor; valid as long as the misc device stays bound. */
+static struct udevice *rsu_dm_dev;
+
+static struct rsu_ll_intf **rsu_ll_ptrp(void)
+{
+	struct socfpga_rsu_priv *priv;
+	int ret;
+	ofnode node;
+
+	if (rsu_dm_dev)
+		goto have_dev;
+
+	/* Locate by compatible to avoid hard-coding a DT path. */
+	node = ofnode_by_compatible(ofnode_null(), "altr,socfpga-rsu");
+	if (!ofnode_valid(node))
+		return NULL;
+	ret = device_get_global_by_ofnode(node, &rsu_dm_dev);
+	if (ret)
+		return NULL;
+have_dev:
+	priv = dev_get_priv(rsu_dm_dev);
+	return &priv->ll;
+}
+#else
+static struct rsu_ll_intf **rsu_ll_ptrp(void)
+{
+	return &rsu_session.ll;
+}
+#endif
+
+static struct rsu_ll_intf *rsu_ll(void)
+{
+	struct rsu_ll_intf **p = rsu_ll_ptrp();
+
+	return p ? *p : NULL;
+}
 
 /**
  * rsu_init() - initialize flash driver, SPT and CPB data
- * @filename: NULL for qspi
+ * @filename: ignored; kept for ABI compatibility with librsu.
  *
- * Returns: 0 on success, or error code
+ * If a previous session is still active, it is closed and re-opened so
+ * a stale state cannot wedge subsequent commands.
+ *
+ * Returns: 0 on success, or the errno from the low-level backend init.
  */
 int rsu_init(char *filename)
 {
 	int ret;
+	struct rsu_ll_intf **llp = rsu_ll_ptrp();
 
-	if (ll_intf) {
-		rsu_log(RSU_ERR, "ll_intf initialized\n");
-		return -EINTF;
+	(void)filename;
+
+	if (!llp)
+		return -ENODEV;
+
+	if (*llp) {
+		rsu_log(RSU_ERR,
+			"ll_intf already initialized; resetting\n");
+		/* Tear down the stale session and re-initialize below. */
+		rsu_exit();
 	}
 
-	ret = rsu_ll_qspi_init(&ll_intf);
+	ret = rsu_ll_qspi_init(llp);
 	if (ret) {
+		rsu_exit();
+		/* Preserve the backend errno for callers and tests. */
+		return ret;
+	}
+
+	/* Backend success but no session pointer: report as -ENODEV. */
+	if (!*llp) {
 		rsu_exit();
 		return -ENODEV;
 	}
@@ -60,10 +116,13 @@ int rsu_init(char *filename)
  */
 void rsu_exit(void)
 {
-	if (ll_intf && ll_intf->exit)
-		ll_intf->exit();
+	struct rsu_ll_intf **llp = rsu_ll_ptrp();
 
-	ll_intf = NULL;
+	if (!llp || !*llp)
+		return;
+	if ((*llp)->exit)
+		(*llp)->exit();
+	*llp = NULL;
 }
 
 /**
@@ -96,18 +155,18 @@ int rsu_slot_count(void)
 	int cnt = 0;
 	int x;
 
-	if (!ll_intf)
+	if (!rsu_ll())
 		return -EINTF;
 
-	if (ll_intf->spt_ops.corrupted()) {
+	if (rsu_ll()->spt_ops.corrupted()) {
 		rsu_spt_corrupted_info();
 		return -ECORRUPTED_SPT;
 	}
 
-	partitions = ll_intf->partition.count();
+	partitions = rsu_ll()->partition.count();
 
 	for (x = 0; x < partitions; x++) {
-		if (rsu_misc_is_slot(ll_intf, x))
+		if (rsu_misc_is_slot(rsu_ll(), x))
 			cnt++;
 	}
 
@@ -126,10 +185,10 @@ int rsu_slot_by_name(char *name)
 	int cnt = 0;
 	int x;
 
-	if (!ll_intf)
+	if (!rsu_ll())
 		return -EINTF;
 
-	if (ll_intf->spt_ops.corrupted()) {
+	if (rsu_ll()->spt_ops.corrupted()) {
 		rsu_spt_corrupted_info();
 		return -ECORRUPTED_SPT;
 	}
@@ -137,11 +196,11 @@ int rsu_slot_by_name(char *name)
 	if (!name)
 		return -EARGS;
 
-	partitions = ll_intf->partition.count();
+	partitions = rsu_ll()->partition.count();
 
 	for (x = 0; x < partitions; x++) {
-		if (rsu_misc_is_slot(ll_intf, x)) {
-			if (!strcmp(name, ll_intf->partition.name(x)))
+		if (rsu_misc_is_slot(rsu_ll(), x)) {
+			if (!strcmp(name, rsu_ll()->partition.name(x)))
 				return cnt;
 			cnt++;
 		}
@@ -161,18 +220,18 @@ int rsu_slot_get_info(int slot, struct rsu_slot_info *info)
 {
 	int part_num;
 
-	if (!ll_intf)
+	if (!rsu_ll())
 		return -EINTF;
 
 	if (!info)
 		return -EARGS;
 
-	if (ll_intf->spt_ops.corrupted()) {
+	if (rsu_ll()->spt_ops.corrupted()) {
 		rsu_spt_corrupted_info();
 		return -ECORRUPTED_SPT;
 	}
 
-	if (ll_intf->cpb_ops.corrupted()) {
+	if (rsu_ll()->cpb_ops.corrupted()) {
 		rsu_cpb_corrupted_info();
 		return -ECORRUPTED_CPB;
 	}
@@ -182,17 +241,17 @@ int rsu_slot_get_info(int slot, struct rsu_slot_info *info)
 		return -ESLOTNUM;
 	}
 
-	part_num = rsu_misc_slot2part(ll_intf, slot);
+	part_num = rsu_misc_slot2part(rsu_ll(), slot);
 	if (part_num < 0)
 		return -EINVAL;
 
 	rsu_misc_safe_strcpy(info->name, sizeof(info->name),
-			     ll_intf->partition.name(part_num),
+			     rsu_ll()->partition.name(part_num),
 			     sizeof(info->name));
 
-	info->offset = ll_intf->partition.offset(part_num);
-	info->size = ll_intf->partition.size(part_num);
-	info->priority = ll_intf->priority.get(part_num);
+	info->offset = rsu_ll()->partition.offset(part_num);
+	info->size = rsu_ll()->partition.size(part_num);
+	info->priority = rsu_ll()->priority.get(part_num);
 
 	return 0;
 }
@@ -207,10 +266,10 @@ int rsu_slot_size(int slot)
 {
 	int part_num;
 
-	if (!ll_intf)
+	if (!rsu_ll())
 		return -EINTF;
 
-	if (ll_intf->spt_ops.corrupted()) {
+	if (rsu_ll()->spt_ops.corrupted()) {
 		rsu_spt_corrupted_info();
 		return -ECORRUPTED_SPT;
 	}
@@ -220,11 +279,11 @@ int rsu_slot_size(int slot)
 		return -ESLOTNUM;
 	}
 
-	part_num = rsu_misc_slot2part(ll_intf, slot);
+	part_num = rsu_misc_slot2part(rsu_ll(), slot);
 	if (part_num < 0)
 		return -ESLOTNUM;
 
-	return ll_intf->partition.size(part_num);
+	return rsu_ll()->partition.size(part_num);
 }
 
 /**
@@ -240,15 +299,15 @@ int rsu_slot_priority(int slot)
 {
 	int part_num;
 
-	if (!ll_intf)
+	if (!rsu_ll())
 		return -EINTF;
 
-	if (ll_intf->spt_ops.corrupted()) {
+	if (rsu_ll()->spt_ops.corrupted()) {
 		rsu_spt_corrupted_info();
 		return -ECORRUPTED_SPT;
 	}
 
-	if (ll_intf->cpb_ops.corrupted()) {
+	if (rsu_ll()->cpb_ops.corrupted()) {
 		rsu_cpb_corrupted_info();
 		return -ECORRUPTED_CPB;
 	}
@@ -258,16 +317,11 @@ int rsu_slot_priority(int slot)
 		return -ESLOTNUM;
 	}
 
-	if (slot < 0 || slot >= rsu_slot_count()) {
-		rsu_log(RSU_ERR, "invalid slot number\n");
-		return -ESLOTNUM;
-	}
-
-	part_num = rsu_misc_slot2part(ll_intf, slot);
+	part_num = rsu_misc_slot2part(rsu_ll(), slot);
 	if (part_num < 0)
 		return -ESLOTNUM;
 
-	return ll_intf->priority.get(part_num);
+	return rsu_ll()->priority.get(part_num);
 }
 
 /**
@@ -283,15 +337,15 @@ int rsu_slot_erase(int slot)
 {
 	int part_num;
 
-	if (!ll_intf)
+	if (!rsu_ll())
 		return -EINTF;
 
-	if (ll_intf->spt_ops.corrupted()) {
+	if (rsu_ll()->spt_ops.corrupted()) {
 		rsu_spt_corrupted_info();
 		return -ECORRUPTED_SPT;
 	}
 
-	if (ll_intf->cpb_ops.corrupted()) {
+	if (rsu_ll()->cpb_ops.corrupted()) {
 		rsu_cpb_corrupted_info();
 		return -ECORRUPTED_CPB;
 	}
@@ -306,14 +360,14 @@ int rsu_slot_erase(int slot)
 		return -EWRPROT;
 	}
 
-	part_num = rsu_misc_slot2part(ll_intf, slot);
+	part_num = rsu_misc_slot2part(rsu_ll(), slot);
 	if (part_num < 0)
 		return -ESLOTNUM;
 
-	if (ll_intf->priority.remove(part_num))
+	if (rsu_ll()->priority.remove(part_num))
 		return -ELOWLEVEL;
 
-	if (ll_intf->data.erase(part_num))
+	if (rsu_ll()->data.erase(part_num))
 		return -ELOWLEVEL;
 
 	return 0;
@@ -339,15 +393,15 @@ int rsu_slot_program_buf(int slot, void *buf, int size)
 		return -ESLOTNUM;
 	}
 
-	if (!ll_intf)
+	if (!rsu_ll())
 		return -EINTF;
 
-	if (ll_intf->spt_ops.corrupted()) {
+	if (rsu_ll()->spt_ops.corrupted()) {
 		rsu_spt_corrupted_info();
 		return -ECORRUPTED_SPT;
 	}
 
-	if (ll_intf->cpb_ops.corrupted()) {
+	if (rsu_ll()->cpb_ops.corrupted()) {
 		rsu_cpb_corrupted_info();
 		return -ECORRUPTED_CPB;
 	}
@@ -357,7 +411,7 @@ int rsu_slot_program_buf(int slot, void *buf, int size)
 		return -EARGS;
 	}
 
-	ret = rsu_cb_program_common(ll_intf, slot, rsu_cb_buf, 0);
+	ret = rsu_cb_program_common(rsu_ll(), slot, rsu_cb_buf, 0);
 	if (ret) {
 		rsu_log(RSU_ERR, "fail to program buf data\n");
 		return ret;
@@ -399,10 +453,10 @@ int rsu_slot_program_buf_raw(int slot, void *buf, int size)
 {
 	int ret;
 
-	if (!ll_intf)
+	if (!rsu_ll())
 		return -EINTF;
 
-	if (ll_intf->spt_ops.corrupted()) {
+	if (rsu_ll()->spt_ops.corrupted()) {
 		rsu_spt_corrupted_info();
 		return -ECORRUPTED_SPT;
 	}
@@ -417,7 +471,7 @@ int rsu_slot_program_buf_raw(int slot, void *buf, int size)
 		return -EARGS;
 	}
 
-	ret = rsu_cb_program_common(ll_intf, slot, rsu_cb_buf, 1);
+	ret = rsu_cb_program_common(rsu_ll(), slot, rsu_cb_buf, 1);
 	if (ret) {
 		rsu_log(RSU_ERR, "fail to program raw data\n");
 		return ret;
@@ -442,15 +496,15 @@ int rsu_slot_verify_buf(int slot, void *buf, int size)
 {
 	int ret;
 
-	if (!ll_intf)
+	if (!rsu_ll())
 		return -EINTF;
 
-	if (ll_intf->spt_ops.corrupted()) {
+	if (rsu_ll()->spt_ops.corrupted()) {
 		rsu_spt_corrupted_info();
 		return -ECORRUPTED_SPT;
 	}
 
-	if (ll_intf->cpb_ops.corrupted()) {
+	if (rsu_ll()->cpb_ops.corrupted()) {
 		rsu_cpb_corrupted_info();
 		return -ECORRUPTED_CPB;
 	}
@@ -465,7 +519,7 @@ int rsu_slot_verify_buf(int slot, void *buf, int size)
 		return -EARGS;
 	}
 
-	ret = rsu_cb_verify_common(ll_intf, slot, rsu_cb_buf, 0);
+	ret = rsu_cb_verify_common(rsu_ll(), slot, rsu_cb_buf, 0);
 	if (ret) {
 		rsu_log(RSU_ERR, "fail to verify buffer data\n");
 		return ret;
@@ -491,10 +545,10 @@ int rsu_slot_verify_buf_raw(int slot, void *buf, int size)
 {
 	int ret;
 
-	if (!ll_intf)
+	if (!rsu_ll())
 		return -EINTF;
 
-	if (ll_intf->spt_ops.corrupted()) {
+	if (rsu_ll()->spt_ops.corrupted()) {
 		rsu_spt_corrupted_info();
 		return -ECORRUPTED_SPT;
 	}
@@ -509,7 +563,7 @@ int rsu_slot_verify_buf_raw(int slot, void *buf, int size)
 		return -EARGS;
 	}
 
-	ret = rsu_cb_verify_common(ll_intf, slot, rsu_cb_buf, 1);
+	ret = rsu_cb_verify_common(rsu_ll(), slot, rsu_cb_buf, 1);
 	if (ret) {
 		rsu_log(RSU_ERR, "fail to verify raw data\n");
 		return ret;
@@ -532,15 +586,15 @@ int rsu_slot_enable(int slot)
 {
 	int part_num;
 
-	if (!ll_intf)
+	if (!rsu_ll())
 		return -EINTF;
 
-	if (ll_intf->spt_ops.corrupted()) {
+	if (rsu_ll()->spt_ops.corrupted()) {
 		rsu_spt_corrupted_info();
 		return -ECORRUPTED_SPT;
 	}
 
-	if (ll_intf->cpb_ops.corrupted()) {
+	if (rsu_ll()->cpb_ops.corrupted()) {
 		rsu_cpb_corrupted_info();
 		return -ECORRUPTED_CPB;
 	}
@@ -550,14 +604,14 @@ int rsu_slot_enable(int slot)
 		return -ESLOTNUM;
 	}
 
-	part_num = rsu_misc_slot2part(ll_intf, slot);
+	part_num = rsu_misc_slot2part(rsu_ll(), slot);
 	if (part_num < 0)
 		return -ESLOTNUM;
 
-	if (ll_intf->priority.remove(part_num))
+	if (rsu_ll()->priority.remove(part_num))
 		return -ELOWLEVEL;
 
-	if (ll_intf->priority.add(part_num))
+	if (rsu_ll()->priority.add(part_num))
 		return -ELOWLEVEL;
 
 	return 0;
@@ -576,15 +630,15 @@ int rsu_slot_disable(int slot)
 {
 	int part_num;
 
-	if (!ll_intf)
+	if (!rsu_ll())
 		return -EINTF;
 
-	if (ll_intf->spt_ops.corrupted()) {
+	if (rsu_ll()->spt_ops.corrupted()) {
 		rsu_spt_corrupted_info();
 		return -ECORRUPTED_SPT;
 	}
 
-	if (ll_intf->cpb_ops.corrupted()) {
+	if (rsu_ll()->cpb_ops.corrupted()) {
 		rsu_cpb_corrupted_info();
 		return -ECORRUPTED_CPB;
 	}
@@ -594,11 +648,11 @@ int rsu_slot_disable(int slot)
 		return -ESLOTNUM;
 	}
 
-	part_num = rsu_misc_slot2part(ll_intf, slot);
+	part_num = rsu_misc_slot2part(rsu_ll(), slot);
 	if (part_num < 0)
 		return -ESLOTNUM;
 
-	if (ll_intf->priority.remove(part_num))
+	if (rsu_ll()->priority.remove(part_num))
 		return -ELOWLEVEL;
 
 	return 0;
@@ -618,15 +672,15 @@ int rsu_slot_load(int slot)
 	int part_num;
 	u64 offset;
 
-	if (!ll_intf)
+	if (!rsu_ll())
 		return -EINTF;
 
-	if (ll_intf->spt_ops.corrupted()) {
+	if (rsu_ll()->spt_ops.corrupted()) {
 		rsu_spt_corrupted_info();
 		return -ECORRUPTED_SPT;
 	}
 
-	if (ll_intf->cpb_ops.corrupted()) {
+	if (rsu_ll()->cpb_ops.corrupted()) {
 		rsu_cpb_corrupted_info();
 		return -ECORRUPTED_CPB;
 	}
@@ -636,13 +690,13 @@ int rsu_slot_load(int slot)
 		return -ESLOTNUM;
 	}
 
-	part_num = rsu_misc_slot2part(ll_intf, slot);
+	part_num = rsu_misc_slot2part(rsu_ll(), slot);
 	if (part_num < 0)
 		return -ESLOTNUM;
 
-	offset = ll_intf->partition.offset(part_num);
+	offset = rsu_ll()->partition.offset(part_num);
 
-	return ll_intf->fw_ops.load(offset);
+	return rsu_ll()->fw_ops.load(offset);
 }
 
 /**
@@ -660,17 +714,17 @@ int rsu_slot_load_factory(void)
 	u64 offset;
 	char name[] = "FACTORY_IMAGE";
 
-	if (!ll_intf)
+	if (!rsu_ll())
 		return -EINTF;
 
-	if (ll_intf->spt_ops.corrupted()) {
+	if (rsu_ll()->spt_ops.corrupted()) {
 		rsu_spt_corrupted_info();
 		return -ECORRUPTED_SPT;
 	}
 
-	partitions = ll_intf->partition.count();
+	partitions = rsu_ll()->partition.count();
 	for (part_num = 0; part_num < partitions; part_num++) {
-		if (!strcmp(name, ll_intf->partition.name(part_num)))
+		if (!strcmp(name, rsu_ll()->partition.name(part_num)))
 			break;
 	}
 
@@ -679,8 +733,8 @@ int rsu_slot_load_factory(void)
 		return -EFORMAT;
 	}
 
-	offset = ll_intf->partition.offset(part_num);
-	return ll_intf->fw_ops.load(offset);
+	offset = rsu_ll()->partition.offset(part_num);
+	return rsu_ll()->fw_ops.load(offset);
 }
 
 /**
@@ -694,10 +748,10 @@ int rsu_slot_rename(int slot, char *name)
 {
 	int part_num;
 
-	if (!ll_intf)
+	if (!rsu_ll())
 		return -EINTF;
 
-	if (ll_intf->spt_ops.corrupted()) {
+	if (rsu_ll()->spt_ops.corrupted()) {
 		rsu_spt_corrupted_info();
 		return -ECORRUPTED_SPT;
 	}
@@ -710,7 +764,7 @@ int rsu_slot_rename(int slot, char *name)
 	if (!name)
 		return -EARGS;
 
-	part_num = rsu_misc_slot2part(ll_intf, slot);
+	part_num = rsu_misc_slot2part(rsu_ll(), slot);
 	if (part_num < 0)
 		return -ESLOTNUM;
 
@@ -719,7 +773,7 @@ int rsu_slot_rename(int slot, char *name)
 		return -ENAME;
 	}
 
-	if (ll_intf->partition.rename(part_num, name))
+	if (rsu_ll()->partition.rename(part_num, name))
 		return -ENAME;
 
 	return 0;
@@ -735,15 +789,15 @@ int rsu_slot_delete(int slot)
 {
 	int part_num;
 
-	if (!ll_intf)
+	if (!rsu_ll())
 		return -EINTF;
 
-	if (ll_intf->spt_ops.corrupted()) {
+	if (rsu_ll()->spt_ops.corrupted()) {
 		rsu_spt_corrupted_info();
 		return -ECORRUPTED_SPT;
 	}
 
-	if (ll_intf->cpb_ops.corrupted()) {
+	if (rsu_ll()->cpb_ops.corrupted()) {
 		rsu_cpb_corrupted_info();
 		return -ECORRUPTED_CPB;
 	}
@@ -758,17 +812,17 @@ int rsu_slot_delete(int slot)
 		return -EWRPROT;
 	}
 
-	part_num = rsu_misc_slot2part(ll_intf, slot);
+	part_num = rsu_misc_slot2part(rsu_ll(), slot);
 	if (part_num < 0)
 		return -ESLOTNUM;
 
-	if (ll_intf->priority.remove(part_num))
+	if (rsu_ll()->priority.remove(part_num))
 		return -ELOWLEVEL;
 
-	if (ll_intf->data.erase(part_num))
+	if (rsu_ll()->data.erase(part_num))
 		return -ELOWLEVEL;
 
-	if (ll_intf->partition.delete(part_num))
+	if (rsu_ll()->partition.delete(part_num))
 		return -ELOWLEVEL;
 
 	return 0;
@@ -784,10 +838,10 @@ int rsu_slot_delete(int slot)
  */
 int rsu_slot_create(char *name, u64 address, unsigned int size)
 {
-	if (!ll_intf)
+	if (!rsu_ll())
 		return -EINTF;
 
-	if (ll_intf->spt_ops.corrupted()) {
+	if (rsu_ll()->spt_ops.corrupted()) {
 		rsu_spt_corrupted_info();
 		return -ECORRUPTED_SPT;
 	}
@@ -797,7 +851,7 @@ int rsu_slot_create(char *name, u64 address, unsigned int size)
 		return -ENAME;
 	}
 
-	if (ll_intf->partition.create(name, address, size))
+	if (rsu_ll()->partition.create(name, address, size))
 		return -ELOWLEVEL;
 
 	return 0;
@@ -811,10 +865,10 @@ int rsu_slot_create(char *name, u64 address, unsigned int size)
  */
 int rsu_status_log(struct rsu_status_info *info)
 {
-	if (!ll_intf)
+	if (!rsu_ll())
 		return -EINTF;
 
-	return ll_intf->fw_ops.status(info);
+	return rsu_ll()->fw_ops.status(info);
 }
 
 /**
@@ -827,11 +881,11 @@ int rsu_notify(int stage)
 {
 	u32 arg;
 
-	if (!ll_intf)
+	if (!rsu_ll())
 		return -EINTF;
 
 	arg = stage & GENMASK(15, 0);
-	return ll_intf->fw_ops.notify(arg);
+	return rsu_ll()->fw_ops.notify(arg);
 }
 
 /**
@@ -845,7 +899,7 @@ int rsu_clear_error_status(void)
 	u32 arg;
 	int ret;
 
-	if (!ll_intf)
+	if (!rsu_ll())
 		return -EINTF;
 
 	ret = rsu_status_log(&info);
@@ -856,7 +910,7 @@ int rsu_clear_error_status(void)
 		return -ELOWLEVEL;
 
 	arg = RSU_NOTIFY_IGNORE_STAGE | RSU_NOTIFY_CLEAR_ERROR_STATUS;
-	return ll_intf->fw_ops.notify(arg);
+	return rsu_ll()->fw_ops.notify(arg);
 }
 
 /**
@@ -873,7 +927,7 @@ int rsu_reset_retry_counter(void)
 	u32 arg;
 	int ret;
 
-	if (!ll_intf)
+	if (!rsu_ll())
 		return -EINTF;
 
 	ret = rsu_status_log(&info);
@@ -885,7 +939,7 @@ int rsu_reset_retry_counter(void)
 		return -ELOWLEVEL;
 
 	arg = RSU_NOTIFY_IGNORE_STAGE | RSU_NOTIFY_RESET_RETRY_COUNTER;
-	return ll_intf->fw_ops.notify(arg);
+	return rsu_ll()->fw_ops.notify(arg);
 }
 
 extern u32 smc_rsu_dcmf_version[4];
@@ -934,13 +988,13 @@ int rsu_dcmf_version(u32 *versions)
 {
 	int ret;
 
-	if (!ll_intf)
+	if (!rsu_ll())
 		return -EINTF;
 
 	if (!versions)
 		return -EARGS;
 
-	ret = ll_intf->fw_ops.dcmf_version(versions);
+	ret = rsu_ll()->fw_ops.dcmf_version(versions);
 	if (ret)
 		return ret;
 
@@ -963,13 +1017,13 @@ int rsu_max_retry(u8 *value)
 #endif
 	int ret;
 
-	if (!ll_intf)
+	if (!rsu_ll())
 		return -EINTF;
 
 	if (!value)
 		return -EARGS;
 
-	ret = ll_intf->fw_ops.max_retry(value);
+	ret = rsu_ll()->fw_ops.max_retry(value);
 	if (ret)
 		return ret;
 
@@ -1030,13 +1084,13 @@ int rsu_dcmf_status(u16 *status)
 {
 	int ret;
 
-	if (!ll_intf)
+	if (!rsu_ll())
 		return -EINTF;
 
 	if (!status)
 		return -EARGS;
 
-	ret = ll_intf->fw_ops.dcmf_status(status);
+	ret = rsu_ll()->fw_ops.dcmf_status(status);
 	if (ret)
 		return ret;
 
@@ -1053,7 +1107,10 @@ int rsu_dcmf_status(u16 *status)
  */
 int rsu_create_empty_cpb(void)
 {
-	return ll_intf->cpb_ops.empty();
+	if (!rsu_ll())
+		return -EINTF;
+
+	return rsu_ll()->cpb_ops.empty();
 }
 
 /**
@@ -1066,7 +1123,10 @@ int rsu_create_empty_cpb(void)
  */
 int rsu_restore_cpb(u64 address)
 {
-	return ll_intf->cpb_ops.restore(address);
+	if (!rsu_ll())
+		return -EINTF;
+
+	return rsu_ll()->cpb_ops.restore(address);
 }
 
 /**
@@ -1079,12 +1139,15 @@ int rsu_restore_cpb(u64 address)
  */
 int rsu_save_cpb(u64 address)
 {
-	if (ll_intf->cpb_ops.corrupted()) {
+	if (!rsu_ll())
+		return -EINTF;
+
+	if (rsu_ll()->cpb_ops.corrupted()) {
 		rsu_cpb_corrupted_info();
 		return -ECORRUPTED_CPB;
 	}
 
-	return ll_intf->cpb_ops.save(address);
+	return rsu_ll()->cpb_ops.save(address);
 }
 
 /**
@@ -1097,7 +1160,10 @@ int rsu_save_cpb(u64 address)
  */
 int rsu_restore_spt(u64 address)
 {
-	return ll_intf->spt_ops.restore(address);
+	if (!rsu_ll())
+		return -EINTF;
+
+	return rsu_ll()->spt_ops.restore(address);
 }
 
 /**
@@ -1110,12 +1176,15 @@ int rsu_restore_spt(u64 address)
  */
 int rsu_save_spt(u64 address)
 {
-	if (ll_intf->spt_ops.corrupted()) {
+	if (!rsu_ll())
+		return -EINTF;
+
+	if (rsu_ll()->spt_ops.corrupted()) {
 		rsu_spt_corrupted_info();
 		return -ECORRUPTED_SPT;
 	}
 
-	return ll_intf->spt_ops.save(address);
+	return rsu_ll()->spt_ops.save(address);
 }
 
 /**
@@ -1129,19 +1198,19 @@ int rsu_running_factory(int *factory)
 	s64 factory_offset;
 	struct rsu_status_info status;
 
-	if (!ll_intf)
+	if (!rsu_ll())
 		return -EINTF;
 
-	if (ll_intf->spt_ops.corrupted()) {
+	if (rsu_ll()->spt_ops.corrupted()) {
 		rsu_spt_corrupted_info();
 		return -ECORRUPTED_SPT;
 	}
 
-	factory_offset = ll_intf->partition.factory_offset();
+	factory_offset = rsu_ll()->partition.factory_offset();
 	if (factory_offset < 0)
 		return -ELOWLEVEL;
 
-	if (ll_intf->fw_ops.status(&status))
+	if (rsu_ll()->fw_ops.status(&status))
 		return -ELOWLEVEL;
 
 	*factory = (factory_offset == status.current_image);
