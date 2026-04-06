@@ -7,6 +7,9 @@
 #include <linux/compiler.h>
 #include <linux/errno.h>
 #include <linux/kernel.h>
+#ifdef CONFIG_DM_SPI_FLASH
+#include <dm/device.h>
+#endif
 #include <asm/arch/mailbox_s10.h>
 #include <asm/arch/rsu.h>
 #include <asm/arch/rsu_s10.h>
@@ -14,6 +17,7 @@
 #include <spi.h>
 #include <spi_flash.h>
 #include <env.h>
+#include <asm/arch/rsu_flash_if.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -112,7 +116,11 @@ static int rsu_spt_cpb_list_inner(int argc, char * const argv[],
 	u32 cpb_offset;
 	u32 spt0_off, spt1_off;
 	int err;
+#ifdef CONFIG_DM_SPI_FLASH
+	struct udevice *flash;
+#else
 	struct spi_flash *flash;
+#endif
 	struct socfpga_rsu_s10_spt spt = { 0 };
 	struct socfpga_rsu_s10_cpb cpb = { 0 };
 	unsigned int nentries;
@@ -141,47 +149,54 @@ static int rsu_spt_cpb_list_inner(int argc, char * const argv[],
 	printf("RSU: Sub-partition table 0 offset 0x%08x\n", spt0_off);
 	printf("RSU: Sub-partition table 1 offset 0x%08x\n", spt1_off);
 
-	flash = spi_flash_probe(CONFIG_SF_DEFAULT_BUS,
-				CONFIG_SF_DEFAULT_CS,
-				CONFIG_SF_DEFAULT_SPEED,
-				CONFIG_SF_DEFAULT_MODE);
-	if (!flash) {
+	err = rsu_mtd_probe(CONFIG_SF_DEFAULT_BUS, CONFIG_SF_DEFAULT_CS, &flash);
+	if (err) {
 		puts("RSU: SPI probe failed.\n");
 		return -ENODEV;
 	}
-	if (spi_flash_read(flash, spt0_off, sizeof(spt), &spt)) {
-		puts("RSU: spi_flash_read failed\n");
-		return -EIO;
+
+	if (rsu_mtd_read(flash, spt0_off, sizeof(spt), &spt)) {
+		puts("RSU: rsu_mtd_read failed\n");
+		err = -EIO;
+		goto out;
 	}
 
 	if (spt.magic_number != RSU_S10_SPT_MAGIC_NUMBER) {
 		printf("RSU: Sub-partition table magic number not match 0x%08x\n",
 		       spt.magic_number);
-		return -EFAULT;
+		err = -EFAULT;
+		goto out;
 	}
 
 	nentries = rsu_s10_spt_entry_count(&spt);
 	rsu_print_spt_slot(&spt, nentries);
 
 	cpb_offset = rsu_spt_slot_find_cpb(&spt, nentries);
-	if (!cpb_offset)
-		return -ENXIO;
+	if (!cpb_offset) {
+		err = -ENXIO;
+		goto out;
+	}
 	printf("RSU: CMF pointer block offset 0x%08x\n", cpb_offset);
 
-	if (spi_flash_read(flash, cpb_offset, sizeof(cpb), &cpb)) {
-		puts("RSU: spi_flash_read failed\n");
-		return -EIO;
+	if (rsu_mtd_read(flash, cpb_offset, sizeof(cpb), &cpb)) {
+		puts("RSU: rsu_mtd_read failed\n");
+		err = -EIO;
+		goto out;
 	}
 
 	if (cpb.magic_number != RSU_S10_CPB_MAGIC_NUMBER) {
 		printf("RSU: CMF pointer block magic number not match 0x%08x\n",
 		       cpb.magic_number);
-		return -EFAULT;
+		err = -EFAULT;
+		goto out;
 	}
 
 	rsu_print_cpb_slot(&cpb);
-
-	return 0;
+	err = 0;
+out:
+	/* Release the probed SPI flash; no-op under DM_SPI_FLASH. */
+	rsu_mtd_unclaim(flash);
+	return err;
 }
 
 int rsu_spt_cpb_list(int argc, char * const argv[])
@@ -231,11 +246,11 @@ int rsu_dtb(int argc, char * const argv[])
 	 */
 	if (err == CMD_RET_USAGE)
 		return CMD_RET_USAGE;
-	if (err == -ENOTSUPP)
+	if (err == -ENOTSUPP) {
 		return 0;
-	else if ((err == -ECOMM) || (err == -ENODEV) || (err == -EIO))
+	} else if ((err == -ECOMM) || (err == -ENODEV) || (err == -EIO)) {
 		return err;
-	else if (err) {
+	} else if (err) {
 		/*
 		 * There was corruption occurred in SPT or CPB, doesn't
 		 * return error & let load process continue. So that Linux

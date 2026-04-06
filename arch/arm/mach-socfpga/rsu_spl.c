@@ -8,7 +8,11 @@
 #include <log.h>
 #include <spi.h>
 #include <spi_flash.h>
+#ifdef CONFIG_DM_SPI_FLASH
+#include <dm/device.h>
+#endif
 #include <asm/arch/mailbox_s10.h>
+#include <asm/arch/rsu_flash_if.h>
 #include <asm/arch/rsu.h>
 #include <asm/arch/rsu_s10.h>
 #include <asm/arch/rsu_spl.h>
@@ -42,9 +46,15 @@ static int get_spl_slot(struct socfpga_rsu_s10_spt *rsu_spt,
 	u32 rsu_spt0_offset = 0, rsu_spt1_offset = 0;
 	u32 spt_offset[4] = {0};
 	struct rsu_status_info rsu_status = {0};
+#ifdef CONFIG_DM_SPI_FLASH
+	struct udevice *flash;
+#else
 	struct spi_flash *flash;
+#endif
 	unsigned int nentries;
 	int i;
+	int pret;
+	int ret = -EINVAL;
 
 	/* get rsu status */
 	if (mbox_rsu_status((u32 *)&rsu_status, sizeof(rsu_status) / 4)) {
@@ -61,41 +71,42 @@ static int get_spl_slot(struct socfpga_rsu_s10_spt *rsu_spt,
 	rsu_spt0_offset = spt_offset[SPT0_INDEX];
 	rsu_spt1_offset = spt_offset[SPT1_INDEX];
 
-	/* initialize flash */
-	flash = spi_flash_probe(CONFIG_SF_DEFAULT_BUS,
-				CONFIG_SF_DEFAULT_CS,
-				CONFIG_SF_DEFAULT_SPEED,
-				CONFIG_SF_DEFAULT_MODE);
-	if (!flash) {
-		puts("RSU: Error - spi_flash_probe failed!\n");
-		return -EINVAL;
+	pret = rsu_mtd_probe(CONFIG_SF_DEFAULT_BUS, CONFIG_SF_DEFAULT_CS, &flash);
+	if (pret) {
+		printf("RSU: Error - rsu_mtd_probe failed (%d)!\n", pret);
+		return pret;
 	}
 
 	/* read spt0 */
-	if (spi_flash_read(flash, rsu_spt0_offset, rsu_spt_size, rsu_spt)) {
-		puts("RSU: Error - spi_flash_read failed!\n");
-		return -EINVAL;
+	pret = rsu_mtd_read(flash, rsu_spt0_offset, rsu_spt_size, rsu_spt);
+	if (pret) {
+		printf("RSU: Error - rsu_mtd_read spt0 failed (%d)!\n", pret);
+		ret = pret;
+		goto out;
 	}
 
 	/* if spt0 does not have the correct magic number */
 	if (rsu_spt->magic_number != RSU_S10_SPT_MAGIC_NUMBER) {
 		/* read spt1 */
-		if (spi_flash_read(flash, rsu_spt1_offset, rsu_spt_size, rsu_spt)) {
-			printf("RSU: Error - spi_flash_read failed!\n");
-			return -EINVAL;
+		pret = rsu_mtd_read(flash, rsu_spt1_offset, rsu_spt_size, rsu_spt);
+		if (pret) {
+			printf("RSU: Error - rsu_mtd_read spt1 failed (%d)!\n",
+			       pret);
+			ret = pret;
+			goto out;
 		}
 
 		/* bail out if spt1 does not have the correct magic number */
 		if (rsu_spt->magic_number != RSU_S10_SPT_MAGIC_NUMBER) {
 			printf("RSU: Error: spt table magic number not match 0x%08x!\n",
 			       rsu_spt->magic_number);
-			return -EINVAL;
+			goto out;
 		}
 	}
 
 	nentries = rsu_spl_spt_nentries(rsu_spt);
 	if (!nentries)
-		return -EINVAL;
+		goto out;
 
 	/* display status */
 	debug("RSU current image:  0x%08x\n", (u32)rsu_status.current_image);
@@ -117,12 +128,16 @@ static int get_spl_slot(struct socfpga_rsu_s10_spt *rsu_spt,
 		   ((rsu_status.current_image >> RSU_ADDR_SHIFT) ==
 			rsu_spt->spt_slot[i].offset[1])) {
 			*crt_spt_index = i;
-			return 0;
+			ret = 0;
+			goto out;
 		}
 	}
 
 	puts("RSU: Error - could not locate SPL partition in the SPT table!\n");
-	return -EINVAL;
+out:
+	/* Release the probed SPI flash; no-op under DM_SPI_FLASH. */
+	rsu_mtd_unclaim(flash);
+	return ret;
 }
 
 static int get_ssbl_slot(struct socfpga_rsu_s10_spt_slot *rsu_ssbl_slot)

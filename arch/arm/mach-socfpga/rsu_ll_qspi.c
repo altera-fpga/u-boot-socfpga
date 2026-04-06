@@ -10,6 +10,10 @@
 #include <spi_flash.h>
 #include <stdio.h>
 #include <asm/arch/mailbox_s10.h>
+#if CONFIG_IS_ENABLED(DM_SPI_FLASH)
+#include <dm/device.h>
+#endif
+#include <asm/arch/rsu_flash_if.h>
 #include <asm/arch/rsu.h>
 #include <asm/arch/rsu_misc.h>
 #include <asm/arch/smc_api.h>
@@ -134,8 +138,13 @@ struct rsu_qspi_priv {
 	union cmf_pointer_block cpb;
 	struct sub_partition_table spt;
 	u64 *cpb_slots;
+#if CONFIG_IS_ENABLED(DM_SPI_FLASH)
+	struct udevice **flashlist;
+	struct udevice *flash;
+#else
 	struct spi_flash **flashlist;
 	struct spi_flash *flash;
+#endif
 	u32 spt0_offset;
 	u32 spt1_offset;
 	int cpb0_part;
@@ -192,8 +201,8 @@ static int get_current_flash_offset(u64 offset, int *current_offset, int *curren
 		return -EINVAL;
 
 	for (int j = 0; j < P->num_flash; j++) {
-		if (relative_offset > P->flashlist[j]->size) {
-			relative_offset -= P->flashlist[j]->size;
+		if (relative_offset > rsu_mtd_size(P->flashlist[j])) {
+			relative_offset -= rsu_mtd_size(P->flashlist[j]);
 			continue;
 		} else {
 			*current_flash = j;
@@ -229,13 +238,13 @@ static int read_dev(u64 offset, void *buf, int len)
 			break;
 
 		/* check how many bytes to write to current_flash */
-		if (len + current_offset - count > P->flashlist[i]->size)
-			current_len = P->flashlist[i]->size - current_offset;
+		if (len + current_offset - count > rsu_mtd_size(P->flashlist[i]))
+			current_len = rsu_mtd_size(P->flashlist[i]) - current_offset;
 		else
 			current_len = len - count;
 
-		ret = spi_flash_read(P->flashlist[i], (u32)current_offset,
-				     current_len, buf);
+		ret = rsu_mtd_read(P->flashlist[i], (u32)current_offset,
+				   current_len, buf);
 		if (ret) {
 			rsu_log(RSU_ERR, "read flash error=%i\n", ret);
 			return ret;
@@ -273,13 +282,13 @@ static int write_dev(u64 offset, void *buf, int len)
 			break;
 
 		/* check how many bytes to write to current_flash */
-		if (len + current_offset - count > P->flashlist[i]->size)
-			current_len = P->flashlist[i]->size - current_offset;
+		if (len + current_offset - count > rsu_mtd_size(P->flashlist[i]))
+			current_len = rsu_mtd_size(P->flashlist[i]) - current_offset;
 		else
 			current_len = len - count;
 
-		ret = spi_flash_write(P->flashlist[i], (u32)current_offset,
-				      current_len, buf);
+		ret = rsu_mtd_write(P->flashlist[i], (u32)current_offset,
+				    current_len, buf);
 		if (ret) {
 			rsu_log(RSU_ERR, "write flash error=%i\n", ret);
 			return ret;
@@ -316,12 +325,13 @@ static int erase_dev(u64 offset, int len)
 			break;
 
 		/* check how many bytes to write to current_flash */
-		if (len + current_offset - count > P->flashlist[i]->size)
-			current_len = P->flashlist[i]->size - current_offset;
+		if (len + current_offset - count > rsu_mtd_size(P->flashlist[i]))
+			current_len = rsu_mtd_size(P->flashlist[i]) - current_offset;
 		else
 			current_len = len - count;
 
-		ret = spi_flash_erase(P->flashlist[i], (u32)current_offset, current_len);
+		ret = rsu_mtd_erase(P->flashlist[i], (u32)current_offset,
+				    current_len);
 		if (ret) {
 			rsu_log(RSU_ERR, "erase flash error=%i\n", ret);
 			return ret;
@@ -1787,25 +1797,25 @@ static int dcmf_version(__u32 *versions)
 	/* get the first flash since DCMF always located at first flash */
 	P->flash = P->flashlist[0];
 
-	ret = spi_flash_read(P->flash, DCMF0_VERSION_OFFSET, 4, &versions[0]);
+	ret = rsu_mtd_read(P->flash, DCMF0_VERSION_OFFSET, 4, &versions[0]);
 	if (ret) {
 		rsu_log(RSU_ERR, "read flash error=%i\n", ret);
 		return ret;
 	}
 
-	ret = spi_flash_read(P->flash, DCMF1_VERSION_OFFSET, 4, &versions[1]);
+	ret = rsu_mtd_read(P->flash, DCMF1_VERSION_OFFSET, 4, &versions[1]);
 	if (ret) {
 		rsu_log(RSU_ERR, "read flash error=%i\n", ret);
 		return ret;
 	}
 
-	ret = spi_flash_read(P->flash, DCMF2_VERSION_OFFSET, 4, &versions[2]);
+	ret = rsu_mtd_read(P->flash, DCMF2_VERSION_OFFSET, 4, &versions[2]);
 	if (ret) {
 		rsu_log(RSU_ERR, "read flash error=%i\n", ret);
 		return ret;
 	}
 
-	ret = spi_flash_read(P->flash, DCMF3_VERSION_OFFSET, 4, &versions[3]);
+	ret = rsu_mtd_read(P->flash, DCMF3_VERSION_OFFSET, 4, &versions[3]);
 	if (ret) {
 		rsu_log(RSU_ERR, "read flash error=%i\n", ret);
 		return ret;
@@ -1858,7 +1868,7 @@ static int dcmf_status(u16 *status)
 		goto ret_val;
 	}
 
-	ret = spi_flash_read(P->flash, crt_dcmf * DCMF_SIZE, DCMF_SIZE, buffa);
+	ret = rsu_mtd_read(P->flash, crt_dcmf * DCMF_SIZE, DCMF_SIZE, buffa);
 	if (ret) {
 		rsu_log(RSU_ERR, "read flash error=%i\n", ret);
 		goto ret_val;
@@ -1872,7 +1882,7 @@ static int dcmf_status(u16 *status)
 		if (idx == crt_dcmf)
 			continue;
 
-		ret = spi_flash_read(P->flash, idx * DCMF_SIZE, DCMF_SIZE, buffb);
+		ret = rsu_mtd_read(P->flash, idx * DCMF_SIZE, DCMF_SIZE, buffb);
 		if (ret) {
 			rsu_log(RSU_ERR, "read flash error=%i\n", ret);
 			goto ret_val;
@@ -1913,7 +1923,7 @@ static int max_retry(__u8 *value)
 	/* get the first flash since DCMF always located at first flash */
 	P->flash = P->flashlist[0];
 
-	ret = spi_flash_read(P->flash, DCIO_MAX_RETRY_OFFSET, 1, &tmp);
+	ret = rsu_mtd_read(P->flash, DCIO_MAX_RETRY_OFFSET, 1, &tmp);
 	if (ret) {
 		rsu_log(RSU_ERR, "read flash error=%i\n", ret);
 		return ret;
@@ -1925,45 +1935,8 @@ static int max_retry(__u8 *value)
 	return ret;
 }
 
-/* Forward declaration: qspi_ll_intf is defined below but referenced in ll_exit(). */
-static struct rsu_ll_intf qspi_ll_intf;
-
-static void ll_exit(void)
-{
-	struct rsu_qspi_priv *ctx = qspi_ctx;
-
-	if (!ctx)
-		return;
-
-	ctx->cpb0_part = -1;
-	ctx->cpb1_part = -1;
-	ctx->cpb_corrupted = false;
-	ctx->cpb_fixed = false;
-	ctx->spt_corrupted = false;
-
-	for (int i = 0; i < QSPI_MAX_DEVICE; i++) {
-		if (ctx->flashlist && ctx->flashlist[i]) {
-			spi_flash_free(ctx->flashlist[i]);
-			ctx->flashlist[i] = NULL;
-		}
-	}
-
-	free(ctx->flashlist);
-	ctx->flashlist = NULL;
-	ctx->flash = NULL;
-	ctx->cpb_slots = NULL;
-
-	memset(ctx, 0, sizeof(*ctx));
-	free(ctx);
-	qspi_ctx = NULL;
-
-	/*
-	 * qspi_ll_intf.priv is set to qspi_ctx during ll_init(). Clear it
-	 * in sync with the free above so any accidental future access via
-	 * the interface object cannot dereference freed memory.
-	 */
-	qspi_ll_intf.priv = NULL;
-}
+/* Forward decl so qspi_ll_intf can reference .exit before the body. */
+static void ll_exit(void);
 
 static struct rsu_ll_intf qspi_ll_intf = {
 	.exit = ll_exit,
@@ -2004,6 +1977,39 @@ static struct rsu_ll_intf qspi_ll_intf = {
 	.cpb_ops.save = save_cpb_to_address,
 	.cpb_ops.corrupted = corrupted_cpb
 };
+
+static void ll_exit(void)
+{
+	struct rsu_qspi_priv *ctx = qspi_ctx;
+
+	if (!ctx)
+		return;
+
+	ctx->cpb0_part = -1;
+	ctx->cpb1_part = -1;
+	ctx->cpb_corrupted = false;
+	ctx->cpb_fixed = false;
+	ctx->spt_corrupted = false;
+
+	for (int i = 0; i < QSPI_MAX_DEVICE; i++) {
+		if (ctx->flashlist && ctx->flashlist[i]) {
+			rsu_mtd_unclaim(ctx->flashlist[i]);
+			ctx->flashlist[i] = NULL;
+		}
+	}
+
+	free(ctx->flashlist);
+	ctx->flashlist = NULL;
+	ctx->flash = NULL;
+	ctx->cpb_slots = NULL;
+
+	memset(ctx, 0, sizeof(*ctx));
+	free(ctx);
+	qspi_ctx = NULL;
+
+	/* Clear so a stale .priv cannot dereference freed memory. */
+	qspi_ll_intf.priv = NULL;
+}
 
 #if CONFIG_IS_ENABLED(SOCFPGA_RSU_MULTIFLASH)
 int get_num_flash(u32 *flash_enabled)
@@ -2054,9 +2060,6 @@ int get_num_flash(u32 *flash_enabled)
 int rsu_ll_qspi_init(struct rsu_ll_intf **intf)
 {
 	u32 spt_offset[SPT_OFFSET_MBOX];
-	int found;
-
-	found = 0;
 
 	qspi_ctx = malloc(sizeof(*qspi_ctx));
 	if (!qspi_ctx)
@@ -2077,19 +2080,24 @@ int rsu_ll_qspi_init(struct rsu_ll_intf **intf)
 	}
 
 #if CONFIG_IS_ENABLED(SOCFPGA_RSU_MULTIFLASH)
-	u32 flash_enabled[QSPI_MAX_DEVICE];
+	/* Zero-init so a partial fill cannot leak into the probe loop. */
+	u32 flash_enabled[QSPI_MAX_DEVICE] = {0};
 
 	/* retrieve qspi info from mailbox */
 	P->num_flash = get_num_flash(flash_enabled);
 	printf("%s: MULTIFLASH_ENABLED: num_flash #%d\n", __func__, P->num_flash);
+	if (P->num_flash < 0) {
+		rsu_log(RSU_ERR, "get_num_flash failed, err=%d\n",
+			P->num_flash);
+		ll_exit();
+		return P->num_flash;
+	}
 #else
 	P->num_flash = 1;
 	printf("%s: MULTIFLASH_DISABLED: num_flash #%d\n", __func__, P->num_flash);
 #endif
 
-	P->flashlist = (struct spi_flash **) malloc(sizeof(struct spi_flash *) *
-						 QSPI_MAX_DEVICE);
-
+	P->flashlist = calloc(QSPI_MAX_DEVICE, sizeof(*P->flashlist));
 	if (!P->flashlist) {
 		rsu_log(RSU_ERR,
 			"RSU: Failed to allocate memory for flash list. Exiting.\n");
@@ -2098,38 +2106,55 @@ int rsu_ll_qspi_init(struct rsu_ll_intf **intf)
 	}
 
 #if CONFIG_IS_ENABLED(SOCFPGA_RSU_MULTIFLASH)
-	for (int i = 0; i < QSPI_MAX_DEVICE; i++) {
-		debug("%s: probe flash #%d\n", __func__, i);
-		if (flash_enabled[i] > 0) {
-			/* retrieve data from flash */
-			P->flash = spi_flash_probe(CONFIG_SF_DEFAULT_BUS,
-						   i,
-						   CONFIG_SF_DEFAULT_SPEED,
-						   CONFIG_SF_DEFAULT_MODE);
-			if (!P->flash) {
-				rsu_log(RSU_ERR, "SPI probe failed.\n");
-				ll_exit();
-				return -ENODEV;
-			}
+	{
+		int found = 0;
 
-			/* store initialized flash into P->flashlist */
-			P->flashlist[i] = P->flash;
-			found++;
+		/*
+		 * Firmware may enable CSes sparsely; compact the probed
+		 * handles into a contiguous prefix because consumers iterate
+		 * 0..num_flash-1 unconditionally.
+		 */
+		for (int i = 0; i < QSPI_MAX_DEVICE; i++) {
+			debug("%s: probe flash #%d\n", __func__, i);
+			if (flash_enabled[i] > 0) {
+				int err;
+
+				err = rsu_mtd_probe(CONFIG_SF_DEFAULT_BUS, i,
+						    &P->flash);
+				if (err) {
+					rsu_log(RSU_ERR, "SPI probe failed.\n");
+					ll_exit();
+					return err;
+				}
+
+				P->flashlist[found++] = P->flash;
+			}
 		}
+
+		if (!found) {
+			rsu_log(RSU_ERR,
+				"RSU: no QSPI flash enabled by firmware\n");
+			ll_exit();
+			return -ENODEV;
+		}
+
+		/* Resync num_flash with the compacted flashlist[]. */
+		P->num_flash = found;
 	}
 #else
-	/* retrieve data from flash */
-	P->flash = spi_flash_probe(CONFIG_SF_DEFAULT_BUS,
-				   CONFIG_SF_DEFAULT_CS,
-				   CONFIG_SF_DEFAULT_SPEED,
-				   CONFIG_SF_DEFAULT_MODE);
-	if (!P->flash) {
-		ll_exit();
-		rsu_log(RSU_ERR, "SPI probe failed.\n");
-		return -ENODEV;
-	}
+	{
+		int err;
 
-	P->flashlist[0] = P->flash;
+		err = rsu_mtd_probe(CONFIG_SF_DEFAULT_BUS, CONFIG_SF_DEFAULT_CS,
+				    &P->flash);
+		if (err) {
+			ll_exit();
+			rsu_log(RSU_ERR, "SPI probe failed.\n");
+			return err;
+		}
+
+		P->flashlist[0] = P->flash;
+	}
 #endif
 	P->spt0_offset = spt_offset[1];
 	P->spt1_offset = spt_offset[3];
