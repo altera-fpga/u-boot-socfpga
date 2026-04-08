@@ -26,6 +26,7 @@
 #define EWRPROT		13
 #define EARGS		14
 #define ECORRUPTED_CPB	15
+#define ECORRUPTED_SPT	16
 
 /* RSU Version Bitmasks */
 #define RSU_VERSION_CRT_IDX_MASK	GENMASK(31, 28)
@@ -383,4 +384,24 @@ int rsu_restore_cpb(u64 address);
  * Returns: 0 on success, or error code
  */
 int rsu_save_cpb(u64 address);
+
+/**
+ * rsu_restore_spt() - restore the spt from an address
+ * @address: the address which spt is restored from.
+ *
+ * This function is used to restore a saved SPT from an address
+ *
+ * Returns: 0 on success, or error code
+ */
+int rsu_restore_spt(u64 address);
+
+/**
+ * rsu_save_spt() - save spt to the address
+ * @address: the address which spt is saved to.
+ *
+ * This function is used to save SPT to an address.
+ *
+ * Returns: 0 on success, or error code
+ */
+int rsu_save_spt(u64 address);
 #endif

@@ -72,6 +72,12 @@ struct rsu_ll_intf {
 		int (*save)(u64 address);
 		int (*corrupted)(void);
 	} cpb_ops;
+
+	struct {
+		int (*restore)(u64 address);
+		int (*save)(u64 address);
+		int (*corrupted)(void);
+	} spt_ops;
 };
 
 /**

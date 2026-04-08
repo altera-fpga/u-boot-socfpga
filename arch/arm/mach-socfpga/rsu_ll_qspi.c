@@ -5,6 +5,7 @@
  */
 
 #include <common.h>
+#include <env.h>
 #include <linux/errno.h>
 #include <asm/arch/mailbox_s10.h>
 #include <asm/arch/rsu.h>
@@ -47,6 +48,7 @@
 #define MIN_QSPI_ERASE_SIZE	4096
 
 #define CPB_SIZE		SZ_4K
+#define SPT_SIZE		SZ_4K
 #define CPB_IMAGE_PTR_OFFSET	32
 #define CPB_IMAGE_PTR_NSLOTS	508
 
@@ -112,6 +114,8 @@ static u32 spt1_offset;
 static int cpb0_part = -1;
 static int cpb1_part = -1;
 static bool cpb_corrupted;
+static bool spt_corrupted;
+static int load_cpb(void);
 
 /**
  * get_part_offset() - get a selected partition offset
@@ -255,6 +259,59 @@ static int erase_part(int part_num)
 }
 
 /**
+ * save_spt_to_address() - save spt to the address
+ * @address: the address which spt is saved to
+ *
+ * Return: 0 for successful operation, or -ve on error
+ */
+static int save_spt_to_address(u64 address)
+{
+	int ret;
+	char *spt_data_dst = (char *)address;
+	char *spt_data_src;
+	u32 calc_crc;
+
+	if (!spt_data_dst) {
+		rsu_log(RSU_ERR, "failed due to invalid address\n");
+		return -EINVAL;
+	}
+
+	spt_data_src = (char *)malloc(SPT_SIZE);
+	if (!spt_data_src) {
+		rsu_log(RSU_ERR, "failed to allocate spt_data_src\n");
+		return -ENOMEM;
+	}
+
+	ret = read_dev(spt0_offset, spt_data_src, SPT_SIZE);
+	if (ret) {
+		rsu_log(RSU_ERR, "failed to read SPT data\n");
+		free(spt_data_src);
+		return ret;
+	}
+
+	calc_crc = crc32(0, (void *)spt_data_src, SPT_SIZE);
+	rsu_log(RSU_DEBUG, "%s - calc_crc is 0x%x\n", __func__, calc_crc);
+	memcpy(spt_data_dst, spt_data_src, SPT_SIZE);
+	memcpy(spt_data_dst + SPT_SIZE, &calc_crc, sizeof(calc_crc));
+	rsu_log(RSU_INFO, "%ld bytes SPT data saved\n",
+		SPT_SIZE + sizeof(calc_crc));
+	env_set_hex("filesize", SPT_SIZE + sizeof(calc_crc));
+
+	free(spt_data_src);
+	return ret;
+}
+
+/**
+ * corrupted_spt() - check if spt is corrupted
+ *
+ * Return: 1 for the corrupted spt , or 0 for not
+ */
+static int corrupted_spt(void)
+{
+	return spt_corrupted;
+}
+
+/**
  * writeback_spt() - write back SPT
  *
  * Return: 0 on success, or -1 for error
@@ -299,13 +356,71 @@ static int writeback_spt(void)
 }
 
 /**
+ * restore_spt_from_address() - restore the spt from an address
+ * @address: the address which spt is restored from
+ *
+ * Return: 0 for successful operation, or -ve on error
+ */
+static int restore_spt_from_address(u64 address)
+{
+	int ret;
+	u32 calc_crc;
+	u32 crc_from_saved;
+	u32 magic_number;
+	char *spt_data = (char *)address;
+
+	if (!spt_data) {
+		rsu_log(RSU_ERR, "failed due to invalid address\n");
+		return -EINVAL;
+	}
+
+	calc_crc = crc32(0, (void *)spt_data, SPT_SIZE);
+	rsu_log(RSU_DEBUG, "%s - calc_crc is 0x%x\n", __func__, calc_crc);
+	memcpy(&crc_from_saved, spt_data + SPT_SIZE, sizeof(crc_from_saved));
+	rsu_log(RSU_DEBUG, "%s - crc_from_saved is 0x%x\n", __func__,
+		crc_from_saved);
+
+	if (calc_crc != crc_from_saved) {
+		rsu_log(RSU_ERR, "saved data is corrupted\n");
+		return -EINVAL;
+	}
+
+	/*
+	 * check the magic number to prevent user from accidentally
+	 * restoring CPB
+	 */
+	memcpy(&magic_number, spt_data, sizeof(magic_number));
+	if (magic_number != SPT_MAGIC_NUMBER) {
+		rsu_log(RSU_ERR, "failure due to mismatch magic number\n");
+		return -EINVAL;
+	}
+
+	memcpy(&spt, spt_data, SPT_SIZE);
+	ret = writeback_spt();
+	if (ret) {
+		rsu_log(RSU_ERR, "failed to write back spt\n");
+		return ret;
+	}
+
+	spt_corrupted = false;
+
+	/* try to reload CPB, as we have a new SPT */
+	cpb_corrupted = false;
+	if (load_cpb() && !cpb_corrupted)
+		rsu_log(RSU_ERR, "Bad CPB\n");
+
+	return 0;
+}
+
+/**
  * check_spt() - check if SPT is valid
  *
- * Return: 0 for valid SPT, or -1 for not
+ * Return: 0 for valid SPT, or -ve on error
  */
 static int check_spt(void)
 {
 	int x;
+	int y;
 	int max_len = sizeof(spt.partition[0].name);
 	int spt0_found = 0;
 	int spt1_found = 0;
@@ -329,6 +444,11 @@ static int check_spt(void)
 			LIBRSU_VER);
 	}
 
+	if (spt.partitions > SPT_MAX_PARTITIONS) {
+		rsu_log(RSU_ERR, "bigger than max partition\n");
+		return -EINVAL;
+	}
+
 	for (x = 0; x < spt.partitions; x++) {
 		if (strnlen(spt.partition[x].name, max_len) >= max_len)
 			spt.partition[x].name[max_len - 1] = '\0';
@@ -338,6 +458,35 @@ static int check_spt(void)
 			(spt.partition[x].offset +
 			spt.partition[x].length - 1),
 			spt.partition[x].flags);
+
+		/* check if the partition is overlap */
+		u64 s_start = spt.partition[x].offset;
+		u64 s_end = spt.partition[x].offset + spt.partition[x].length;
+
+		for (y = 0; y < spt.partitions; y++) {
+			if (x == y)
+				continue;
+
+			/*
+			 * don't allow the same partition name to appear
+			 * more than once
+			 */
+			if (!(strcmp(spt.partition[x].name,
+				     spt.partition[y].name))) {
+				rsu_log(RSU_ERR, "partition name ");
+				rsu_log(RSU_ERR, "appears more than once\n");
+				return -EINVAL;
+			}
+
+			u64 d_start = spt.partition[y].offset;
+			u64 d_end = spt.partition[y].offset +
+				    spt.partition[y].length;
+
+			if (s_start < d_end && s_end > d_start) {
+				rsu_log(RSU_ERR, "partition overlap\n");
+				return -EINVAL;
+			}
+		}
 
 		if (strcmp(spt.partition[x].name, "SPT0") == 0)
 			spt0_found = 1;
@@ -355,6 +504,50 @@ static int check_spt(void)
 	}
 
 	return 0;
+}
+
+/**
+ * check_both_spt() - check if both SPTs are same
+ *
+ * Return: 0 for the identical SPTs, or -ve on error
+ */
+static int check_both_spt(void)
+{
+	int ret;
+	char *spt0_data;
+	char *spt1_data;
+
+	spt0_data = (char *)malloc(SPT_SIZE);
+	if (!spt0_data) {
+		rsu_log(RSU_ERR, "failed to allocate spt0_data\n");
+		return -ENOMEM;
+	}
+
+	spt1_data = (char *)malloc(SPT_SIZE);
+	if (!spt1_data) {
+		rsu_log(RSU_ERR, "failed to allocate spt1_data\n");
+		free(spt0_data);
+		return -ENOMEM;
+	}
+
+	ret = read_dev(spt0_offset, spt0_data, SPT_SIZE);
+	if (ret) {
+		rsu_log(RSU_ERR, "failed to read spt0_data\n");
+		goto ops_error;
+	}
+
+	ret = read_dev(spt1_offset, spt1_data, SPT_SIZE);
+	if (ret) {
+		rsu_log(RSU_ERR, "failed to read spt1_data\n");
+		goto ops_error;
+	}
+
+	ret = memcmp(spt0_data, spt1_data, SPT_SIZE);
+
+ops_error:
+	free(spt1_data);
+	free(spt0_data);
+	return ret;
 }
 
 /**
@@ -393,6 +586,11 @@ static int load_spt(void)
 	}
 
 	if (spt0_good && spt1_good) {
+		if (check_both_spt()) {
+			rsu_log(RSU_ERR, "unmatched SPT0/1 data");
+			spt_corrupted = true;
+			return -EINVAL;
+		}
 		rsu_log(RSU_INFO, "SPTs are GOOD!!!\n");
 		return 0;
 	}
@@ -450,6 +648,7 @@ static int load_spt(void)
 		return 0;
 	}
 
+	spt_corrupted = true;
 	rsu_log(RSU_ERR, "no valid SPT0 and SPT1 found\n");
 	return -1;
 }
@@ -578,6 +777,9 @@ static int save_cpb_to_address(u64 address)
 	rsu_log(RSU_DEBUG, "%s - calc_crc is 0x%x\n", __func__, calc_crc);
 	memcpy(cpb_data_dst, cpb_data_src, CPB_SIZE);
 	memcpy(cpb_data_dst + CPB_SIZE, &calc_crc, sizeof(calc_crc));
+	rsu_log(RSU_INFO, "%ld bytes CPB data saved\n",
+		CPB_SIZE + sizeof(calc_crc));
+	env_set_hex("filesize", CPB_SIZE + sizeof(calc_crc));
 
 	free(cpb_data_src);
 	return ret;
@@ -1478,6 +1680,7 @@ static void ll_exit(void)
 	cpb0_part = -1;
 	cpb1_part = -1;
 	cpb_corrupted = false;
+	spt_corrupted = false;
 
 	if (flash) {
 		spi_flash_free(flash);
@@ -1513,6 +1716,10 @@ static struct rsu_ll_intf qspi_ll_intf = {
 	.fw_ops.dcmf_status = dcmf_status,
 	.fw_ops.max_retry = max_retry,
 
+	.spt_ops.restore = restore_spt_from_address,
+	.spt_ops.save = save_spt_to_address,
+	.spt_ops.corrupted = corrupted_spt,
+
 	.cpb_ops.empty = empty_cpb,
 	.cpb_ops.restore = restore_cpb_from_address,
 	.cpb_ops.save = save_cpb_to_address,
@@ -1544,7 +1751,7 @@ int rsu_ll_qspi_init(struct rsu_ll_intf **intf)
 	rsu_log(RSU_DEBUG, "SPT0 offset 0x%08x\n", spt0_offset);
 	rsu_log(RSU_DEBUG, "SPT1 offset 0x%08x\n", spt1_offset);
 
-	if (load_spt()) {
+	if (load_spt() && !spt_corrupted) {
 		rsu_log(RSU_ERR, "Bad SPT\n");
 		return -1;
 	}
