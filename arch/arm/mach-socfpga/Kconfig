@@ -24,6 +24,16 @@ config SOCFPGA_RSU_MULTIFLASH
 	 RSU will be able to perform operations on multiple flash on the platform
 	 given multiple flash configuration in programmer tool.
 
+config SPL_SOCFPGA_RSU_SSBL_FALLBACK
+	int "RSU SPL fallback SSBL slot size (MiB)"
+	depends on ARCH_SOCFPGA_SOC64 && SPL && SPI_FLASH
+	default 8
+	range 1 64
+	help
+	 Conservative upper bound (in MiB) for the SSBL slot used when the
+	 SPT lookup fails, so env/sf.c CONFIG_ENV_OFFSET math cannot
+	 underflow. Override only if the board's SSBL exceeds the default.
+
 config SOCFPGA_SECURE_VAB_AUTH
 	bool "Enable boot image authentication with Secure Device Manager"
 	depends on ARCH_SOCFPGA_AGILEX || ARCH_SOCFPGA_N5X || \

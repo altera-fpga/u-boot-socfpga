@@ -5,6 +5,8 @@
  */
 #include <linux/errno.h>
 #include <linux/kernel.h>
+#include <linux/sizes.h>
+#include <linux/string.h>
 #include <stdio.h>
 #include <log.h>
 #include <spi.h>
@@ -30,6 +32,10 @@
 #define FACTORY_IMG_NAME "FACTORY_IM"
 
 #define RSU_SPL_SPT_SLOT_MAX 127
+
+/* Bytes; pairs with CONFIG_SYS_SPI_U_BOOT_OFFS so env-offset math cannot underflow. */
+#define RSU_SPL_SSBL_FALLBACK_BYTES \
+	(CONFIG_SPL_SOCFPGA_RSU_SSBL_FALLBACK * SZ_1M)
 
 static unsigned int rsu_spl_spt_nentries(const struct socfpga_rsu_s10_spt *spt)
 {
@@ -157,7 +163,7 @@ static int get_ssbl_slot(struct socfpga_rsu_s10_spt_slot *rsu_ssbl_slot)
 	ret = get_spl_slot(&rsu_spt, sizeof(rsu_spt), &crt_spt_index);
 	if (ret) {
 		puts("RSU: Error - could not locate partition in the SPT table!\n");
-		return -EINVAL;
+		return ret;
 	}
 
 	nentries = rsu_spl_spt_nentries(&rsu_spt);
@@ -280,7 +286,7 @@ int rsu_spl_mmc_env_name(char *filename, int max_size, bool redund)
 
 		/* should throw error if cannot find u-boot proper(SSBL) in MMC */
 		printf("ERROR: could not find u-boot.env!");
-		return 0;
+		return ret;
 	}
 
 	if (redund) {
@@ -318,8 +324,15 @@ u32 rsu_spl_ssbl_address(bool is_qspi_imge_check)
 			panic("ERROR: could not find u-boot proper(SSBL) address!");
 		} else {
 			printf("ERROR: could not find u-boot env address!");
-			return 0;
+			return CONFIG_SYS_SPI_U_BOOT_OFFS;
 		}
+	}
+
+	if (!rsu_ssbl_slot.length) {
+		if (is_qspi_imge_check)
+			panic("ERROR: could not find u-boot proper(SSBL) size!");
+		/* No log here; the size() variant reports it. */
+		return CONFIG_SYS_SPI_U_BOOT_OFFS;
 	}
 
 	printf("RSU: Success found SSBL at offset: %08x.\n",
@@ -337,7 +350,7 @@ u32 rsu_spl_ssbl_size(bool is_qspi_imge_check)
 	if (ret) {
 		if (ret == -EOPNOTSUPP) {
 			printf("ERROR: Invalid address, could not retrieve SSBL size!");
-			return 0;
+			return RSU_SPL_SSBL_FALLBACK_BYTES;
 		}
 
 		/* should throw error if cannot find u-boot proper(SSBL) address */
@@ -345,14 +358,16 @@ u32 rsu_spl_ssbl_size(bool is_qspi_imge_check)
 			panic("ERROR: could not find u-boot proper(SSBL) address!");
 		} else {
 			printf("ERROR: could not find u-boot env address!");
-			return 0;
+			return RSU_SPL_SSBL_FALLBACK_BYTES;
 		}
 	}
 
 	if (!rsu_ssbl_slot.length) {
 		/* throw error if cannot find u-boot proper(SSBL) size */
 		printf("ERROR: could not retrieve u-boot proper(SSBL) size!");
-		return 0;
+		if (is_qspi_imge_check)
+			panic("ERROR: could not find u-boot proper(SSBL) size!");
+		return RSU_SPL_SSBL_FALLBACK_BYTES;
 	}
 
 	printf("RSU: Success found SSBL with length: %08x.\n",
