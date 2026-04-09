@@ -3,8 +3,9 @@
  * Copyright (C) 2022 Intel Corporation <www.intel.com>
  *
  */
-#define DEBUG
 #include <linux/errno.h>
+#include <linux/kernel.h>
+#include <stdio.h>
 #include <log.h>
 #include <spi.h>
 #include <spi_flash.h>
@@ -20,7 +21,6 @@
 #define SSBL_PART_PREFIX	"SSBL."
 #define RSU_ADDR_MASK	0xFFFFFFFF
 #define RSU_ADDR_SHIFT	32
-#define SSBL_PART_PREFIX   "SSBL."
 #define UBOOT_ENV_EXT ".env"
 #define UBOOT_IMG_EXT ".img"
 #define UBOOT_ITB_EXT ".itb"
@@ -108,6 +108,10 @@ static int get_spl_slot(struct socfpga_rsu_s10_spt *rsu_spt,
 	if (!nentries)
 		goto out;
 
+	/* Flash may omit NUL in 16-byte names; cap strings for strstr/printf safety */
+	for (i = 0; i < (int)nentries; i++)
+		rsu_spt->spt_slot[i].name[MAX_PART_NAME_LENGTH - 1] = '\0';
+
 	/* display status */
 	debug("RSU current image:  0x%08x\n", (u32)rsu_status.current_image);
 	debug("RSU state:          0x%08x\n", rsu_status.state);
@@ -188,8 +192,11 @@ static int get_ssbl_slot(struct socfpga_rsu_s10_spt_slot *rsu_ssbl_slot)
 	}
 
 	/* fail to find u-boot proper(SSBL) */
-	printf("RSU: Error - could not find u-boot proper partition SSBL.%s!\n",
-	       rsu_spt.spt_slot[crt_spt_index].name);
+	if (crt_spt_index >= 0 && crt_spt_index < (int)nentries)
+		printf("RSU: Error - could not find u-boot proper partition SSBL.%s!\n",
+		       rsu_spt.spt_slot[crt_spt_index].name);
+	else
+		puts("RSU: Error - could not find u-boot proper (SSBL) partition!\n");
 
 	return -EINVAL;
 }
@@ -198,15 +205,22 @@ int rsu_spl_mmc_filename(char *filename, int max_size)
 {
 	struct socfpga_rsu_s10_spt rsu_spt = {0};
 	int crt_spt_index = -EINVAL;
-	int ret, len;
+	int ret;
 
 	if (!filename) {
 		printf("RSU: filename is NULL!\n");
 		return -ENOENT;
 	}
 
+	/*
+	 * max_size is `int` for ABI reasons but used as size_t below;
+	 * reject non-positive up front so it cannot sign-extend.
+	 */
+	if (max_size <= 0)
+		return -EINVAL;
+
 	if ((strlen(UBOOT_PREFIX) + MAX_PART_NAME_LENGTH + strlen(UBOOT_ITB_EXT))
-	     > max_size)
+	     > (size_t)max_size)
 		return -ENAMETOOLONG;
 
 	ret = get_spl_slot(&rsu_spt, sizeof(rsu_spt), &crt_spt_index);
@@ -216,24 +230,19 @@ int rsu_spl_mmc_filename(char *filename, int max_size)
 			return -EOPNOTSUPP;
 		}
 
-		/* should throw error if cannot find u-boot proper(SSBL) in MMC */
-		panic("ERROR: could not find u-boot proper(SSBL): SSBL.%s!",
-		      rsu_spt.spt_slot[crt_spt_index].name);
+		panic("ERROR: could not find u-boot proper (SSBL) for MMC load");
 	}
 
-	/* add 1 to the length to copy for NULL terminated string */
-	strlcat(filename, UBOOT_PREFIX, strlen(UBOOT_PREFIX) + 1);
-	strlcat(filename + strlen(UBOOT_PREFIX),
-		rsu_spt.spt_slot[crt_spt_index].name,
-		strlen(rsu_spt.spt_slot[crt_spt_index].name) + 1);
-	len = strlen(UBOOT_PREFIX) + strlen(rsu_spt.spt_slot[crt_spt_index].name);
 #if IS_ENABLED(CONFIG_SPL_LOAD_FIT)
-	strlcat(filename + len,
-		UBOOT_ITB_EXT, strlen(UBOOT_ITB_EXT) + 1);
+	ret = snprintf(filename, (size_t)max_size, "%s%s%s", UBOOT_PREFIX,
+		       rsu_spt.spt_slot[crt_spt_index].name, UBOOT_ITB_EXT);
 #else
-	strlcat(filename + len,
-		UBOOT_IMG_EXT, strlen(UBOOT_IMG_EXT) + 1);
+	ret = snprintf(filename, (size_t)max_size, "%s%s%s", UBOOT_PREFIX,
+		       rsu_spt.spt_slot[crt_spt_index].name, UBOOT_IMG_EXT);
 #endif
+	if (ret < 0 || ret >= max_size)
+		return -ENAMETOOLONG;
+
 	printf("%s, filename: %s\n", __func__, filename);
 	return 0;
 }
@@ -242,15 +251,24 @@ int rsu_spl_mmc_env_name(char *filename, int max_size, bool redund)
 {
 	struct socfpga_rsu_s10_spt rsu_spt = {0};
 	int crt_spt_index = -EINVAL;
-	int ret, len;
+	int ret;
 
 	if (!filename) {
 		printf("RSU: filename is NULL!\n");
 		return -ENOENT;
 	}
 
-	if ((strlen(UBOOT_ENV_REDUND_PREFIX) + strlen(UBOOT_ENV_PREFIX) +
-	    MAX_PART_NAME_LENGTH + strlen(UBOOT_ENV_EXT)) > max_size)
+	/* Same signed/unsigned guard as rsu_spl_mmc_filename(). */
+	if (max_size <= 0)
+		return -EINVAL;
+
+	/*
+	 * Only one of UBOOT_ENV_REDUND_PREFIX / UBOOT_ENV_PREFIX is used
+	 * per call; size against the chosen one so a buffer that actually
+	 * fits is not falsely rejected.
+	 */
+	if ((strlen(redund ? UBOOT_ENV_REDUND_PREFIX : UBOOT_ENV_PREFIX) +
+	     MAX_PART_NAME_LENGTH + strlen(UBOOT_ENV_EXT)) > (size_t)max_size)
 		return -ENAMETOOLONG;
 
 	ret = get_spl_slot(&rsu_spt, sizeof(rsu_spt), &crt_spt_index);
@@ -262,26 +280,22 @@ int rsu_spl_mmc_env_name(char *filename, int max_size, bool redund)
 
 		/* should throw error if cannot find u-boot proper(SSBL) in MMC */
 		printf("ERROR: could not find u-boot.env!");
-		return ret;
+		return 0;
 	}
 
 	if (redund) {
-		strlcat(filename, UBOOT_ENV_REDUND_PREFIX,
-			strlen(UBOOT_ENV_REDUND_PREFIX) + 1);
-		strlcat(filename + strlen(UBOOT_ENV_REDUND_PREFIX),
-			rsu_spt.spt_slot[crt_spt_index].name,
-			strlen(rsu_spt.spt_slot[crt_spt_index].name) + 1);
-		len = strlen(UBOOT_ENV_REDUND_PREFIX) +
-		      strlen(rsu_spt.spt_slot[crt_spt_index].name);
+		ret = snprintf(filename, (size_t)max_size, "%s%s%s",
+			       UBOOT_ENV_REDUND_PREFIX,
+			       rsu_spt.spt_slot[crt_spt_index].name,
+			       UBOOT_ENV_EXT);
 	} else {
-		strlcat(filename, UBOOT_ENV_PREFIX, strlen(UBOOT_ENV_PREFIX) + 1);
-		strlcat(filename + strlen(UBOOT_ENV_PREFIX),
-			rsu_spt.spt_slot[crt_spt_index].name,
-			strlen(rsu_spt.spt_slot[crt_spt_index].name) + 1);
-		len = strlen(UBOOT_ENV_PREFIX) +
-		      strlen(rsu_spt.spt_slot[crt_spt_index].name);
+		ret = snprintf(filename, (size_t)max_size, "%s%s%s",
+			       UBOOT_ENV_PREFIX,
+			       rsu_spt.spt_slot[crt_spt_index].name,
+			       UBOOT_ENV_EXT);
 	}
-	strlcat(filename + len, UBOOT_ENV_EXT, strlen(UBOOT_ENV_EXT) + 1);
+	if (ret < 0 || ret >= max_size)
+		return -ENAMETOOLONG;
 
 	printf("%s, filename: %s\n", __func__, filename);
 	return 0;
@@ -304,7 +318,7 @@ u32 rsu_spl_ssbl_address(bool is_qspi_imge_check)
 			panic("ERROR: could not find u-boot proper(SSBL) address!");
 		} else {
 			printf("ERROR: could not find u-boot env address!");
-			return ret;
+			return 0;
 		}
 	}
 
@@ -331,14 +345,14 @@ u32 rsu_spl_ssbl_size(bool is_qspi_imge_check)
 			panic("ERROR: could not find u-boot proper(SSBL) address!");
 		} else {
 			printf("ERROR: could not find u-boot env address!");
-			return ret;
+			return 0;
 		}
 	}
 
 	if (!rsu_ssbl_slot.length) {
 		/* throw error if cannot find u-boot proper(SSBL) size */
 		printf("ERROR: could not retrieve u-boot proper(SSBL) size!");
-		return ret;
+		return 0;
 	}
 
 	printf("RSU: Success found SSBL with length: %08x.\n",
