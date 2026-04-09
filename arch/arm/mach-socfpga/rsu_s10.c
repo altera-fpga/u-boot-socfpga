@@ -4,6 +4,7 @@
  *
  */
 
+#include <limits.h>
 #include <linux/compiler.h>
 #include <linux/errno.h>
 #include <linux/kernel.h>
@@ -14,6 +15,7 @@
 #include <asm/arch/rsu.h>
 #include <asm/arch/rsu_s10.h>
 #include <command.h>
+#include <vsprintf.h>
 #include <spi.h>
 #include <spi_flash.h>
 #include <env.h>
@@ -61,7 +63,7 @@ static void rsu_print_spt_slot(const struct socfpga_rsu_s10_spt *spt,
 
 	puts("RSU: Sub-partition table content\n");
 	for (i = 0; i < nentries; i++) {
-		printf("%16s\tOffset: 0x%08x%08x\tLength: 0x%08x\tFlag : 0x%08x\n",
+		printf("%16.16s\tOffset: 0x%08x%08x\tLength: 0x%08x\tFlag : 0x%08x\n",
 		       spt->spt_slot[i].name,
 		       spt->spt_slot[i].offset[1],
 		       spt->spt_slot[i].offset[0],
@@ -100,8 +102,17 @@ static u32 rsu_spt_slot_find_cpb(const struct socfpga_rsu_s10_spt *spt,
 		if (strstr(spt->spt_slot[i].name, "CPB0"))
 			return spt->spt_slot[i].offset[0];
 	}
-	puts("RSU: Cannot find SPT0 entry from sub-partition table\n");
+	puts("RSU: Cannot find CPB0 entry in sub-partition table\n");
 	return 0;
+}
+
+static void rsu_s10_sanitize_spt_names(struct socfpga_rsu_s10_spt *spt,
+				       unsigned int nentries)
+{
+	unsigned int i;
+
+	for (i = 0; i < nentries; i++)
+		spt->spt_slot[i].name[MAX_PART_NAME_LENGTH - 1] = '\0';
 }
 
 /**
@@ -169,6 +180,7 @@ static int rsu_spt_cpb_list_inner(int argc, char * const argv[],
 	}
 
 	nentries = rsu_s10_spt_entry_count(&spt);
+	rsu_s10_sanitize_spt_names(&spt, nentries);
 	rsu_print_spt_slot(&spt, nentries);
 
 	cpb_offset = rsu_spt_slot_find_cpb(&spt, nentries);
@@ -204,30 +216,86 @@ int rsu_spt_cpb_list(int argc, char * const argv[])
 	return rsu_spt_cpb_list_inner(argc, argv, NULL, NULL);
 }
 
+/*
+ * Strictly parse a hex u64 from argv[].
+ *
+ * U-Boot's simple_strtoull() silently accepts partial input ("12xyz")
+ * and wraps on overflow; both would let an unintended flash offset
+ * reach the SDM. Parse digit-by-digit so we can reject either case.
+ *
+ * Allows a single trailing '\n' for pasted-command compatibility.
+ */
+static int rsu_parse_hex_u64(const char *s, u64 *out)
+{
+	const char *start;
+	u64 result = 0;
+
+	if (!s || !*s || !out)
+		return -EINVAL;
+
+	if (s[0] == '0' && (s[1] == 'x' || s[1] == 'X'))
+		s += 2;
+
+	start = s;
+	while (*s) {
+		unsigned int digit;
+		char c = *s;
+
+		if (c >= '0' && c <= '9')
+			digit = c - '0';
+		else if (c >= 'a' && c <= 'f')
+			digit = c - 'a' + 10;
+		else if (c >= 'A' && c <= 'F')
+			digit = c - 'A' + 10;
+		else
+			break;
+
+		if (result > (ULLONG_MAX - digit) / 16)
+			return -ERANGE;
+
+		result = result * 16 + digit;
+		s++;
+	}
+
+	if (s == start)
+		return -EINVAL;
+	if (*s != '\0' && !(*s == '\n' && s[1] == '\0'))
+		return -EINVAL;
+
+	*out = result;
+	return 0;
+}
+
 int rsu_update(int argc, char * const argv[])
 {
 	u32 flash_offset[2];
 	u64 addr;
-	char *endp;
+	int ret;
 
 	if (argc != 2)
 		return CMD_RET_USAGE;
 
-	addr = simple_strtoul(argv[1], &endp, 16);
+	if (rsu_parse_hex_u64(argv[1], &addr))
+		return CMD_RET_USAGE;
 
 	flash_offset[0] = lower_32_bits(addr);
 	flash_offset[1] = upper_32_bits(addr);
 
 	printf("RSU: RSU update to 0x%08x%08x\n",
 	       flash_offset[1], flash_offset[0]);
-	mbox_rsu_update(flash_offset);
-	return 0;
+	ret = mbox_rsu_update(flash_offset);
+	if (ret) {
+		printf("RSU: mbox_rsu_update failed (%d)\n", ret);
+		return CMD_RET_FAILURE;
+	}
+	return CMD_RET_SUCCESS;
 }
 
 int rsu_dtb(int argc, char * const argv[])
 {
 	char flash0_string[100];
-	int nodeoffset, parentoffset, fdt_flash0_offset, len, end;
+	int nodeoffset, parentoffset, fdt_flash0_offset, len;
+	u32 end;
 	const fdt32_t *val;
 	const __be32 *rsu_handle = NULL;
 	u32 alt_phandle = 0;
@@ -320,10 +388,32 @@ int rsu_dtb(int argc, char * const argv[])
 	}
 	reg[0] = fdt32_to_cpu(val[0]);
 	reg[1] = fdt32_to_cpu(val[1]);
+	/*
+	 * Reject a DTB-supplied reg window whose start+size wraps u32.
+	 * Without this check, `end` underflows into a tiny value that
+	 * silently passes the spt0_off > end guard below, and the
+	 * subsequent (end - spt0_off) length poisons the boot partition.
+	 */
+	if (reg[0] > U32_MAX - reg[1]) {
+		printf("DTB: %s.reg start+size overflows u32 (0x%x + 0x%x)\n",
+		       flash0_string, reg[0], reg[1]);
+		return -ERANGE;
+	}
 	end = reg[0] + reg[1];
 
 	/* align to 64Kb flash sector size */
 	end = roundup(end, 64 * 1024);
+
+	/*
+	 * Guard reg[1]: spt0_off must lie within the boot partition, else
+	 * the u32 subtract below underflows into a multi-GiB length and
+	 * corrupts the DTB.
+	 */
+	if (spt0_off > end) {
+		printf("DTB: SPT0 offset 0x%x exceeds boot partition end 0x%x\n",
+		       spt0_off, end);
+		return -EINVAL;
+	}
 
 	/* assemble new reg value for boot partition */
 	reg[0] = cpu_to_fdt32(spt0_off);
