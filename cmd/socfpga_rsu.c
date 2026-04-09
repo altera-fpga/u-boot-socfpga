@@ -6,11 +6,116 @@
  */
 
 #include <command.h>
+#include <limits.h>
+#include <linux/errno.h>
 #include <linux/kernel.h>
 #include <linux/string.h>
+#include <rsu_console.h>
 #include <vsprintf.h>
 #include <asm/arch/rsu.h>
-#include <asm/arch/rsu_s10.h>
+
+/*
+ * Strictly parse a numeric argv[] value.
+ *
+ * U-Boot's dectoul()/simple_strtoul*() silently return partial values
+ * for "12xyz" and wrap on u64 overflow without indication; either could
+ * feed a malformed argv into slot tables or pointers. Parse digit-by-
+ * digit so we can reject both, and allow a single trailing '\n'.
+ */
+static int rsu_parse_num(const char *s, unsigned int base, u64 *out)
+{
+	const char *start;
+	u64 result = 0;
+
+	if (!s || !*s || !out)
+		return -EINVAL;
+	if (base != 10 && base != 16)
+		return -EINVAL;
+
+	/* Accept an optional "0x" prefix for base 16 (matches U-Boot usage). */
+	if (base == 16 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X'))
+		s += 2;
+
+	start = s;
+	while (*s) {
+		unsigned int digit;
+		char c = *s;
+
+		if (c >= '0' && c <= '9')
+			digit = c - '0';
+		else if (c >= 'a' && c <= 'f')
+			digit = c - 'a' + 10;
+		else if (c >= 'A' && c <= 'F')
+			digit = c - 'A' + 10;
+		else
+			break;
+
+		if (digit >= base)
+			break;
+
+		/* Pre-division overflow guard: result*base + digit must fit a u64. */
+		if (result > (ULLONG_MAX - digit) / base)
+			return -ERANGE;
+
+		result = result * base + digit;
+		s++;
+	}
+
+	if (s == start)
+		return -EINVAL;
+	if (*s != '\0' && !(*s == '\n' && s[1] == '\0'))
+		return -EINVAL;
+
+	*out = result;
+	return 0;
+}
+
+/* Parse a decimal slot index into an int, rejecting values > INT_MAX. */
+static int rsu_parse_slot(const char *s, int *out)
+{
+	u64 v;
+
+	if (rsu_parse_num(s, 10, &v) || v > INT_MAX)
+		return -EINVAL;
+	*out = (int)v;
+	return 0;
+}
+
+/*
+ * Parse a hex size into int (rejects > INT_MAX); a negative value would
+ * be treated as a huge unsigned length downstream.
+ */
+static int rsu_parse_hex_int(const char *s, int *out)
+{
+	u64 v;
+
+	if (rsu_parse_num(s, 16, &v) || v > INT_MAX)
+		return -EINVAL;
+	*out = (int)v;
+	return 0;
+}
+
+/* Parse a hex size argument into unsigned int, rejecting values > UINT_MAX. */
+static int rsu_parse_hex_uint(const char *s, unsigned int *out)
+{
+	u64 v;
+
+	if (rsu_parse_num(s, 16, &v) || v > UINT_MAX)
+		return -EINVAL;
+	*out = (unsigned int)v;
+	return 0;
+}
+
+/* Parse a hex u32, rejecting values > U32_MAX. */
+static int rsu_parse_hex_u32(const char *s, u32 *out)
+{
+	u64 v;
+
+	if (rsu_parse_num(s, 16, &v) || v > U32_MAX)
+		return -EINVAL;
+	*out = (u32)v;
+	return 0;
+}
 
 static int slot_count(int argc, char * const argv[])
 {
@@ -35,11 +140,13 @@ static int slot_count(int argc, char * const argv[])
 
 static int slot_by_name(int argc, char * const argv[])
 {
-	char *name = argv[1];
+	char *name;
 	int slot;
 
 	if (argc != 2)
 		return CMD_RET_USAGE;
+
+	name = argv[1];
 
 	if (rsu_init(NULL))
 		return CMD_RET_FAILURE;
@@ -57,17 +164,18 @@ static int slot_by_name(int argc, char * const argv[])
 static int slot_get_info(int argc, char * const argv[])
 {
 	int slot;
-	char *endp;
 	struct rsu_slot_info info;
 	int ret;
 
 	if (argc != 2)
 		return CMD_RET_USAGE;
 
+	if (rsu_parse_slot(argv[1], &slot))
+		return CMD_RET_USAGE;
+
 	if (rsu_init(NULL))
 		return CMD_RET_FAILURE;
 
-	slot = dectoul(argv[1], &endp);
 	ret = rsu_slot_get_info(slot, &info);
 	rsu_exit();
 
@@ -88,16 +196,17 @@ static int slot_get_info(int argc, char * const argv[])
 static int slot_size(int argc, char * const argv[])
 {
 	int slot;
-	char *endp;
 	int size;
 
 	if (argc != 2)
 		return CMD_RET_USAGE;
 
+	if (rsu_parse_slot(argv[1], &slot))
+		return CMD_RET_USAGE;
+
 	if (rsu_init(NULL))
 		return CMD_RET_FAILURE;
 
-	slot = dectoul(argv[1], &endp);
 	size = rsu_slot_size(slot);
 	rsu_exit();
 
@@ -111,16 +220,17 @@ static int slot_size(int argc, char * const argv[])
 static int slot_priority(int argc, char * const argv[])
 {
 	int slot;
-	char *endp;
 	int priority;
 
 	if (argc != 2)
 		return CMD_RET_USAGE;
 
+	if (rsu_parse_slot(argv[1], &slot))
+		return CMD_RET_USAGE;
+
 	if (rsu_init(NULL))
 		return CMD_RET_FAILURE;
 
-	slot = dectoul(argv[1], &endp);
 	priority = rsu_slot_priority(slot);
 	rsu_exit();
 
@@ -134,16 +244,17 @@ static int slot_priority(int argc, char * const argv[])
 static int slot_erase(int argc, char * const argv[])
 {
 	int slot;
-	char *endp;
 	int ret;
 
 	if (argc != 2)
 		return CMD_RET_USAGE;
 
+	if (rsu_parse_slot(argv[1], &slot))
+		return CMD_RET_USAGE;
+
 	if (rsu_init(NULL))
 		return CMD_RET_FAILURE;
 
-	slot = dectoul(argv[1], &endp);
 	ret = rsu_slot_erase(slot);
 	rsu_exit();
 
@@ -157,7 +268,6 @@ static int slot_erase(int argc, char * const argv[])
 static int slot_program_buf(int argc, char * const argv[])
 {
 	int slot;
-	char *endp;
 	u64 address;
 	int size;
 	int ret;
@@ -167,14 +277,22 @@ static int slot_program_buf(int argc, char * const argv[])
 	if (argc != 4)
 		return CMD_RET_USAGE;
 
+	if (rsu_parse_slot(argv[1], &slot) ||
+	    rsu_parse_num(argv[2], 16, &address) ||
+	    rsu_parse_hex_int(argv[3], &size))
+		return CMD_RET_USAGE;
+
+	/*
+	 * Reject u64 addresses that don't round-trip through ulong so the
+	 * cast to (void *) below cannot silently truncate.
+	 */
+	if (address > (u64)ULONG_MAX)
+		return CMD_RET_USAGE;
+
 	if (rsu_init(NULL))
 		return CMD_RET_FAILURE;
 
-	slot = dectoul(argv[1], &endp);
-	address = simple_strtoull(argv[2], &endp, 16);
-	size = simple_strtoul(argv[3], &endp, 16);
-
-	ret = rsu_slot_program_buf(slot, (void *)address, size);
+	ret = rsu_slot_program_buf(slot, (void *)(ulong)address, size);
 	rsu_exit();
 
 	if (ret)
@@ -191,7 +309,6 @@ static int slot_program_buf(int argc, char * const argv[])
 static int slot_program_factory_update_buf(int argc, char * const argv[])
 {
 	int slot;
-	char *endp;
 	u64 address;
 	int size;
 	int ret;
@@ -201,14 +318,23 @@ static int slot_program_factory_update_buf(int argc, char * const argv[])
 	if (argc != 4)
 		return CMD_RET_USAGE;
 
+	if (rsu_parse_slot(argv[1], &slot) ||
+	    rsu_parse_num(argv[2], 16, &address) ||
+	    rsu_parse_hex_int(argv[3], &size))
+		return CMD_RET_USAGE;
+
+	/*
+	 * Reject u64 addresses that don't round-trip through ulong so the
+	 * cast to (void *) below cannot silently truncate.
+	 */
+	if (address > (u64)ULONG_MAX)
+		return CMD_RET_USAGE;
+
 	if (rsu_init(NULL))
 		return CMD_RET_FAILURE;
 
-	slot = dectoul(argv[1], &endp);
-	address = simple_strtoull(argv[2], &endp, 16);
-	size = simple_strtoul(argv[3], &endp, 16);
-
-	ret = rsu_slot_program_factory_update_buf(slot, (void *)address, size);
+	ret = rsu_slot_program_factory_update_buf(slot, (void *)(ulong)address,
+						  size);
 	rsu_exit();
 
 	if (ret)
@@ -225,7 +351,6 @@ static int slot_program_factory_update_buf(int argc, char * const argv[])
 static int slot_program_buf_raw(int argc, char * const argv[])
 {
 	int slot;
-	char *endp;
 	u64 address;
 	int size;
 	int ret;
@@ -235,14 +360,22 @@ static int slot_program_buf_raw(int argc, char * const argv[])
 	if (argc != 4)
 		return CMD_RET_USAGE;
 
+	if (rsu_parse_slot(argv[1], &slot) ||
+	    rsu_parse_num(argv[2], 16, &address) ||
+	    rsu_parse_hex_int(argv[3], &size))
+		return CMD_RET_USAGE;
+
+	/*
+	 * Reject u64 addresses that don't round-trip through ulong so the
+	 * cast to (void *) below cannot silently truncate.
+	 */
+	if (address > (u64)ULONG_MAX)
+		return CMD_RET_USAGE;
+
 	if (rsu_init(NULL))
 		return CMD_RET_FAILURE;
 
-	slot = dectoul(argv[1], &endp);
-	address = simple_strtoull(argv[2], &endp, 16);
-	size = simple_strtoul(argv[3], &endp, 16);
-
-	ret = rsu_slot_program_buf_raw(slot, (void *)address, size);
+	ret = rsu_slot_program_buf_raw(slot, (void *)(ulong)address, size);
 	rsu_exit();
 
 	if (ret)
@@ -259,7 +392,6 @@ static int slot_program_buf_raw(int argc, char * const argv[])
 static int slot_verify_buf(int argc, char * const argv[])
 {
 	int slot;
-	char *endp;
 	u64 address;
 	int size;
 	int ret;
@@ -269,14 +401,22 @@ static int slot_verify_buf(int argc, char * const argv[])
 	if (argc != 4)
 		return CMD_RET_USAGE;
 
+	if (rsu_parse_slot(argv[1], &slot) ||
+	    rsu_parse_num(argv[2], 16, &address) ||
+	    rsu_parse_hex_int(argv[3], &size))
+		return CMD_RET_USAGE;
+
+	/*
+	 * Reject u64 addresses that don't round-trip through ulong so the
+	 * cast to (void *) below cannot silently truncate.
+	 */
+	if (address > (u64)ULONG_MAX)
+		return CMD_RET_USAGE;
+
 	if (rsu_init(NULL))
 		return CMD_RET_FAILURE;
 
-	slot = dectoul(argv[1], &endp);
-	address = simple_strtoull(argv[2], &endp, 16);
-	size = simple_strtoul(argv[3], &endp, 16);
-
-	ret = rsu_slot_verify_buf(slot, (void *)address, size);
+	ret = rsu_slot_verify_buf(slot, (void *)(ulong)address, size);
 	rsu_exit();
 
 	if (ret)
@@ -293,7 +433,6 @@ static int slot_verify_buf(int argc, char * const argv[])
 static int slot_verify_buf_raw(int argc, char * const argv[])
 {
 	int slot;
-	char *endp;
 	u64 address;
 	int size;
 	int ret;
@@ -303,14 +442,22 @@ static int slot_verify_buf_raw(int argc, char * const argv[])
 	if (argc != 4)
 		return CMD_RET_USAGE;
 
+	if (rsu_parse_slot(argv[1], &slot) ||
+	    rsu_parse_num(argv[2], 16, &address) ||
+	    rsu_parse_hex_int(argv[3], &size))
+		return CMD_RET_USAGE;
+
+	/*
+	 * Reject u64 addresses that don't round-trip through ulong so the
+	 * cast to (void *) below cannot silently truncate.
+	 */
+	if (address > (u64)ULONG_MAX)
+		return CMD_RET_USAGE;
+
 	if (rsu_init(NULL))
 		return CMD_RET_FAILURE;
 
-	slot = dectoul(argv[1], &endp);
-	address = simple_strtoull(argv[2], &endp, 16);
-	size = simple_strtoul(argv[3], &endp, 16);
-
-	ret = rsu_slot_verify_buf_raw(slot, (void *)address, size);
+	ret = rsu_slot_verify_buf_raw(slot, (void *)(ulong)address, size);
 	rsu_exit();
 
 	if (ret)
@@ -327,16 +474,17 @@ static int slot_verify_buf_raw(int argc, char * const argv[])
 static int slot_enable(int argc, char * const argv[])
 {
 	int slot;
-	char *endp;
 	int ret;
 
 	if (argc != 2)
 		return CMD_RET_USAGE;
 
+	if (rsu_parse_slot(argv[1], &slot))
+		return CMD_RET_USAGE;
+
 	if (rsu_init(NULL))
 		return CMD_RET_FAILURE;
 
-	slot = dectoul(argv[1], &endp);
 	ret = rsu_slot_enable(slot);
 	rsu_exit();
 
@@ -350,16 +498,17 @@ static int slot_enable(int argc, char * const argv[])
 static int slot_disable(int argc, char * const argv[])
 {
 	int slot;
-	char *endp;
 	int ret;
 
 	if (argc != 2)
 		return CMD_RET_USAGE;
 
+	if (rsu_parse_slot(argv[1], &slot))
+		return CMD_RET_USAGE;
+
 	if (rsu_init(NULL))
 		return CMD_RET_FAILURE;
 
-	slot = dectoul(argv[1], &endp);
 	ret = rsu_slot_disable(slot);
 	rsu_exit();
 
@@ -373,16 +522,17 @@ static int slot_disable(int argc, char * const argv[])
 static int slot_load(int argc, char * const argv[])
 {
 	int slot;
-	char *endp;
 	int ret;
 
 	if (argc != 2)
 		return CMD_RET_USAGE;
 
+	if (rsu_parse_slot(argv[1], &slot))
+		return CMD_RET_USAGE;
+
 	if (rsu_init(NULL))
 		return CMD_RET_FAILURE;
 
-	slot = dectoul(argv[1], &endp);
 	ret = rsu_slot_load(slot);
 	rsu_exit();
 
@@ -416,18 +566,18 @@ static int slot_load_factory(int argc, char * const argv[])
 static int slot_rename(int argc, char * const argv[])
 {
 	int slot;
-	char *endp;
 	char *name;
 	int ret;
 
 	if (argc != 3)
 		return CMD_RET_USAGE;
 
+	if (rsu_parse_slot(argv[1], &slot))
+		return CMD_RET_USAGE;
+	name = argv[2];
+
 	if (rsu_init(NULL))
 		return CMD_RET_FAILURE;
-
-	slot = dectoul(argv[1], &endp);
-	name = argv[2];
 
 	ret = rsu_slot_rename(slot, name);
 	rsu_exit();
@@ -442,16 +592,16 @@ static int slot_rename(int argc, char * const argv[])
 static int slot_delete(int argc, char * const argv[])
 {
 	int slot;
-	char *endp;
 	int ret;
 
 	if (argc != 2)
 		return CMD_RET_USAGE;
 
+	if (rsu_parse_slot(argv[1], &slot))
+		return CMD_RET_USAGE;
+
 	if (rsu_init(NULL))
 		return CMD_RET_FAILURE;
-
-	slot = dectoul(argv[1], &endp);
 
 	ret = rsu_slot_delete(slot);
 	rsu_exit();
@@ -465,21 +615,21 @@ static int slot_delete(int argc, char * const argv[])
 
 static int slot_create(int argc, char * const argv[])
 {
-	char *endp;
 	char *name;
-	int address;
-	int size;
+	u64 address;
+	unsigned int size;
 	int ret;
 
 	if (argc != 4)
 		return CMD_RET_USAGE;
 
+	name = argv[1];
+	if (rsu_parse_num(argv[2], 16, &address) ||
+	    rsu_parse_hex_uint(argv[3], &size))
+		return CMD_RET_USAGE;
+
 	if (rsu_init(NULL))
 		return CMD_RET_FAILURE;
-
-	name = argv[1];
-	address = simple_strtoul(argv[2], &endp, 16);
-	size = simple_strtoul(argv[3], &endp, 16);
 
 	ret = rsu_slot_create(name, address, size);
 	rsu_exit();
@@ -487,7 +637,7 @@ static int slot_create(int argc, char * const argv[])
 	if (ret < 0)
 		return CMD_RET_FAILURE;
 
-	printf("Slot %s created at 0x%08x with size =  0x%08x bytes.\n", name,
+	printf("Slot %s created at 0x%016llx with size = 0x%08x bytes.\n", name,
 	       address, size);
 	return CMD_RET_SUCCESS;
 }
@@ -509,8 +659,8 @@ static int status_log(int argc, char * const argv[])
 	if (ret < 0)
 		return CMD_RET_FAILURE;
 
-	printf("Current Image\t: 0x%08llx\n", info.current_image);
-	printf("Last Fail Image\t: 0x%08llx\n", info.fail_image);
+	printf("Current Image\t: 0x%016llx\n", info.current_image);
+	printf("Last Fail Image\t: 0x%016llx\n", info.fail_image);
 	printf("State\t\t: 0x%08x\n", info.state);
 	printf("Version\t\t: 0x%08x\n", info.version);
 	printf("Error location\t: 0x%08x\n", info.error_location);
@@ -524,16 +674,17 @@ static int status_log(int argc, char * const argv[])
 static int notify(int argc, char * const argv[])
 {
 	u32 stage;
-	char *endp;
 	int ret;
 
 	if (argc != 2)
 		return CMD_RET_USAGE;
 
+	if (rsu_parse_hex_u32(argv[1], &stage))
+		return CMD_RET_USAGE;
+
 	if (rsu_init(NULL))
 		return CMD_RET_FAILURE;
 
-	stage = simple_strtoul(argv[1], &endp, 16);
 	ret = rsu_notify(stage);
 	rsu_exit();
 
@@ -675,15 +826,16 @@ static int restore_cpb(int argc, char * const argv[])
 {
 	int ret;
 	u64 addr;
-	char *endp;
 
 	if (argc != 2)
+		return CMD_RET_USAGE;
+
+	if (rsu_parse_num(argv[1], 16, &addr))
 		return CMD_RET_USAGE;
 
 	if (rsu_init(NULL))
 		return CMD_RET_FAILURE;
 
-	addr = simple_strtoull(argv[1], &endp, 16);
 	ret = rsu_restore_cpb(addr);
 	rsu_exit();
 
@@ -697,15 +849,16 @@ static int save_cpb(int argc, char * const argv[])
 {
 	int ret;
 	u64 addr;
-	char *endp;
 
 	if (argc != 2)
+		return CMD_RET_USAGE;
+
+	if (rsu_parse_num(argv[1], 16, &addr))
 		return CMD_RET_USAGE;
 
 	if (rsu_init(NULL))
 		return CMD_RET_FAILURE;
 
-	addr = simple_strtoull(argv[1], &endp, 16);
 	ret = rsu_save_cpb(addr);
 	rsu_exit();
 
@@ -719,15 +872,16 @@ static int restore_spt(int argc, char * const argv[])
 {
 	int ret;
 	u64 addr;
-	char *endp;
 
 	if (argc != 2)
+		return CMD_RET_USAGE;
+
+	if (rsu_parse_num(argv[1], 16, &addr))
 		return CMD_RET_USAGE;
 
 	if (rsu_init(NULL))
 		return CMD_RET_FAILURE;
 
-	addr = simple_strtoull(argv[1], &endp, 16);
 	ret = rsu_restore_spt(addr);
 	rsu_exit();
 
@@ -741,15 +895,16 @@ static int save_spt(int argc, char * const argv[])
 {
 	int ret;
 	u64 addr;
-	char *endp;
 
 	if (argc != 2)
+		return CMD_RET_USAGE;
+
+	if (rsu_parse_num(argv[1], 16, &addr))
 		return CMD_RET_USAGE;
 
 	if (rsu_init(NULL))
 		return CMD_RET_FAILURE;
 
-	addr = simple_strtoull(argv[1], &endp, 16);
 	ret = rsu_save_spt(addr);
 	rsu_exit();
 
@@ -856,7 +1011,7 @@ int do_rsu(struct cmd_tbl *cmdtp, int flag, int argc, char * const argv[])
 
 U_BOOT_CMD(rsu, 5, 1, do_rsu,
 	   "Intel SoC FPGA Remote System Update",
-	   "dtb   - Update Linux DTB qspi-boot parition offset with spt0 value\n"
+	   "dtb   - Update Linux DTB qspi-boot partition offset with spt0 value\n"
 	   "list  - List down the available bitstreams in flash\n"
 	   "slot_by_name <name> - find slot by name and display the slot number\n"
 	   "slot_count - display the slot count\n"
@@ -889,6 +1044,5 @@ U_BOOT_CMD(rsu, 5, 1, do_rsu,
 	   "create_empty_cpb - create an empty CPB\n"
 	   "restore_cpb <address> - restore CPB from an address\n"
 	   "save_cpb <address> - save CPB to an address\n"
-	   "check_running_factory - check if currently running the factory image\n"
-	   ""
+	   "check_running_factory - check if currently running the factory image"
 );
