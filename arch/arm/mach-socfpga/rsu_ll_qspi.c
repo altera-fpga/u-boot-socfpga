@@ -5,6 +5,7 @@
  */
 
 #include <env.h>
+#include <limits.h>
 #include <malloc.h>
 #include <spi.h>
 #include <spi_flash.h>
@@ -160,6 +161,7 @@ static struct rsu_qspi_priv *qspi_ctx;
 #define P (qspi_ctx)
 
 static int load_cpb(void);
+static int check_spt(void);
 
 /**
  * get_part_offset() - get a selected partition offset
@@ -200,9 +202,13 @@ static int get_current_flash_offset(u64 offset, int *current_offset, int *curren
 	if (!current_offset || !current_flash)
 		return -EINVAL;
 
-	for (int j = 0; j < P->num_flash; j++) {
-		if (relative_offset > rsu_mtd_size(P->flashlist[j])) {
-			relative_offset -= rsu_mtd_size(P->flashlist[j]);
+	for (int j = 0; j < P->num_flash && j < QSPI_MAX_DEVICE; j++) {
+		u32 sz = rsu_mtd_size(P->flashlist[j]);
+
+		if (!sz)
+			return -EINVAL;
+		if (relative_offset >= sz) {
+			relative_offset -= sz;
 			continue;
 		} else {
 			*current_flash = j;
@@ -232,7 +238,8 @@ static int read_dev(u64 offset, void *buf, int len)
 	if (ret)
 		return ret;
 
-	for (int i = current_flash; i < P->num_flash; i++) {
+	for (int i = current_flash; i < P->num_flash && i < QSPI_MAX_DEVICE;
+	     i++) {
 		/* break if total data length is done */
 		if (count == len)
 			break;
@@ -249,6 +256,8 @@ static int read_dev(u64 offset, void *buf, int len)
 			rsu_log(RSU_ERR, "read flash error=%i\n", ret);
 			return ret;
 		}
+
+		buf = (char *)buf + current_len;
 
 		/* reset the offset to new flash */
 		current_offset = 0;
@@ -276,7 +285,8 @@ static int write_dev(u64 offset, void *buf, int len)
 	if (ret)
 		return ret;
 
-	for (int i = current_flash; i < P->num_flash; i++) {
+	for (int i = current_flash; i < P->num_flash && i < QSPI_MAX_DEVICE;
+	     i++) {
 		/* break if total data length is done */
 		if (count == len)
 			break;
@@ -293,6 +303,8 @@ static int write_dev(u64 offset, void *buf, int len)
 			rsu_log(RSU_ERR, "write flash error=%i\n", ret);
 			return ret;
 		}
+
+		buf = (char *)buf + current_len;
 
 		/* reset the offset to new flash */
 		current_offset = 0;
@@ -319,7 +331,8 @@ static int erase_dev(u64 offset, int len)
 	if (ret)
 		return ret;
 
-	for (int i = current_flash; i < P->num_flash; i++) {
+	for (int i = current_flash; i < P->num_flash && i < QSPI_MAX_DEVICE;
+	     i++) {
 		/* break if total data length is done */
 		if (count == len)
 			break;
@@ -361,8 +374,11 @@ static int read_part(int part_num, u64 offset, void *buf, int len)
 	if (get_part_offset(part_num, &part_offset))
 		return -1;
 
-	if (offset < 0 || len < 0 ||
-	    (offset + len) > P->spt.partition[part_num].length)
+	if (len < 0)
+		return -1;
+
+	if (offset > P->spt.partition[part_num].length ||
+	    (u64)len > P->spt.partition[part_num].length - offset)
 		return -1;
 
 	return read_dev(part_offset + offset, buf, len);
@@ -384,8 +400,11 @@ static int write_part(int part_num, u64 offset, void *buf, int len)
 	if (get_part_offset(part_num, &part_offset))
 		return -1;
 
-	if (offset < 0 || len < 0 ||
-	    (offset + len) > P->spt.partition[part_num].length)
+	if (len < 0)
+		return -1;
+
+	if (offset > P->spt.partition[part_num].length ||
+	    (u64)len > P->spt.partition[part_num].length - offset)
 		return -1;
 
 	return write_dev(part_offset + offset, buf, len);
@@ -586,6 +605,19 @@ static int restore_spt_from_address(u64 address)
 	}
 
 	memcpy(&P->spt, spt_data, SPT_SIZE);
+
+	/*
+	 * CRC+magic only prove self-consistency of the supplied image; a
+	 * crafted SPT could still carry an out-of-range partition count or
+	 * overlapping regions. Re-run the full validator before committing.
+	 */
+	ret = check_spt();
+	if (ret) {
+		rsu_log(RSU_ERR, "restored SPT failed validation\n");
+		P->spt_corrupted = true;
+		return ret;
+	}
+
 	ret = writeback_spt();
 	if (ret) {
 		rsu_log(RSU_ERR, "failed to write back spt\n");
@@ -660,18 +692,36 @@ static int check_spt(void)
 	}
 
 	for (x = 0; x < P->spt.partitions; x++) {
+		u64 s_start;
+		u64 s_len;
+		u64 s_end;
+
 		if (strnlen(P->spt.partition[x].name, max_len) >= max_len)
 			P->spt.partition[x].name[max_len - 1] = '\0';
 
-		rsu_log(RSU_DEBUG, "RSU %-16s %016llX - %016llX (%X)\n",
-			P->spt.partition[x].name, P->spt.partition[x].offset,
-			(P->spt.partition[x].offset +
-			P->spt.partition[x].length - 1),
-			P->spt.partition[x].flags);
+		s_start = P->spt.partition[x].offset;
+		s_len = P->spt.partition[x].length;
 
-		/* check if the partition is overlap */
-		u64 s_start = P->spt.partition[x].offset;
-		u64 s_end = P->spt.partition[x].offset + P->spt.partition[x].length;
+		/* Zero length would underflow the inclusive end below. */
+		if (s_len == 0) {
+			rsu_log(RSU_ERR,
+				"SPT entry %d (%s): zero-length partition\n",
+				x, P->spt.partition[x].name);
+			return -EINVAL;
+		}
+
+		/* Reject offset+length wraparound; otherwise overlap test passes spuriously. */
+		if (s_len > U64_MAX - s_start) {
+			rsu_log(RSU_ERR,
+				"SPT entry %d: offset+length overflows u64\n",
+				x);
+			return -EINVAL;
+		}
+		s_end = s_start + s_len;
+
+		rsu_log(RSU_DEBUG, "RSU %-16s %016llX - %016llX (%X)\n",
+			P->spt.partition[x].name, s_start, s_end - 1,
+			P->spt.partition[x].flags);
 
 		for (y = 0; y < P->spt.partitions; y++) {
 			if (x == y)
@@ -689,8 +739,16 @@ static int check_spt(void)
 			}
 
 			u64 d_start = P->spt.partition[y].offset;
-			u64 d_end = P->spt.partition[y].offset +
-				    P->spt.partition[y].length;
+			u64 d_len = P->spt.partition[y].length;
+			u64 d_end;
+
+			if (d_len > U64_MAX - d_start) {
+				rsu_log(RSU_ERR,
+					"SPT entry %d: offset+length overflows u64\n",
+					y);
+				return -EINVAL;
+			}
+			d_end = d_start + d_len;
 
 			if (s_start < d_end && s_end > d_start) {
 				rsu_log(RSU_ERR, "partition overlap\n");
@@ -864,6 +922,42 @@ static int load_spt(void)
 }
 
 /**
+ * cpb_header_access_ok() - validate CPB header fields used to index
+ * cpb_slots[].
+ *
+ * Return: 0 if the header is safe to use, -EINVAL otherwise.
+ */
+static int cpb_header_access_ok(void)
+{
+	u32 ip_off = P->cpb.header.image_ptr_offset;
+	u32 ip_slots = P->cpb.header.image_ptr_slots;
+	u32 max_by_buf;
+
+	if (P->cpb.header.header_size > CPB_HEADER_SIZE) {
+		rsu_log(RSU_WARNING,
+			"CPB header is larger than expected\n");
+		return -EINVAL;
+	}
+	if (ip_off >= CPB_SIZE) {
+		rsu_log(RSU_ERR, "CPB image_ptr_offset out of range\n");
+		return -EINVAL;
+	}
+	/* cpb_slots[] is dereferenced as u64; reject misaligned image_ptr_offset. */
+	if (ip_off % sizeof(u64)) {
+		rsu_log(RSU_ERR, "CPB image_ptr_offset not 8-byte aligned\n");
+		return -EINVAL;
+	}
+	max_by_buf = (CPB_SIZE - ip_off) / sizeof(u64);
+	/* Reject ip_slots == 0 too: zero-iteration loops would silently succeed. */
+	if (!ip_slots || !max_by_buf || ip_slots > max_by_buf ||
+	    ip_slots > CPB_IMAGE_PTR_NSLOTS) {
+		rsu_log(RSU_ERR, "CPB image_ptr_slots out of range\n");
+		return -EINVAL;
+	}
+	return 0;
+}
+
+/**
  * check_cpb() - check if CPB is valid
  *
  * Return: 0 for the valid CPB, or -ve on error
@@ -871,12 +965,11 @@ static int load_spt(void)
 static int check_cpb(void)
 {
 	int x, y;
+	int ret;
 
-	if (P->cpb.header.header_size > CPB_HEADER_SIZE) {
-		rsu_log(RSU_WARNING,
-			"CPB header is larger than expected\n");
-		return -1;
-	}
+	ret = cpb_header_access_ok();
+	if (ret)
+		return ret;
 
 	for (x = 0; x < P->cpb.header.image_ptr_slots; x++) {
 		if (P->cpb_slots[x] == ERASED_ENTRY ||
@@ -1053,7 +1146,8 @@ static int load_cpb(void)
 
 	rsu_log(RSU_DEBUG, "Reading CPB1\n");
 	if (read_part(P->cpb1_part, 0, &P->cpb, sizeof(P->cpb)) == 0 &&
-	    P->cpb.header.magic_number == CPB_MAGIC_NUMBER) {
+	    P->cpb.header.magic_number == CPB_MAGIC_NUMBER &&
+	    cpb_header_access_ok() == 0) {
 		P->cpb_slots = (u64 *)
 			     &P->cpb.data[P->cpb.header.image_ptr_offset];
 		if (check_cpb() == 0)
@@ -1065,7 +1159,8 @@ static int load_cpb(void)
 	if (!cpb0_corrupted) {
 		rsu_log(RSU_DEBUG, "Reading CPB0\n");
 		if (read_part(P->cpb0_part, 0, &P->cpb, sizeof(P->cpb)) == 0 &&
-		    P->cpb.header.magic_number == CPB_MAGIC_NUMBER) {
+		    P->cpb.header.magic_number == CPB_MAGIC_NUMBER &&
+		    cpb_header_access_ok() == 0) {
 			P->cpb_slots = (u64 *)
 				     &P->cpb.data[P->cpb.header.image_ptr_offset];
 			if (check_cpb() == 0)
@@ -1147,16 +1242,22 @@ static int load_cpb(void)
 }
 
 /**
- * update_cpb() - update CPB at flash
+ * update_cpb() - update a CPB slot in flash (best-effort).
+ * @slot: index into P->cpb_slots
+ * @ptr:  new pointer value (NAND-style 1->0 transitions only)
  *
- * Return: 0 on success, or -1 for error
+ * Writes CPB0 then CPB1; on a mid-write failure (one updated, the other
+ * stale) returns -1 with no rollback. Callers MUST then call load_cpb(),
+ * which reconciles the two flash copies; do not roll back P->cpb locally.
+ *
+ * Return: 0 on success, or -1 on error (caller MUST load_cpb()).
  */
 static int update_cpb(int slot, u64 ptr)
 {
 	int x;
 	int updates = 0;
 
-	if (slot < 0 || slot > P->cpb.header.image_ptr_slots)
+	if (slot < 0 || slot >= P->cpb.header.image_ptr_slots)
 		return -1;
 
 	if ((P->cpb_slots[slot] & ptr) != ptr)
@@ -1329,13 +1430,34 @@ static int restore_cpb_from_address(u64 address)
 	}
 
 	memcpy(&P->cpb, cpb_data, CPB_SIZE);
+
+	/*
+	 * CRC+magic only prove self-consistency; a crafted header with an
+	 * out-of-range or misaligned image_ptr_offset would otherwise flow
+	 * into cpb_slots[] accesses. Validate before writing back to flash.
+	 */
+	ret = cpb_header_access_ok();
+	if (ret) {
+		rsu_log(RSU_ERR, "restored CPB has invalid header\n");
+		P->cpb_slots = NULL;
+		P->cpb_corrupted = true;
+		return ret;
+	}
+
+	P->cpb_slots = (u64 *)&P->cpb.data[P->cpb.header.image_ptr_offset];
+	ret = check_cpb();
+	if (ret) {
+		rsu_log(RSU_ERR, "restored CPB failed validation\n");
+		P->cpb_slots = NULL;
+		P->cpb_corrupted = true;
+		return ret;
+	}
+
 	ret = writeback_cpb();
 	if (ret) {
 		rsu_log(RSU_ERR, "failed to write back cpb\n");
 		return ret;
 	}
-
-	P->cpb_slots = (u64 *)&P->cpb.data[P->cpb.header.image_ptr_offset];
 
 	P->cpb_corrupted = false;
 	P->cpb_fixed = true;
@@ -1383,7 +1505,7 @@ static u64 partition_offset(int part_num)
 /**
  * factory_offset() - get the offset of the factory image
  *
- * Return: offset on success, or -1 on error
+ * Return: offset on success, or -ENOENT if factory image not found
  */
 static s64 factory_offset(void)
 {
@@ -1394,7 +1516,7 @@ static s64 factory_offset(void)
 			    sizeof(P->spt.partition[0].name) - 1) == 0)
 			return P->spt.partition[x].offset;
 
-	return -1;
+	return -ENOENT;
 }
 
 /**
@@ -1498,7 +1620,7 @@ static int partition_delete(int part_num)
 		return -1;
 	}
 
-	for (x = part_num; x < P->spt.partitions; x++)
+	for (x = part_num; x < P->spt.partitions - 1; x++)
 		P->spt.partition[x] = P->spt.partition[x + 1];
 
 	P->spt.partitions--;
@@ -1523,7 +1645,14 @@ static int partition_delete(int part_num)
 static int partition_create(char *name, u64 start, unsigned int size)
 {
 	int x;
-	u64 end = start + size;
+	u64 end;
+
+	/* Reject overflow before computing end; a wrapped end defeats overlap checks. */
+	if ((u64)size > U64_MAX - start) {
+		rsu_log(RSU_ERR, "Partition end overflows u64\n");
+		return -EINVAL;
+	}
+	end = start + size;
 
 	if (size % MIN_QSPI_ERASE_SIZE) {
 		rsu_log(RSU_ERR, "Invalid partition size\n");
@@ -1557,8 +1686,13 @@ static int partition_create(char *name, u64 start, unsigned int size)
 
 	for (x = 0; x < P->spt.partitions; x++) {
 		u64 pstart = P->spt.partition[x].offset;
-		u64 pend = P->spt.partition[x].offset +
-			     P->spt.partition[x].length;
+		u64 plen = P->spt.partition[x].length;
+		u64 pend;
+
+		/* Skip a corrupt entry rather than wrap; check_spt() validates on load. */
+		if (plen > U64_MAX - pstart)
+			continue;
+		pend = pstart + plen;
 
 		if (start < pend && end > pstart) {
 			rsu_log(RSU_ERR, "Partition overlap\n");
@@ -1584,6 +1718,14 @@ static int partition_create(char *name, u64 start, unsigned int size)
 	return 0;
 }
 
+/* Reject corrupt CPB header before indexing cpb_slots[]. */
+static int cpb_ptr_slots_access_ok(void)
+{
+	if (!P->cpb_slots)
+		return -1;
+	return cpb_header_access_ok() ? -1 : 0;
+}
+
 /**
  * priority_get() - get the selected partition's priority
  * @part_num: the selected partition number
@@ -1596,6 +1738,8 @@ static int priority_get(int part_num)
 	int priority = 0;
 
 	if (part_num < 0 || part_num >= P->spt.partitions)
+		return -1;
+	if (cpb_ptr_slots_access_ok())
 		return -1;
 
 	for (x = P->cpb.header.image_ptr_slots; x > 0; x--) {
@@ -1624,11 +1768,19 @@ static int priority_add(int part_num)
 
 	if (part_num < 0 || part_num >= P->spt.partitions)
 		return -1;
+	if (cpb_ptr_slots_access_ok())
+		return -1;
 
 	for (x = 0; x < P->cpb.header.image_ptr_slots; x++) {
 		if (P->cpb_slots[x] == ERASED_ENTRY) {
 			if (update_cpb(x,
 				       P->spt.partition[part_num].offset)) {
+				/*
+				 * update_cpb() may have written one CPB but
+				 * not the other; force a reload so load_cpb()
+				 * resyncs the two flash copies before we
+				 * return failure.
+				 */
 				load_cpb();
 				return -1;
 			}
@@ -1671,10 +1823,13 @@ static int priority_remove(int part_num)
 
 	if (part_num < 0 || part_num >= P->spt.partitions)
 		return -1;
+	if (cpb_ptr_slots_access_ok())
+		return -1;
 
 	for (x = 0; x < P->cpb.header.image_ptr_slots; x++) {
 		if (P->cpb_slots[x] == P->spt.partition[part_num].offset)
 			if (update_cpb(x, SPENT_ENTRY)) {
+				/* See priority_add(): same recovery contract. */
 				load_cpb();
 				return -1;
 			}
@@ -2014,10 +2169,9 @@ static void ll_exit(void)
 #if CONFIG_IS_ENABLED(SOCFPGA_RSU_MULTIFLASH)
 int get_num_flash(u32 *flash_enabled)
 {
-	int flash_count;
+	int flash_count = 0;
 	struct flash_info mbox_flash_info[QSPI_MAX_DEVICE];
 
-	flash_count = 0;
 	/* retrieve qspi info from mailbox */
 	if (mbox_qspi_get_device_info((u32 *)mbox_flash_info, 8)) {
 		rsu_log(RSU_ERR,
@@ -2102,7 +2256,7 @@ int rsu_ll_qspi_init(struct rsu_ll_intf **intf)
 		rsu_log(RSU_ERR,
 			"RSU: Failed to allocate memory for flash list. Exiting.\n");
 		ll_exit();
-		return -ECOMM;
+		return -ENOMEM;
 	}
 
 #if CONFIG_IS_ENABLED(SOCFPGA_RSU_MULTIFLASH)
