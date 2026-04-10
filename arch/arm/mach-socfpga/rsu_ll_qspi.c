@@ -195,7 +195,8 @@ static int get_part_offset(int part_num, u64 *offset)
  * @param current_flash Pointer to store the index of the current flash.
  */
 
-static int get_current_flash_offset(u64 offset, int *current_offset, int *current_flash)
+static int get_current_flash_offset(u64 offset, u32 *current_offset,
+				    int *current_flash)
 {
 	u64 relative_offset = offset;
 
@@ -211,8 +212,9 @@ static int get_current_flash_offset(u64 offset, int *current_offset, int *curren
 			relative_offset -= sz;
 			continue;
 		} else {
+			/* relative_offset < sz here; u32 keeps the assignment loss-free. */
 			*current_flash = j;
-			*current_offset = relative_offset;
+			*current_offset = (u32)relative_offset;
 			return 0;
 		}
 	}
@@ -230,7 +232,18 @@ static int get_current_flash_offset(u64 offset, int *current_offset, int *curren
  */
 static int read_dev(u64 offset, void *buf, int len)
 {
-	int ret, count, current_flash, current_len, current_offset;
+	int ret, current_flash;
+	u32 count, current_len, current_offset;
+
+	if (len < 0)
+		return -EINVAL;
+	/*
+	 * Preserve the long-standing no-op convention: callers (notably
+	 * read_part) may pass len == 0 at offset == flash/partition end,
+	 * which the per-flash boundary check would otherwise reject.
+	 */
+	if (len == 0)
+		return 0;
 
 	count = 0;
 
@@ -240,18 +253,32 @@ static int read_dev(u64 offset, void *buf, int len)
 
 	for (int i = current_flash; i < P->num_flash && i < QSPI_MAX_DEVICE;
 	     i++) {
+		u32 sz = rsu_mtd_size(P->flashlist[i]);
+
 		/* break if total data length is done */
-		if (count == len)
+		if (count == (u32)len)
 			break;
 
-		/* check how many bytes to write to current_flash */
-		if (len + current_offset - count > rsu_mtd_size(P->flashlist[i]))
-			current_len = rsu_mtd_size(P->flashlist[i]) - current_offset;
-		else
-			current_len = len - count;
+		/*
+		 * Re-validate per iteration: only the first flash was checked
+		 * by get_current_flash_offset(), and a later device may report
+		 * sz == 0.
+		 */
+		if (!sz || current_offset > sz) {
+			rsu_log(RSU_ERR,
+				"%s: flash %d invalid size %u or offset %u\n",
+				__func__, i, sz, current_offset);
+			return -EINVAL;
+		}
 
-		ret = rsu_mtd_read(P->flashlist[i], (u32)current_offset,
-				   current_len, buf);
+		/* Compute in u64 so (len + current_offset) cannot wrap past 4 GiB. */
+		if ((u64)(u32)len + current_offset - count > sz)
+			current_len = sz - current_offset;
+		else
+			current_len = (u32)len - count;
+
+		ret = rsu_mtd_read(P->flashlist[i], current_offset,
+				   (int)current_len, buf);
 		if (ret) {
 			rsu_log(RSU_ERR, "read flash error=%i\n", ret);
 			return ret;
@@ -277,7 +304,14 @@ static int read_dev(u64 offset, void *buf, int len)
  */
 static int write_dev(u64 offset, void *buf, int len)
 {
-	int ret, count, current_flash, current_len, current_offset;
+	int ret, current_flash;
+	u32 count, current_len, current_offset;
+
+	if (len < 0)
+		return -EINVAL;
+	/* See read_dev() for why len == 0 is treated as a no-op. */
+	if (len == 0)
+		return 0;
 
 	count = 0;
 
@@ -287,18 +321,27 @@ static int write_dev(u64 offset, void *buf, int len)
 
 	for (int i = current_flash; i < P->num_flash && i < QSPI_MAX_DEVICE;
 	     i++) {
+		u32 sz = rsu_mtd_size(P->flashlist[i]);
+
 		/* break if total data length is done */
-		if (count == len)
+		if (count == (u32)len)
 			break;
 
-		/* check how many bytes to write to current_flash */
-		if (len + current_offset - count > rsu_mtd_size(P->flashlist[i]))
-			current_len = rsu_mtd_size(P->flashlist[i]) - current_offset;
-		else
-			current_len = len - count;
+		/* See read_dev() for why these guards are required. */
+		if (!sz || current_offset > sz) {
+			rsu_log(RSU_ERR,
+				"%s: flash %d invalid size %u or offset %u\n",
+				__func__, i, sz, current_offset);
+			return -EINVAL;
+		}
 
-		ret = rsu_mtd_write(P->flashlist[i], (u32)current_offset,
-				    current_len, buf);
+		if ((u64)(u32)len + current_offset - count > sz)
+			current_len = sz - current_offset;
+		else
+			current_len = (u32)len - count;
+
+		ret = rsu_mtd_write(P->flashlist[i], current_offset,
+				    (int)current_len, buf);
 		if (ret) {
 			rsu_log(RSU_ERR, "write flash error=%i\n", ret);
 			return ret;
@@ -323,7 +366,14 @@ static int write_dev(u64 offset, void *buf, int len)
  */
 static int erase_dev(u64 offset, int len)
 {
-	int ret, count, current_flash, current_len, current_offset;
+	int ret, current_flash;
+	u32 count, current_len, current_offset;
+
+	if (len < 0)
+		return -EINVAL;
+	/* See read_dev() for why len == 0 is treated as a no-op. */
+	if (len == 0)
+		return 0;
 
 	count = 0;
 
@@ -333,24 +383,31 @@ static int erase_dev(u64 offset, int len)
 
 	for (int i = current_flash; i < P->num_flash && i < QSPI_MAX_DEVICE;
 	     i++) {
-		/* break if total data length is done */
-		if (count == len)
+		u32 sz = rsu_mtd_size(P->flashlist[i]);
+
+		if (count >= (u32)len)
 			break;
 
-		/* check how many bytes to write to current_flash */
-		if (len + current_offset - count > rsu_mtd_size(P->flashlist[i]))
-			current_len = rsu_mtd_size(P->flashlist[i]) - current_offset;
-		else
-			current_len = len - count;
+		/* See read_dev() for why these guards are required. */
+		if (!sz || current_offset > sz) {
+			rsu_log(RSU_ERR,
+				"%s: flash %d invalid size %u or offset %u\n",
+				__func__, i, sz, current_offset);
+			return -EINVAL;
+		}
 
-		ret = rsu_mtd_erase(P->flashlist[i], (u32)current_offset,
-				    current_len);
+		if ((u64)(u32)len + current_offset - count > sz)
+			current_len = sz - current_offset;
+		else
+			current_len = (u32)len - count;
+
+		ret = rsu_mtd_erase(P->flashlist[i], current_offset,
+				    (int)current_len);
 		if (ret) {
 			rsu_log(RSU_ERR, "erase flash error=%i\n", ret);
 			return ret;
 		}
 
-		/* reset the offset to new flash */
 		current_offset = 0;
 		count += current_len;
 	}
