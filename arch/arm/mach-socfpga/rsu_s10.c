@@ -15,6 +15,7 @@
 #include <asm/arch/rsu.h>
 #include <asm/arch/rsu_s10.h>
 #include <command.h>
+#include <rsu_console.h>
 #include <vsprintf.h>
 #include <spi.h>
 #include <spi_flash.h>
@@ -160,7 +161,7 @@ static int rsu_spt_cpb_list_inner(int argc, char * const argv[],
 	printf("RSU: Sub-partition table 0 offset 0x%08x\n", spt0_off);
 	printf("RSU: Sub-partition table 1 offset 0x%08x\n", spt1_off);
 
-	err = rsu_mtd_probe(CONFIG_SF_DEFAULT_BUS, CONFIG_SF_DEFAULT_CS, &flash);
+	err = rsu_mtd_probe(CONFIG_SF_DEFAULT_BUS, CONFIG_SOCFPGA_RSU_SF_CS, &flash);
 	if (err) {
 		puts("RSU: SPI probe failed.\n");
 		return -ENODEV;

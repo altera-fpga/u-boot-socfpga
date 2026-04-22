@@ -77,7 +77,7 @@ static int get_spl_slot(struct socfpga_rsu_s10_spt *rsu_spt,
 	rsu_spt0_offset = spt_offset[SPT0_INDEX];
 	rsu_spt1_offset = spt_offset[SPT1_INDEX];
 
-	pret = rsu_mtd_probe(CONFIG_SF_DEFAULT_BUS, CONFIG_SF_DEFAULT_CS, &flash);
+	pret = rsu_mtd_probe(CONFIG_SF_DEFAULT_BUS, CONFIG_SOCFPGA_RSU_SF_CS, &flash);
 	if (pret) {
 		printf("RSU: Error - rsu_mtd_probe failed (%d)!\n", pret);
 		return pret;

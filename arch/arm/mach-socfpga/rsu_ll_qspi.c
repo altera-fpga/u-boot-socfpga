@@ -2356,7 +2356,7 @@ int rsu_ll_qspi_init(struct rsu_ll_intf **intf)
 	{
 		int err;
 
-		err = rsu_mtd_probe(CONFIG_SF_DEFAULT_BUS, CONFIG_SF_DEFAULT_CS,
+		err = rsu_mtd_probe(CONFIG_SF_DEFAULT_BUS, CONFIG_SOCFPGA_RSU_SF_CS,
 				    &P->flash);
 		if (err) {
 			ll_exit();

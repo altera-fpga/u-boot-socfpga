@@ -24,6 +24,16 @@ config SOCFPGA_RSU_MULTIFLASH
 	 RSU will be able to perform operations on multiple flash on the platform
 	 given multiple flash configuration in programmer tool.
 
+config SOCFPGA_RSU_SF_CS
+	int "SPI Flash Chip-select used by RSU flow (SPT/CPB)"
+	depends on SPI_FLASH || DM_SPI_FLASH
+	default SF_DEFAULT_CS
+	help
+	 Chip select of the SPI flash that holds the RSU SPT/CPB metadata.
+	 Independent from CONFIG_SF_DEFAULT_CS (which selects the flash SPL
+	 loads u-boot.itb from). Override only when RSU metadata lives on a
+	 different chip select than the u-boot.itb boot image.
+
 config SPL_SOCFPGA_RSU_SSBL_FALLBACK
 	int "RSU SPL fallback SSBL slot size (MiB)"
 	depends on ARCH_SOCFPGA_SOC64 && SPL && SPI_FLASH
