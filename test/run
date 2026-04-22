@@ -98,6 +98,17 @@ if [ -z "${para}" ]; then
 	run_test "fdt code coverage" ./tools/dtoc/test_fdt -T
 fi
 
+# SoCFPGA-specific native ASan/UBSan harness for the RSU driver
+# stack (host gcc + sanitizers). Opt-in so default `make tests` stays
+# portable when ASan/UBSan toolchains or -lz are unavailable.
+#
+#   RUN_SOCFPGA_RSU_ASAN=1 ./test/run   # enable from CI / shell
+#
+# Run `make tests-socfpga-asan` (Makefile) to invoke only this harness.
+if [ "${RUN_SOCFPGA_RSU_ASAN}" = "1" ] && [ -f test_asan/rsu/Makefile ]; then
+	run_test "socfpga_rsu_asan" make -s -C test_asan/rsu
+fi
+
 if [ $failures == 0 ]; then
 	echo "Tests passed!"
 else

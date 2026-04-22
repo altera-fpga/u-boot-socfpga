@@ -142,3 +142,62 @@ __pycache__
 
 # Clang's compilation database file
 /compile_commands.json
+
+#
+# SoCFPGA workspace-local files (lab artefacts, personal scripts, scan
+# output). None of these belong in the upstream tree; gitignored so
+# `git status` stays clean while developers iterate.
+#
+
+# Quartus / FPGA programming artefacts (never source)
+*.sof
+*.rpd
+*.rbf
+*.pfg
+*.jic
+*.wic
+*.crt
+*.hex
+output_file*
+
+# Personal per-target build scripts (kept on disk, not shared)
+/compile.sh
+/compile_uboot_*.sh
+/agilex.sh
+/agilex5.sh
+/arria10.sh
+/km.sh
+/rsu_test.sh
+/run.sh
+/env.sh
+
+# Documents, presentations, datasheets at repo root
+/*.pdf
+/*.pptx
+/*.potx
+/*.xml
+
+# Local vulnerability / dump-tool output
+vuln_scan*.py
+vuln_scan*.json
+vuln_scan*.txt
+getdt.out
+final.dts
+compare.dts
+serv_req_info.txt
+
+# Coverity / coverage build directories
+/cov_config/
+/cov_out/
+
+# Compiled native ASan/UBSan harness binaries (sources stay tracked)
+/test_asan/*/rsu_asan_test
+/test_asan/*/*.o
+
+# Vendor / lab tooling that lives in-tree but is never source we ship
+/km_5909/
+/workspace/
+/hps_isw_handoff/
+/arch/arm/mach-socfpga/craft_spt.py
+/arch/arm/mach-socfpga/cv_bsp_generator/
+/arch/arm/mach-socfpga/vuln_scan_report.json
