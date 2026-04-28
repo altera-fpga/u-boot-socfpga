@@ -1,0 +1,22 @@
+// SPDX-License-Identifier:     GPL-2.0
+/*
+ * Copyright (C) 2026 Altera Corporation <www.altera.com>
+ */
+#include "socfpga_agilex5_socdk_emmc.dts"
+
+/ {
+	model = "SoCFPGA Agilex5 SoCDK A0 eMMC";
+};
+
+&mmc {
+	/delete-property/ mmc-hs200-1_8v;
+	/delete-property/ mmc-hs400-1_8v;
+	/*
+	 * SDHCI_CAPABILITIES / CAPABILITIES_1: program the fields we care about
+	 * and leave the rest from hardware. In words: base SD clock 200 MHz,
+	 * 8-bit data width enabled. (Register layout: BASE_CLOCK_FREQ in the
+	 * high byte of the second word; 8-bit in bit 18 of the second word.)
+	 */
+	sdhci-caps-mask = <0x00000000 0x0004ff00>;
+	sdhci-caps = <0x0 0x04c800>;
+};
