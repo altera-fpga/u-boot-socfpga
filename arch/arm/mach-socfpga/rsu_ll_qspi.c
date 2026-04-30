@@ -168,12 +168,12 @@ static int check_spt(void);
  * @part_num: the selected partition number
  * @offset: the partition offset
  *
- * Return: 0 on success, or -1 for error
+ * Return: 0 on success, or -ve on error
  */
 static int get_part_offset(int part_num, u64 *offset)
 {
 	if (part_num < 0 || part_num >= P->spt.partitions)
-		return -1;
+		return -EINVAL;
 
 	*offset = P->spt.partition[part_num].offset;
 
@@ -427,16 +427,18 @@ static int erase_dev(u64 offset, int len)
 static int read_part(int part_num, u64 offset, void *buf, int len)
 {
 	u64 part_offset;
+	int ret;
 
-	if (get_part_offset(part_num, &part_offset))
-		return -1;
+	ret = get_part_offset(part_num, &part_offset);
+	if (ret)
+		return ret;
 
 	if (len < 0)
-		return -1;
+		return -EINVAL;
 
 	if (offset > P->spt.partition[part_num].length ||
 	    (u64)len > P->spt.partition[part_num].length - offset)
-		return -1;
+		return -EINVAL;
 
 	return read_dev(part_offset + offset, buf, len);
 }
@@ -453,16 +455,18 @@ static int read_part(int part_num, u64 offset, void *buf, int len)
 static int write_part(int part_num, u64 offset, void *buf, int len)
 {
 	u64 part_offset;
+	int ret;
 
-	if (get_part_offset(part_num, &part_offset))
-		return -1;
+	ret = get_part_offset(part_num, &part_offset);
+	if (ret)
+		return ret;
 
 	if (len < 0)
-		return -1;
+		return -EINVAL;
 
 	if (offset > P->spt.partition[part_num].length ||
 	    (u64)len > P->spt.partition[part_num].length - offset)
-		return -1;
+		return -EINVAL;
 
 	return write_dev(part_offset + offset, buf, len);
 }
@@ -476,9 +480,11 @@ static int write_part(int part_num, u64 offset, void *buf, int len)
 static int erase_part(int part_num)
 {
 	u64 part_offset;
+	int ret;
 
-	if (get_part_offset(part_num, &part_offset))
-		return -1;
+	ret = get_part_offset(part_num, &part_offset);
+	if (ret)
+		return ret;
 
 	return erase_dev(part_offset, P->spt.partition[part_num].length);
 }
@@ -539,7 +545,7 @@ static int corrupted_spt(void)
 /**
  * writeback_spt() - write back SPT
  *
- * Return: 0 on success, or -1 for error
+ * Return: 0 on success, or -ve on error
  */
 static int writeback_spt(void)
 {
@@ -555,7 +561,7 @@ static int writeback_spt(void)
 
 		if (erase_part(x)) {
 			rsu_log(RSU_ERR, "failed to erase SPTx");
-			return -1;
+			return -EIO;
 		}
 
 		if (P->spt.version > SPT_VERSION &&
@@ -600,14 +606,14 @@ static int writeback_spt(void)
 		P->spt.magic_number = (u32)0xFFFFFFFF;
 		if (write_part(x, 0, &P->spt, sizeof(P->spt))) {
 			rsu_log(RSU_ERR, "failed to write SPTx table");
-			return -1;
+			return -EIO;
 		}
 
 		P->spt.magic_number = (u32)SPT_MAGIC_NUMBER;
 		if (write_part(x, 0, &P->spt.magic_number,
 			       sizeof(P->spt.magic_number))) {
 			rsu_log(RSU_ERR, "failed to write SPTx magic #");
-			return -1;
+			return -EIO;
 		}
 
 		updates++;
@@ -615,7 +621,7 @@ static int writeback_spt(void)
 
 	if (updates != 2) {
 		rsu_log(RSU_ERR, "didn't find two SPTs");
-		return -1;
+		return -ENOENT;
 	}
 
 	return 0;
@@ -825,7 +831,7 @@ static int check_spt(void)
 
 	if (!spt0_found || !spt1_found || !cpb0_found || !cpb1_found) {
 		rsu_log(RSU_ERR, "Missing a critical entry in the SPT\n");
-		return -1;
+		return -ENOENT;
 	}
 
 	return 0;
@@ -878,7 +884,7 @@ ops_error:
 /**
  * load_spt() - retrieve SPT from flash
  *
- * Return: 0 on success, or -1 for error
+ * Return: 0 on success, or -ve on error
  */
 static int load_spt(void)
 {
@@ -924,20 +930,20 @@ static int load_spt(void)
 		rsu_log(RSU_WARNING, "warning: Restoring SPT1\n");
 		if (erase_dev(P->spt1_offset, spt_size)) {
 			rsu_log(RSU_ERR, "Erase SPT1 region failed\n");
-			return -1;
+			return -EIO;
 		}
 
 		P->spt.magic_number = (u32)0xFFFFFFFF;
 		if (write_dev(P->spt1_offset, &P->spt, sizeof(P->spt))) {
 			rsu_log(RSU_ERR, "Unable to write SPT1 table\n");
-			return -1;
+			return -EIO;
 		}
 
 		P->spt.magic_number = (u32)SPT_MAGIC_NUMBER;
 		if (write_dev(P->spt1_offset, &P->spt.magic_number,
 			      sizeof(P->spt.magic_number))) {
 			rsu_log(RSU_ERR, "Unable to wr SPT1 magic #\n");
-			return -1;
+			return -EIO;
 		}
 
 		return 0;
@@ -947,27 +953,27 @@ static int load_spt(void)
 		if (read_dev(P->spt1_offset, &P->spt, sizeof(P->spt)) ||
 		    P->spt.magic_number != SPT_MAGIC_NUMBER || check_spt()) {
 			rsu_log(RSU_ERR, "Failed to load SPT1\n");
-			return -1;
+			return -EUCLEAN;
 		}
 
 		rsu_log(RSU_WARNING, "Restoring SPT0");
 
 		if (erase_dev(P->spt0_offset, spt_size)) {
 			rsu_log(RSU_ERR, "Erase SPT0 region failed\n");
-			return -1;
+			return -EIO;
 		}
 
 		P->spt.magic_number = (u32)0xFFFFFFFF;
 		if (write_dev(P->spt0_offset, &P->spt, sizeof(P->spt))) {
 			rsu_log(RSU_ERR, "Unable to write SPT0 table\n");
-			return -1;
+			return -EIO;
 		}
 
 		P->spt.magic_number = (u32)SPT_MAGIC_NUMBER;
 		if (write_dev(P->spt0_offset, &P->spt.magic_number,
 			      sizeof(P->spt.magic_number))) {
 			rsu_log(RSU_ERR, "Unable to wr SPT0 magic #\n");
-			return -1;
+			return -EIO;
 		}
 
 		return 0;
@@ -975,7 +981,7 @@ static int load_spt(void)
 
 	P->spt_corrupted = true;
 	rsu_log(RSU_ERR, "no valid SPT0 and SPT1 found\n");
-	return -1;
+	return -EUCLEAN;
 }
 
 /**
@@ -1158,7 +1164,7 @@ static int corrupted_cpb(void)
 /**
  * load_cpb() - retrieve CPB from flash
  *
- * Return: 0 on success, or -1 for error
+ * Return: 0 on success, or -ve on error
  */
 static int load_cpb(void)
 {
@@ -1198,7 +1204,7 @@ static int load_cpb(void)
 
 	if (P->cpb0_part < 0 || P->cpb1_part < 0) {
 		rsu_log(RSU_ERR, "Missing CPB0/1 partition\n");
-		return -1;
+		return -ENOENT;
 	}
 
 	rsu_log(RSU_DEBUG, "Reading CPB1\n");
@@ -1243,20 +1249,20 @@ static int load_cpb(void)
 		rsu_log(RSU_WARNING, "Restoring CPB1\n");
 		if (erase_part(P->cpb1_part)) {
 			rsu_log(RSU_ERR, "Failed erase CPB1\n");
-			return -1;
+			return -EIO;
 		}
 
 		P->cpb.header.magic_number = (u32)0xFFFFFFFF;
 		if (write_part(P->cpb1_part, 0, &P->cpb, sizeof(P->cpb))) {
 			rsu_log(RSU_ERR, "Unable to write CPB1 table\n");
-			return -1;
+			return -EIO;
 		}
 
 		P->cpb.header.magic_number = (u32)CPB_MAGIC_NUMBER;
 		if (write_part(P->cpb1_part, 0, &P->cpb.header.magic_number,
 			       sizeof(P->cpb.header.magic_number))) {
 			rsu_log(RSU_ERR, "Unable to write CPB1 magic number\n");
-			return -1;
+			return -EIO;
 		}
 
 		P->cpb_slots = (u64 *)&P->cpb.data[P->cpb.header.image_ptr_offset];
@@ -1267,26 +1273,26 @@ static int load_cpb(void)
 		if (read_part(P->cpb1_part, 0, &P->cpb, sizeof(P->cpb)) ||
 		    P->cpb.header.magic_number != CPB_MAGIC_NUMBER) {
 			rsu_log(RSU_ERR, "Unable to load CPB1\n");
-			return -1;
+			return -EUCLEAN;
 		}
 
 		rsu_log(RSU_WARNING, "Restoring CPB0\n");
 		if (erase_part(P->cpb0_part)) {
 			rsu_log(RSU_ERR, "Failed erase CPB0\n");
-			return -1;
+			return -EIO;
 		}
 
 		P->cpb.header.magic_number = (u32)0xFFFFFFFF;
 		if (write_part(P->cpb0_part, 0, &P->cpb, sizeof(P->cpb))) {
 			rsu_log(RSU_ERR, "Unable to write CPB0 table\n");
-			return -1;
+			return -EIO;
 		}
 
 		P->cpb.header.magic_number = (u32)CPB_MAGIC_NUMBER;
 		if (write_part(P->cpb0_part, 0, &P->cpb.header.magic_number,
 			       sizeof(P->cpb.header.magic_number))) {
 			rsu_log(RSU_ERR, "Unable to write CPB0 magic number\n");
-			return -1;
+			return -EIO;
 		}
 
 		P->cpb_slots = (u64 *)&P->cpb.data[P->cpb.header.image_ptr_offset];
@@ -1295,7 +1301,7 @@ static int load_cpb(void)
 
 	P->cpb_corrupted = true;
 	rsu_log(RSU_ERR, "No valid CPB0 or CPB1 found\n");
-	return -1;
+	return -EUCLEAN;
 }
 
 /**
@@ -1304,10 +1310,10 @@ static int load_cpb(void)
  * @ptr:  new pointer value (NAND-style 1->0 transitions only)
  *
  * Writes CPB0 then CPB1; on a mid-write failure (one updated, the other
- * stale) returns -1 with no rollback. Callers MUST then call load_cpb(),
+ * stale) returns -ve with no rollback. Callers MUST then call load_cpb(),
  * which reconciles the two flash copies; do not roll back P->cpb locally.
  *
- * Return: 0 on success, or -1 on error (caller MUST load_cpb()).
+ * Return: 0 on success, or -ve on error (caller MUST load_cpb()).
  */
 static int update_cpb(int slot, u64 ptr)
 {
@@ -1315,10 +1321,10 @@ static int update_cpb(int slot, u64 ptr)
 	int updates = 0;
 
 	if (slot < 0 || slot >= P->cpb.header.image_ptr_slots)
-		return -1;
+		return -EINVAL;
 
 	if ((P->cpb_slots[slot] & ptr) != ptr)
-		return -1;
+		return -EINVAL;
 
 	P->cpb_slots[slot] = ptr;
 
@@ -1328,14 +1334,14 @@ static int update_cpb(int slot, u64 ptr)
 			continue;
 
 		if (write_part(x, 0, &P->cpb, sizeof(P->cpb)))
-			return -1;
+			return -EIO;
 
 		updates++;
 	}
 
 	if (updates != 2) {
 		rsu_log(RSU_ERR, "Did not find two CPBs\n");
-		return -1;
+		return -ENOENT;
 	}
 
 	return 0;
@@ -1344,7 +1350,7 @@ static int update_cpb(int slot, u64 ptr)
 /**
  * writeback_cpb() - write CPB back to flash
  *
- * Return: 0 on success, or -1 for error
+ * Return: 0 on success, or -ve on error
  */
 static int writeback_cpb(void)
 {
@@ -1358,13 +1364,13 @@ static int writeback_cpb(void)
 
 		if (erase_part(x)) {
 			rsu_log(RSU_ERR, "Unable to ease CPBx\n");
-			return -1;
+			return -EIO;
 		}
 
 		P->cpb.header.magic_number = (u32)0xFFFFFFFF;
 		if (write_part(x, 0, &P->cpb, sizeof(P->cpb))) {
 			rsu_log(RSU_ERR, "Unable to write CPBx table\n");
-			return -1;
+			return -EIO;
 		}
 
 		P->cpb.header.magic_number = (u32)CPB_MAGIC_NUMBER;
@@ -1372,7 +1378,7 @@ static int writeback_cpb(void)
 			       sizeof(P->cpb.header.magic_number))) {
 			rsu_log(RSU_ERR,
 				"Unable to write CPBx magic number\n");
-			return -1;
+			return -EIO;
 		}
 
 		updates++;
@@ -1380,7 +1386,7 @@ static int writeback_cpb(void)
 
 	if (updates != 2) {
 		rsu_log(RSU_ERR, "Did not find two CPBs\n");
-		return -1;
+		return -ENOENT;
 	}
 
 	return 0;
@@ -1623,21 +1629,22 @@ static int partition_readonly(int part_num)
  * @part_num: the selected partition
  * @name: the new name
  *
- * Return: 0 for success, or -1 on error
+ * Return: 0 for success, or -ve on error
  */
 static int partition_rename(int part_num, char *name)
 {
 	int x;
+	int ret;
 
 	if (part_num < 0 || part_num >= P->spt.partitions)
-		return -1;
+		return -EINVAL;
 
 	if (strnlen(name, sizeof(P->spt.partition[0].name)) >=
 	    sizeof(P->spt.partition[0].name)) {
 		rsu_log(RSU_ERR,
 			"Partition name is too long - limited to %li",
 			sizeof(P->spt.partition[0].name) - 1);
-		return -1;
+		return -EINVAL;
 	}
 
 	for (x = 0; x < P->spt.partitions; x++) {
@@ -1645,7 +1652,7 @@ static int partition_rename(int part_num, char *name)
 			    sizeof(P->spt.partition[0].name) - 1) == 0) {
 			rsu_log(RSU_ERR,
 				"Partition rename already in use\n");
-			return -1;
+			return -EEXIST;
 		}
 	}
 
@@ -1653,28 +1660,27 @@ static int partition_rename(int part_num, char *name)
 			     sizeof(P->spt.partition[0].name),
 			     name, sizeof(P->spt.partition[0].name));
 
-	if (writeback_spt())
-		return -1;
+	ret = writeback_spt();
+	if (ret)
+		return ret;
 
-	if (load_spt())
-		return -1;
-
-	return 0;
+	return load_spt();
 }
 
 /**
  * partition_delete() - delete a partition
  * @part_num: the selected partition
  *
- * Return: 0 for success, or -1 on error
+ * Return: 0 for success, or -ve on error
  */
 static int partition_delete(int part_num)
 {
 	int x;
+	int ret;
 
 	if (part_num < 0 || part_num >= P->spt.partitions) {
 		rsu_log(RSU_ERR, "Invalid partition number\n");
-		return -1;
+		return -EINVAL;
 	}
 
 	for (x = part_num; x < P->spt.partitions - 1; x++)
@@ -1682,13 +1688,11 @@ static int partition_delete(int part_num)
 
 	P->spt.partitions--;
 
-	if (writeback_spt())
-		return -1;
+	ret = writeback_spt();
+	if (ret)
+		return ret;
 
-	if (load_spt())
-		return -1;
-
-	return 0;
+	return load_spt();
 }
 
 /**
@@ -1697,11 +1701,12 @@ static int partition_delete(int part_num)
  * @start: partition start address
  * @size: partition size
  *
- * Return: 0 for success, or -1 on error
+ * Return: 0 for success, or -ve on error
  */
 static int partition_create(char *name, u64 start, unsigned int size)
 {
 	int x;
+	int ret;
 	u64 end;
 
 	/* Reject overflow before computing end; a wrapped end defeats overlap checks. */
@@ -1713,32 +1718,32 @@ static int partition_create(char *name, u64 start, unsigned int size)
 
 	if (size % MIN_QSPI_ERASE_SIZE) {
 		rsu_log(RSU_ERR, "Invalid partition size\n");
-		return -1;
+		return -EINVAL;
 	}
 
 	if (start % MIN_QSPI_ERASE_SIZE) {
 		rsu_log(RSU_ERR, "Invalid partition address\n");
-		return -1;
+		return -EINVAL;
 	}
 
 	if (strnlen(name, sizeof(P->spt.partition[0].name)) >=
 	    sizeof(P->spt.partition[0].name)) {
 		rsu_log(RSU_ERR, "Partition name is too long - limited to %i\n",
 			sizeof(P->spt.partition[0].name) - 1);
-		return -1;
+		return -EINVAL;
 	}
 
 	for (x = 0; x < P->spt.partitions; x++) {
 		if (strncmp(P->spt.partition[x].name, name,
 			    sizeof(P->spt.partition[0].name) - 1) == 0) {
 			rsu_log(RSU_ERR, "Partition name already in use\n");
-			return -1;
+			return -EEXIST;
 		}
 	}
 
 	if (P->spt.partitions == SPT_MAX_PARTITIONS) {
 		rsu_log(RSU_ERR, "Partition table is full\n");
-		return -1;
+		return -ENOSPC;
 	}
 
 	for (x = 0; x < P->spt.partitions; x++) {
@@ -1753,7 +1758,7 @@ static int partition_create(char *name, u64 start, unsigned int size)
 
 		if (start < pend && end > pstart) {
 			rsu_log(RSU_ERR, "Partition overlap\n");
-			return -1;
+			return -EEXIST;
 		}
 	}
 
@@ -1766,38 +1771,38 @@ static int partition_create(char *name, u64 start, unsigned int size)
 
 	P->spt.partitions++;
 
-	if (writeback_spt())
-		return -1;
+	ret = writeback_spt();
+	if (ret)
+		return ret;
 
-	if (load_spt())
-		return -1;
-
-	return 0;
+	return load_spt();
 }
 
 /* Reject corrupt CPB header before indexing cpb_slots[]. */
 static int cpb_ptr_slots_access_ok(void)
 {
 	if (!P->cpb_slots)
-		return -1;
-	return cpb_header_access_ok() ? -1 : 0;
+		return -EUCLEAN;
+	return cpb_header_access_ok();
 }
 
 /**
  * priority_get() - get the selected partition's priority
  * @part_num: the selected partition number
  *
- * Return: 0 for success, or -1 on error
+ * Return: 0 for success, or -ve on error
  */
 static int priority_get(int part_num)
 {
 	int x;
 	int priority = 0;
+	int ret;
 
 	if (part_num < 0 || part_num >= P->spt.partitions)
-		return -1;
-	if (cpb_ptr_slots_access_ok())
-		return -1;
+		return -EINVAL;
+	ret = cpb_ptr_slots_access_ok();
+	if (ret)
+		return ret;
 
 	for (x = P->cpb.header.image_ptr_slots; x > 0; x--) {
 		if (P->cpb_slots[x - 1] != ERASED_ENTRY &&
@@ -1816,17 +1821,19 @@ static int priority_get(int part_num)
  * priority_add() - enable the selected partition's priority
  * @part_num: the selected partition number
  *
- * Return: 0 for success, or  -1 on error
+ * Return: 0 for success, or -ve on error
  */
 static int priority_add(int part_num)
 {
 	int x;
 	int y;
+	int ret;
 
 	if (part_num < 0 || part_num >= P->spt.partitions)
-		return -1;
-	if (cpb_ptr_slots_access_ok())
-		return -1;
+		return -EINVAL;
+	ret = cpb_ptr_slots_access_ok();
+	if (ret)
+		return ret;
 
 	for (x = 0; x < P->cpb.header.image_ptr_slots; x++) {
 		if (P->cpb_slots[x] == ERASED_ENTRY) {
@@ -1839,7 +1846,7 @@ static int priority_add(int part_num)
 				 * return failure.
 				 */
 				load_cpb();
-				return -1;
+				return -EIO;
 			}
 			return load_cpb();
 		}
@@ -1857,38 +1864,41 @@ static int priority_add(int part_num)
 	if (y < P->cpb.header.image_ptr_slots)
 		P->cpb_slots[y++] = P->spt.partition[part_num].offset;
 	else
-		return -1;
+		return -ENOSPC;
 
 	while (y < P->cpb.header.image_ptr_slots)
 		P->cpb_slots[y++] = ERASED_ENTRY;
 
-	if (writeback_cpb() || load_cpb())
-		return -1;
+	ret = writeback_cpb();
+	if (ret)
+		return ret;
 
-	return 0;
+	return load_cpb();
 }
 
 /**
  * priority_remove() - remove the selected partition's priority
  * @part_num: the selected partition number
  *
- * Return: 0 for success, or -1 on error
+ * Return: 0 for success, or -ve on error
  */
 static int priority_remove(int part_num)
 {
 	int x;
+	int ret;
 
 	if (part_num < 0 || part_num >= P->spt.partitions)
-		return -1;
-	if (cpb_ptr_slots_access_ok())
-		return -1;
+		return -EINVAL;
+	ret = cpb_ptr_slots_access_ok();
+	if (ret)
+		return ret;
 
 	for (x = 0; x < P->cpb.header.image_ptr_slots; x++) {
 		if (P->cpb_slots[x] == P->spt.partition[part_num].offset)
 			if (update_cpb(x, SPENT_ENTRY)) {
 				/* See priority_add(): same recovery contract. */
 				load_cpb();
-				return -1;
+				return -EIO;
 			}
 	}
 
@@ -2004,7 +2014,7 @@ static int dcmf_version(__u32 *versions)
 	int ret;
 
 	if (!versions)
-		return -1;
+		return -EINVAL;
 
 	/* get the first flash since DCMF always located at first flash */
 	P->flash = P->flashlist[0];
@@ -2063,20 +2073,20 @@ static int dcmf_status(u16 *status)
 	ret = status_log(&rsu_status);
 	if (ret) {
 		rsu_log(RSU_ERR, "status_log error");
-		return -1;
+		return ret;
 	}
 	crt_dcmf = RSU_VERSION_CRT_DCMF_IDX(rsu_status.version);
 
 	buffa = (char *)malloc(DCMF_SIZE);
 	if (!buffa) {
 		rsu_log(RSU_ERR, "malloc error");
-		return -1;
+		return -ENOMEM;
 	}
 
 	buffb = (char *)malloc(DCMF_SIZE);
 	if (!buffb) {
 		rsu_log(RSU_ERR, "malloc error");
-		ret = -1;
+		ret = -ENOMEM;
 		goto ret_val;
 	}
 
@@ -2130,7 +2140,7 @@ static int max_retry(__u8 *value)
 	__u8 tmp;
 
 	if (!value)
-		return -1;
+		return -EINVAL;
 
 	/* get the first flash since DCMF always located at first flash */
 	P->flash = P->flashlist[0];
@@ -2375,7 +2385,7 @@ int rsu_ll_qspi_init(struct rsu_ll_intf **intf)
 	if (load_spt() && !P->spt_corrupted) {
 		ll_exit();
 		rsu_log(RSU_ERR, "Bad SPT\n");
-		return -1;
+		return -EUCLEAN;
 	}
 
 	if (P->spt_corrupted) {
@@ -2383,7 +2393,7 @@ int rsu_ll_qspi_init(struct rsu_ll_intf **intf)
 	} else if (load_cpb() && !P->cpb_corrupted) {
 		ll_exit();
 		rsu_log(RSU_ERR, "Bad CPB\n");
-		return -1;
+		return -EUCLEAN;
 	}
 
 	*intf = &qspi_ll_intf;

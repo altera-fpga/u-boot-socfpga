@@ -98,7 +98,7 @@ static int find_section(struct rsu_image_state *state, u64 section)
  * @state: current state machine state
  * @section: section to be added
  *
- * Return: zero value for success, -1 on error
+ * Return: 0 on success, or -ve on error
  */
 static int add_section(struct rsu_image_state *state, u64 section)
 {
@@ -106,7 +106,7 @@ static int add_section(struct rsu_image_state *state, u64 section)
 		return 0;
 
 	if (state->no_sections >= MAX_SECTIONS)
-		return -1;
+		return -ENOSPC;
 
 	state->sections[state->no_sections++] = section;
 
@@ -187,7 +187,7 @@ int rsu_misc_is_slot(struct rsu_ll_intf *ll_intf, int part_num)
  * @ll_intf: pointer to ll_intf
  * @slot: slot number
  *
- * Return 0 if success, or -1 for error
+ * Return: partition number on success, or -ve on error
  */
 int rsu_misc_slot2part(struct rsu_ll_intf *ll_intf, int slot)
 {
@@ -204,7 +204,7 @@ int rsu_misc_slot2part(struct rsu_ll_intf *ll_intf, int slot)
 		}
 	}
 
-	return -1;
+	return -EINVAL;
 }
 
 /**
@@ -292,12 +292,12 @@ void rsu_misc_safe_strcpy(char *dst, int dsz, char *src, int ssz)
  * @buf: pointer to buf
  * @size: size of buffer
  *
- * Return 0 if success, or -1 for error
+ * Return: 0 on success, or -ve on error
  */
 int rsu_cb_buf_init(void *buf, int size)
 {
 	if (!buf || size <= 0)
-		return -1;
+		return -EINVAL;
 
 	cb_buffer = (char *)buf;
 	cb_buffer_togo = size;
@@ -329,7 +329,7 @@ int rsu_cb_buf(void *buf, int len)
 		return 0;
 
 	if (!cb_buffer || cb_buffer_togo < 0 || !buf || len < 0)
-		return -1;
+		return -EINVAL;
 
 	if (cb_buffer_togo < len)
 		read_len = cb_buffer_togo;
@@ -422,7 +422,7 @@ static int sig_block_adjust(struct rsu_image_state *state, void *block,
 		rsu_log(RSU_ERR,
 			"Error: Bad CRC32. Calc = %08X / From Block = %08x\n",
 			calc_crc, be32_to_cpu(ptr_blk->crc));
-		return -1;
+		return -EBADMSG;
 	}
 	swap_bits(block, IMAGE_BLOCK_SZ);
 
@@ -439,7 +439,7 @@ static int sig_block_adjust(struct rsu_image_state *state, void *block,
 		if (ptr > info->size) {
 			rsu_log(RSU_ERR,
 				"Error: A pointer not within the slot\n");
-			return -1;
+			return -EINVAL;
 		}
 	}
 
@@ -571,13 +571,14 @@ static int rsu_misc_image_block_init(struct rsu_image_state *state)
  * (when vblock==NULL) or for comparison with verification data
  * (when vblock!=NULL)
  *
- * Returns 0 on success and -1 on error
+ * Returns: 0 on success, or -ve on error
  */
 static int rsu_misc_image_block_process(struct rsu_image_state *state,
 					void *block, void *vblock,
 					struct rsu_slot_info *info)
 {
 	u32 magic;
+	int ret;
 
 	state->offset += IMAGE_BLOCK_SZ;
 
@@ -603,16 +604,18 @@ static int rsu_misc_image_block_process(struct rsu_image_state *state,
 		rsu_log(RSU_DEBUG, "Found signature block @0x%08x\n",
 			state->offset);
 
-		if (sig_block_process(state, block, info))
-			return -1;
+		ret = sig_block_process(state, block, info);
+		if (ret)
+			return ret;
 
 		state->block_type = REGULAR_BLOCK;
 
 		if (vblock)
 			return sig_block_compare(state, block, vblock, info);
 
-		if (sig_block_adjust(state, block, info))
-			return -1;
+		ret = sig_block_adjust(state, block, info);
+		if (ret)
+			return ret;
 
 		break;
 
