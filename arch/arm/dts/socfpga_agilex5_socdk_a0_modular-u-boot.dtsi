@@ -1,0 +1,14 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * U-Boot additions Agilex5 SocDK A0 Modular
+ *
+ * Copyright (C) 2026 Altera Corporation <www.altera.com>
+ */
+
+#include "socfpga_agilex5_socdk_modular-u-boot.dtsi"
+
+#if !defined(CONFIG_SOCFPGA_SECURE_VAB_AUTH)
+&fdt_0_blob {
+	filename = "arch/arm/dts/socfpga_agilex5_socdk_a0_modular.dtb";
+};
+#endif
