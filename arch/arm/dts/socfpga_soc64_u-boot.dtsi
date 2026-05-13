@@ -173,7 +173,6 @@
 		/* RSU: DM anchor for console RSU commands (see CONFIG_SOCFPGA_RSU_DM) */
 		socfpga-rsu {
 			compatible = "altr,socfpga-rsu";
-			bootph-all;
 		};
 	};
 };
