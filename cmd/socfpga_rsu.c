@@ -1010,7 +1010,7 @@ int do_rsu(struct cmd_tbl *cmdtp, int flag, int argc, char * const argv[])
 }
 
 U_BOOT_CMD(rsu, 5, 1, do_rsu,
-	   "Intel SoC FPGA Remote System Update",
+	   "Altera SoC FPGA Remote System Update",
 	   "dtb   - Update Linux DTB qspi-boot partition offset with spt0 value\n"
 	   "list  - List down the available bitstreams in flash\n"
 	   "slot_by_name <name> - find slot by name and display the slot number\n"

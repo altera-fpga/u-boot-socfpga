@@ -1276,7 +1276,7 @@ config CMD_FPGAD
 	  command.
 
 config CMD_SOCFPGA_RSU
-	bool "rsu - Intel SoC FPGA Remote System Update"
+	bool "rsu - Altera SoC FPGA Remote System Update"
 	default y
 	depends on CMDLINE
 	depends on CADENCE_QSPI
