@@ -20,11 +20,15 @@
 #include <spi.h>
 #include <spi_flash.h>
 #include <env.h>
+#include <fdt_support.h>
 #include <asm/arch/rsu_flash_if.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
 #define RSU_S10_SPT_SLOT_MAX 127
+
+/* Linux DTB label identifying the RSU-managed boot partition. */
+#define RSU_BOOT_PARTITION_LABEL "Boot and fpga data"
 
 static unsigned int rsu_s10_spt_entry_count(const struct socfpga_rsu_s10_spt *spt)
 {
@@ -296,14 +300,14 @@ int rsu_dtb(int argc, char * const argv[])
 {
 	char flash0_string[100];
 	int nodeoffset, parentoffset, fdt_flash0_offset, len;
+	int child;
 	u32 end;
 	const fdt32_t *val;
-	const __be32 *rsu_handle = NULL;
-	u32 alt_phandle = 0;
 	u32 reg[2];
 	u32 spt0_off = 0;
 	u32 spt1_off __always_unused = 0;
 	int err;
+	bool found = false;
 
 	/* Extracting RSU info from bitstream */
 	err = rsu_spt_cpb_list_inner(argc, argv, &spt0_off, &spt1_off);
@@ -343,22 +347,41 @@ int rsu_dtb(int argc, char * const argv[])
 		return -ENODEV;
 	}
 
-	/* Retrieve rsu_handle from Linux DTB */
-	rsu_handle = fdt_getprop(working_fdt, nodeoffset, "rsu-handle", NULL);
-	if (rsu_handle)
-		alt_phandle = be32_to_cpup(rsu_handle);
+	/* Primary: match boot partition by label; fallback: rsu-handle. */
+	fdt_for_each_subnode(child, working_fdt, nodeoffset) {
+		const char *lbl;
 
-	/* check the rsu phandle exists */
-	if (!alt_phandle) {
-		printf("DTB: phandle node not found.\n");
-		return -ENODEV;
+		lbl = fdt_getprop(working_fdt, child, "label", NULL);
+		if (lbl && !strcmp(lbl, RSU_BOOT_PARTITION_LABEL)) {
+			nodeoffset = child;
+			found = true;
+			break;
+		}
 	}
 
-	/* Get the offset of the phandle */
-	nodeoffset = fdt_node_offset_by_phandle(working_fdt, alt_phandle);
-	if (nodeoffset < 0) {
-		printf("DTB: phandle node not found.\n");
-		return -ENODEV;
+	if (!found) {
+		const __be32 *rsu_handle;
+		u32 alt_phandle = 0;
+
+		rsu_handle = fdt_getprop(working_fdt, nodeoffset,
+					 "rsu-handle", NULL);
+		if (rsu_handle)
+			alt_phandle = be32_to_cpup(rsu_handle);
+
+		if (!alt_phandle) {
+			printf("DTB: boot partition not found by label \"%s\" or rsu-handle.\n",
+			       RSU_BOOT_PARTITION_LABEL);
+			return -ENODEV;
+		}
+
+		nodeoffset = fdt_node_offset_by_phandle(working_fdt,
+							alt_phandle);
+		if (nodeoffset < 0) {
+			printf("DTB: rsu-handle phandle target not found.\n");
+			return -ENODEV;
+		}
+
+		printf("DTB: boot partition found via rsu-handle (legacy DTB).\n");
 	}
 
 	/* Extract the flash0's reg from Linux DTB */
