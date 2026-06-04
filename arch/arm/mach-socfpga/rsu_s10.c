@@ -300,7 +300,7 @@ int rsu_dtb(int argc, char * const argv[])
 {
 	char flash0_string[100];
 	int nodeoffset, parentoffset, fdt_flash0_offset, len;
-	int child;
+	int child, fp_off;
 	u32 end;
 	const fdt32_t *val;
 	u32 reg[2];
@@ -339,49 +339,60 @@ int rsu_dtb(int argc, char * const argv[])
 		return -ENODEV;
 	}
 
-	/* Retrieve the QSPI partition node from Linux DTB */
-	nodeoffset = fdt_node_offset_by_compatible(working_fdt, parentoffset,
-						   "fixed-partitions");
-	if (nodeoffset < 0) {
-		printf("DTB: QSPI fixed-partitions node not found.\n");
-		return -ENODEV;
+	/*
+	 * A board may carry more than one fixed-partitions node (e.g.
+	 * one for QSPI and one for NAND). Scan every fixed-partitions
+	 * node to find the RSU-managed boot partition. Primary pass
+	 * matches by label; fallback pass honours the legacy rsu-handle
+	 * phandle on the fixed-partitions parent (older Linux DTBs).
+	 */
+	fp_off = parentoffset;
+	while ((fp_off = fdt_node_offset_by_compatible(working_fdt, fp_off,
+						       "fixed-partitions")) >= 0) {
+		fdt_for_each_subnode(child, working_fdt, fp_off) {
+			const char *lbl;
+
+			lbl = fdt_getprop(working_fdt, child, "label", NULL);
+			if (lbl && !strcmp(lbl, RSU_BOOT_PARTITION_LABEL)) {
+				nodeoffset = child;
+				found = true;
+				break;
+			}
+		}
+		if (found)
+			break;
 	}
 
-	/* Primary: match boot partition by label; fallback: rsu-handle. */
-	fdt_for_each_subnode(child, working_fdt, nodeoffset) {
-		const char *lbl;
+	if (!found) {
+		fp_off = parentoffset;
+		while ((fp_off = fdt_node_offset_by_compatible(working_fdt,
+							       fp_off,
+							       "fixed-partitions")) >= 0) {
+			const __be32 *rsu_handle;
+			u32 alt_phandle = 0;
 
-		lbl = fdt_getprop(working_fdt, child, "label", NULL);
-		if (lbl && !strcmp(lbl, RSU_BOOT_PARTITION_LABEL)) {
-			nodeoffset = child;
+			rsu_handle = fdt_getprop(working_fdt, fp_off,
+						 "rsu-handle", NULL);
+			if (rsu_handle)
+				alt_phandle = be32_to_cpup(rsu_handle);
+			if (!alt_phandle)
+				continue;
+
+			nodeoffset = fdt_node_offset_by_phandle(working_fdt,
+								alt_phandle);
+			if (nodeoffset < 0)
+				continue;
+
+			printf("DTB: boot partition found via rsu-handle (legacy DTB).\n");
 			found = true;
 			break;
 		}
 	}
 
 	if (!found) {
-		const __be32 *rsu_handle;
-		u32 alt_phandle = 0;
-
-		rsu_handle = fdt_getprop(working_fdt, nodeoffset,
-					 "rsu-handle", NULL);
-		if (rsu_handle)
-			alt_phandle = be32_to_cpup(rsu_handle);
-
-		if (!alt_phandle) {
-			printf("DTB: boot partition not found by label \"%s\" or rsu-handle.\n",
-			       RSU_BOOT_PARTITION_LABEL);
-			return -ENODEV;
-		}
-
-		nodeoffset = fdt_node_offset_by_phandle(working_fdt,
-							alt_phandle);
-		if (nodeoffset < 0) {
-			printf("DTB: rsu-handle phandle target not found.\n");
-			return -ENODEV;
-		}
-
-		printf("DTB: boot partition found via rsu-handle (legacy DTB).\n");
+		printf("DTB: boot partition not found by label \"%s\" or rsu-handle.\n",
+		       RSU_BOOT_PARTITION_LABEL);
+		return -ENODEV;
 	}
 
 	/* Extract the flash0's reg from Linux DTB */
