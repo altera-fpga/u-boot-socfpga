@@ -6,6 +6,7 @@ Intel
 .. toctree::
    :maxdepth: 2
 
+   agilex5_socdk
    bayleybay
    cherryhill
    cougarcanyon2

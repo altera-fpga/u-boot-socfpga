@@ -172,6 +172,7 @@ F:	arch/arm/mach-socfpga/
 F:	board/intel/agilex-socdk/
 F:	cmd/socfpga_rsu.c
 F:	configs/socfpga_*
+F:	doc/board/intel/
 F:	doc/device-tree-bindings/misc/altr,socfpga-rsu.yaml
 F:	drivers/ddr/altera/
 F:	drivers/misc/socfpga_rsu.c
