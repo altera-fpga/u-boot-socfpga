@@ -109,7 +109,9 @@ obj-$(CONFIG_ARMV8_PSCI) += smc_registers_s10.o
 obj-$(CONFIG_ARMV8_PSCI) += smc_rsu_s10.o
 endif
 ifneq ($(CONFIG_SPL_FIT_SIGNATURE),y)
-$(warning Agilex5 SPL is being built without FIT signature verification (CONFIG_SPL_FIT_SIGNATURE=n). This image is NOT suitable for shipping firmware - see doc/board/intel/agilex5_socdk.rst for the defconfig variant matrix.)
+ifneq ($(CONFIG_SOCFPGA_SECURE_VAB_AUTH),y)
+$(warning Agilex5 SPL has no Root of Trust: neither CONFIG_SPL_FIT_SIGNATURE nor CONFIG_SOCFPGA_SECURE_VAB_AUTH is enabled. This image is NOT suitable for shipping firmware - see doc/board/intel/agilex5_socdk.rst for the defconfig variant matrix.)
+endif
 endif
 endif
 
