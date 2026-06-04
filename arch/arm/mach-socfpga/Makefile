@@ -108,6 +108,9 @@ obj-$(CONFIG_ARMV8_PSCI) += smc_fpga_reconfig_s10.o
 obj-$(CONFIG_ARMV8_PSCI) += smc_registers_s10.o
 obj-$(CONFIG_ARMV8_PSCI) += smc_rsu_s10.o
 endif
+ifneq ($(CONFIG_SPL_FIT_SIGNATURE),y)
+$(warning Agilex5 SPL is being built without FIT signature verification (CONFIG_SPL_FIT_SIGNATURE=n). This image is NOT suitable for shipping firmware - see doc/board/intel/agilex5_socdk.rst for the defconfig variant matrix.)
+endif
 endif
 
 ifdef CONFIG_ARCH_SOCFPGA_AGILEX7M
