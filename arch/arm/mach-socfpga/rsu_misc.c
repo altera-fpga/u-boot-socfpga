@@ -7,9 +7,9 @@
 #include <linux/compat.h>
 #include <linux/compiler.h>
 #include <linux/errno.h>
-#include <asm/arch/rsu.h>
-#include <asm/arch/rsu_ll.h>
-#include <asm/arch/rsu_misc.h>
+#include <socfpga_rsu.h>
+#include <socfpga_rsu_ll.h>
+#include <socfpga_rsu_misc.h>
 #include <asm/types.h>
 #include <u-boot/zlib.h>
 #include <errno.h>
@@ -135,14 +135,18 @@ void swap_bits(char *data, int len)
 	}
 }
 
-int pow(u32 x, u32 y)
+int rsu_pow(u32 x, u32 y)
 {
+	int half;
+
 	if (y == 0)
 		return 1;
-	else if ((y % 2) == 0)
-		return pow(x, y / 2) * pow(x, y / 2);
+
+	half = rsu_pow(x, y / 2);
+	if ((y % 2) == 0)
+		return half * half;
 	else
-		return x * pow(x, y / 2) * pow(x, y / 2);
+		return x * half * half;
 }
 
 /**

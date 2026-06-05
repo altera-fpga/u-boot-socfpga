@@ -179,6 +179,9 @@ F:	drivers/misc/socfpga_rsu.c
 F:	drivers/power/domain/altr-pmgr-agilex5.c
 F:	drivers/sysreset/sysreset_socfpga*
 F:	include/rsu_console.h
+F:	include/socfpga_rsu.h
+F:	include/socfpga_rsu_ll.h
+F:	include/socfpga_rsu_misc.h
 F:	include/test/socfpga.h
 F:	test/socfpga/
 F:	test_asan/rsu/

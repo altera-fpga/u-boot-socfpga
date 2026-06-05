@@ -7,13 +7,14 @@
 #include <linux/bitops.h>
 #include <linux/errno.h>
 #include <linux/kconfig.h>
+#include <linux/string.h>
 #if IS_ENABLED(CONFIG_SOCFPGA_RSU_DM)
 #include <dm/device.h>
 #include <dm/ofnode.h>
 #include <asm/arch/socfpga_rsu_dm.h>
 #endif
-#include <asm/arch/rsu.h>
-#include <asm/arch/rsu_misc.h>
+#include <socfpga_rsu.h>
+#include <socfpga_rsu_misc.h>
 #include <asm/arch/smc_api.h>
 #include <asm/system.h>
 #include <linux/intel-smc.h>

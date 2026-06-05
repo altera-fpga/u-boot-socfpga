@@ -11,8 +11,8 @@
 #include <linux/kernel.h>
 #include <linux/string.h>
 #include <rsu_console.h>
+#include <socfpga_rsu.h>
 #include <vsprintf.h>
-#include <asm/arch/rsu.h>
 
 /*
  * Strictly parse a numeric argv[] value.
