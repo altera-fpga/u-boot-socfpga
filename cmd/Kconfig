@@ -1279,14 +1279,24 @@ config CMD_SOCFPGA_RSU
 	bool "rsu - Altera SoC FPGA Remote System Update"
 	default y
 	depends on CMDLINE
-	depends on CADENCE_QSPI
+	depends on CADENCE_QSPI || SANDBOX
 	depends on ARCH_SOCFPGA_STRATIX10 || ARCH_SOCFPGA_AGILEX || \
 		  ARCH_SOCFPGA_AGILEX5 || ARCH_SOCFPGA_AGILEX7M || \
-		  ARCH_SOCFPGA_N5X
+		  ARCH_SOCFPGA_N5X || SANDBOX
 	help
 	  Remote System Update for Stratix 10 / Agilex family SoCs: inspect
 	  flash images and SPT/CPB, manage configuration slots, trigger
 	  firmware updates, and adjust the Linux DTB QSPI layout.
+
+	  Under CONFIG_SANDBOX the command is wired to the cross-arch
+	  dispatcher (built via drivers/misc/socfpga_rsu_core.c and the
+	  RAM-backed low-level backend in drivers/misc/rsu_ll_sandbox.c).
+	  That backend exposes an empty SPT so rsu_init() and read-side
+	  callbacks succeed, while every write-side callback returns
+	  -ENOSYS. Used by test/socfpga/rsu.c (suite 'ut socfpga') to
+	  exercise both the argv parser (CMD_RET_USAGE paths) and the
+	  rsu_init() / rsu_slot_count() dispatcher routing without a
+	  real flash or mailbox.
 
 config CMD_FUSE
 	bool "fuse - support for the fuse subssystem"

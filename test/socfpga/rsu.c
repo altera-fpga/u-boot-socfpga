@@ -11,6 +11,7 @@
  */
 
 #include <command.h>
+#include <socfpga_rsu.h>
 #include <test/socfpga.h>
 #include <test/ut.h>
 
@@ -78,3 +79,70 @@ static int socfpga_test_rsu_bad_size(struct unit_test_state *uts)
 }
 
 SOCFPGA_TEST(socfpga_test_rsu_bad_size, UTF_CONSOLE);
+
+/*
+ * Backend-routing smoke tests below require CONFIG_SOCFPGA_RSU_CORE,
+ * i.e. the cross-arch dispatcher in arch/arm/mach-socfpga/rsu.c
+ * compiled into the sandbox binary via drivers/misc/socfpga_rsu_core.c,
+ * plus the RAM-backed empty-SPT backend in drivers/misc/rsu_ll_sandbox.c.
+ * They exercise the rsu_init() -> rsu_ll_qspi_init() -> dispatcher path
+ * that the parsing tests above intentionally avoid.
+ */
+#if IS_ENABLED(CONFIG_SOCFPGA_RSU_CORE)
+
+/*
+ * `rsu slot_count` must succeed on the sandbox backend and report 0
+ * partitions. A non-zero count would indicate the backend is leaking
+ * state across rsu_init()/rsu_exit() cycles, or that the dispatcher
+ * misroutes partition.count().
+ */
+static int socfpga_test_rsu_slot_count_zero(struct unit_test_state *uts)
+{
+	ut_assertok(run_command("rsu slot_count", 0));
+	ut_assert_nextlinen("Number of slots = 0");
+
+	return 0;
+}
+
+SOCFPGA_TEST(socfpga_test_rsu_slot_count_zero, UTF_CONSOLE);
+
+/*
+ * Direct dispatcher invocation: rsu_slot_count() must return 0 (no
+ * slots) without the cmd plumbing. This catches dispatcher regressions
+ * that the cmd path would mask by collapsing every non-zero return.
+ */
+static int socfpga_test_rsu_init_exits_clean(struct unit_test_state *uts)
+{
+	ut_asserteq(0, rsu_init(NULL));
+	ut_asserteq(0, rsu_slot_count());
+	rsu_exit();
+	/* Second init must succeed too - dispatcher self-heals stale state. */
+	ut_asserteq(0, rsu_init(NULL));
+	ut_asserteq(0, rsu_slot_count());
+	rsu_exit();
+
+	return 0;
+}
+
+SOCFPGA_TEST(socfpga_test_rsu_init_exits_clean, 0);
+
+/*
+ * Slot lookup by name on an empty SPT must report -ENAME, NOT -EINTF
+ * (which would indicate rsu_init() failed) and NOT -EARGS (which
+ * would indicate a name validation bug). This locks in the
+ * "init succeeded, table empty" semantics.
+ */
+static int socfpga_test_rsu_slot_by_name_empty(struct unit_test_state *uts)
+{
+	char name[] = "does_not_exist";
+
+	ut_asserteq(0, rsu_init(NULL));
+	ut_asserteq(-ENAME, rsu_slot_by_name(name));
+	rsu_exit();
+
+	return 0;
+}
+
+SOCFPGA_TEST(socfpga_test_rsu_slot_by_name_empty, 0);
+
+#endif /* CONFIG_SOCFPGA_RSU_CORE */

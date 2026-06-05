@@ -85,6 +85,35 @@ config SOCFPGA_RSU_DM
 	  coupling of its own; the QSPI flash requirement is enforced
 	  by CMD_SOCFPGA_RSU (the only consumer of this device).
 
+config SOCFPGA_RSU_CORE
+	bool "Compile the SoC FPGA RSU dispatcher and misc helpers"
+	depends on SANDBOX
+	depends on CMD_SOCFPGA_RSU
+	default y
+	help
+	  Build the cross-arch RSU dispatcher (arch/arm/mach-socfpga/rsu.c)
+	  and misc helpers (arch/arm/mach-socfpga/rsu_misc.c) into the
+	  sandbox binary via #include wrappers in drivers/misc/. The arm
+	  build continues to compile the same files directly through
+	  arch/arm/mach-socfpga/Makefile - this symbol does not gate the
+	  arm path and is currently restricted to SANDBOX. Required by
+	  the sandbox low-level backend so cmd/socfpga_rsu.c gets a real
+	  rsu_init() / rsu_slot_count() routing under `ut socfpga`.
+
+config SOCFPGA_RSU_SANDBOX
+	bool "Sandbox low-level backend for the SoC FPGA RSU dispatcher"
+	depends on SOCFPGA_RSU_CORE
+	default y
+	help
+	  Compile the host-side LL backend in drivers/misc/rsu_ll_sandbox.c.
+	  It provides the `rsu_ll_qspi_init()` symbol that the dispatcher
+	  calls unconditionally, returning a struct rsu_ll_intf wired to a
+	  RAM-backed empty SPT (0 partitions, 0 corrupted) and -ENOSYS on
+	  every write-side callback. That is enough for rsu_init() to
+	  succeed, rsu_slot_count() to return 0, and the dispatcher's
+	  spt/cpb corruption guards to all pass. Replace - do not extend -
+	  with a richer RAM-backed SPT/CPB mock when wiring deeper tests.
+
 config ATSHA204A
 	bool "Support for Atmel ATSHA204A module"
 	select BITREVERSE

@@ -175,7 +175,10 @@ F:	configs/socfpga_*
 F:	doc/board/intel/
 F:	doc/device-tree-bindings/misc/altr,socfpga-rsu.yaml
 F:	drivers/ddr/altera/
+F:	drivers/misc/rsu_ll_sandbox.c
 F:	drivers/misc/socfpga_rsu.c
+F:	drivers/misc/socfpga_rsu_core.c
+F:	drivers/misc/socfpga_rsu_misc.c
 F:	drivers/power/domain/altr-pmgr-agilex5.c
 F:	drivers/sysreset/sysreset_socfpga*
 F:	include/rsu_console.h

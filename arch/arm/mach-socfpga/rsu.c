@@ -15,9 +15,18 @@
 #endif
 #include <socfpga_rsu.h>
 #include <socfpga_rsu_misc.h>
+/*
+ * SMC-mediated propagation of DCMF version / status / max-retry to the
+ * secure monitor only makes sense on real Altera silicon. Skip the
+ * arch-arm headers and the corresponding helpers under CONFIG_SANDBOX
+ * so the dispatcher can run inside the sandbox `ut` framework against
+ * a RAM-backed rsu_ll_intf (see drivers/misc/rsu_ll_sandbox.c).
+ */
+#if !defined(CONFIG_SANDBOX)
 #include <asm/arch/smc_api.h>
 #include <asm/system.h>
 #include <linux/intel-smc.h>
+#endif
 
 /* RSU Notify Bitmasks */
 #define RSU_NOTIFY_IGNORE_STAGE         BIT(18)
@@ -943,10 +952,25 @@ int rsu_reset_retry_counter(void)
 	return rsu_ll()->fw_ops.notify(arg);
 }
 
+/*
+ * Defined arm-side in arch/arm/mach-socfpga/smc_rsu_s10.c. Declared
+ * unconditionally so the dispatcher source compiles on sandbox -
+ * the corresponding use is sandboxed-away below, so the linker never
+ * resolves these symbols on the sandbox binary.
+ */
 extern u32 smc_rsu_dcmf_version[4];
 
 static int copy_dcmf_version_to_smc(u32 *versions)
 {
+#if defined(CONFIG_SANDBOX)
+	/*
+	 * Sandbox has no secure monitor; the LL backend supplies the
+	 * versions to the caller of rsu_dcmf_version() but there is
+	 * nowhere to propagate them to.
+	 */
+	(void)versions;
+	return 0;
+#else
 #if !defined(CONFIG_XPL_BUILD) && defined(CONFIG_SPL_ATF)
 	u64 args[2];
 #else
@@ -974,6 +998,7 @@ static int copy_dcmf_version_to_smc(u32 *versions)
 	memcpy(dcmf_versions, versions, sizeof(*versions) * 4);
 #endif
 	return 0;
+#endif /* CONFIG_SANDBOX */
 }
 
 /**
@@ -1013,7 +1038,8 @@ int rsu_dcmf_version(u32 *versions)
  */
 int rsu_max_retry(u8 *value)
 {
-#if !defined(CONFIG_XPL_BUILD) && defined(CONFIG_SPL_ATF)
+#if !defined(CONFIG_XPL_BUILD) && defined(CONFIG_SPL_ATF) && \
+	!defined(CONFIG_SANDBOX)
 	u64 arg;
 #endif
 	int ret;
@@ -1028,7 +1054,10 @@ int rsu_max_retry(u8 *value)
 	if (ret)
 		return ret;
 
-#if !defined(CONFIG_XPL_BUILD) && defined(CONFIG_SPL_ATF)
+#if defined(CONFIG_SANDBOX)
+	/* No secure monitor on sandbox; return the LL-supplied value. */
+	return 0;
+#elif !defined(CONFIG_XPL_BUILD) && defined(CONFIG_SPL_ATF)
 	arg = *value;
 	if (invoke_smc(INTEL_SIP_SMC_RSU_COPY_MAX_RETRY, &arg, 1, NULL, 0))
 		return -EINVAL;
@@ -1038,10 +1067,20 @@ int rsu_max_retry(u8 *value)
 #endif
 }
 
+/* As above; symbol lives in smc_rsu_s10.c on arm, unreferenced on sandbox. */
 extern u16 smc_rsu_dcmf_status[4];
 
 static int copy_dcmf_status_to_smc(u16 *status)
 {
+#if defined(CONFIG_SANDBOX)
+	/*
+	 * Sandbox has no secure monitor; the LL backend supplies the
+	 * status to the caller of rsu_dcmf_status() but there is
+	 * nowhere to propagate it to.
+	 */
+	(void)status;
+	return 0;
+#else
 #if !defined(CONFIG_XPL_BUILD) && defined(CONFIG_SPL_ATF)
 	u64 arg;
 #else
@@ -1067,6 +1106,7 @@ static int copy_dcmf_status_to_smc(u16 *status)
 	memcpy(dcmf_status, status, sizeof(*status) * 4);
 #endif
 	return 0;
+#endif /* CONFIG_SANDBOX */
 }
 
 /**
