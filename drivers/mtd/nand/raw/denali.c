@@ -1293,7 +1293,7 @@ int denali_init(struct denali_nand_info *denali)
 	/* no subpage writes on denali */
 	chip->options |= NAND_NO_SUBPAGE_WRITE;
 
-	if (IS_ENABLED(CONFIG_SPL_BUILD) &&
+	if (IS_ENABLED(CONFIG_XPL_BUILD) &&
 	    IS_ENABLED(CONFIG_NAND_DENALI_SKIP_BBTSCAN_SPL))
 		chip->options |= NAND_SKIP_BBTSCAN;
 
