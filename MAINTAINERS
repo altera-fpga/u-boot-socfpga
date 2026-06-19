@@ -179,12 +179,16 @@ F:	drivers/misc/rsu_ll_sandbox.c
 F:	drivers/misc/socfpga_rsu.c
 F:	drivers/misc/socfpga_rsu_core.c
 F:	drivers/misc/socfpga_rsu_misc.c
+F:	drivers/misc/socfpga_rsu_s10_handlers.c
 F:	drivers/power/domain/altr-pmgr-agilex5.c
 F:	drivers/sysreset/sysreset_socfpga*
 F:	include/rsu_console.h
+F:	include/socfpga_mailbox_rsu.h
 F:	include/socfpga_rsu.h
+F:	include/socfpga_rsu_flash_if.h
 F:	include/socfpga_rsu_ll.h
 F:	include/socfpga_rsu_misc.h
+F:	include/socfpga_rsu_s10.h
 F:	include/test/socfpga.h
 F:	test/socfpga/
 F:	test_asan/rsu/

@@ -86,26 +86,32 @@ config SOCFPGA_RSU_DM
 	  by CMD_SOCFPGA_RSU (the only consumer of this device).
 
 config SOCFPGA_RSU_CORE
-	bool "Compile the SoC FPGA RSU dispatcher and misc helpers"
+	bool
 	depends on SANDBOX
 	depends on CMD_SOCFPGA_RSU
 	default y
 	help
-	  Build the cross-arch RSU dispatcher (arch/arm/mach-socfpga/rsu.c)
-	  and misc helpers (arch/arm/mach-socfpga/rsu_misc.c) into the
-	  sandbox binary via #include wrappers in drivers/misc/. The arm
-	  build continues to compile the same files directly through
+	  Internal symbol. Auto-y whenever CMD_SOCFPGA_RSU=y on SANDBOX;
+	  not user-selectable so the cmd/ entry point cannot be enabled
+	  on sandbox without the objects it links against - that would
+	  produce undefined references to rsu_init() and friends.
+
+	  Builds the cross-arch RSU dispatcher (arch/arm/mach-socfpga/
+	  rsu.c) and misc helpers (rsu_misc.c) into the sandbox binary
+	  via #include wrappers in drivers/misc/. The arm build keeps
+	  compiling the same files directly through
 	  arch/arm/mach-socfpga/Makefile - this symbol does not gate the
-	  arm path and is currently restricted to SANDBOX. Required by
-	  the sandbox low-level backend so cmd/socfpga_rsu.c gets a real
-	  rsu_init() / rsu_slot_count() routing under `ut socfpga`.
+	  arm path.
 
 config SOCFPGA_RSU_SANDBOX
-	bool "Sandbox low-level backend for the SoC FPGA RSU dispatcher"
+	bool
 	depends on SOCFPGA_RSU_CORE
 	default y
 	help
-	  Compile the host-side LL backend in drivers/misc/rsu_ll_sandbox.c.
+	  Internal symbol. Auto-y whenever SOCFPGA_RSU_CORE=y, for the
+	  same link-time-correctness reason as SOCFPGA_RSU_CORE.
+
+	  Compiles the host-side LL backend in drivers/misc/rsu_ll_sandbox.c.
 	  It provides the `rsu_ll_qspi_init()` symbol that the dispatcher
 	  calls unconditionally, returning a struct rsu_ll_intf wired to a
 	  RAM-backed empty SPT (0 partitions, 0 corrupted) and -ENOSYS on
@@ -113,6 +119,46 @@ config SOCFPGA_RSU_SANDBOX
 	  succeed, rsu_slot_count() to return 0, and the dispatcher's
 	  spt/cpb corruption guards to all pass. Replace - do not extend -
 	  with a richer RAM-backed SPT/CPB mock when wiring deeper tests.
+
+	  Also provides -EOPNOTSUPP stubs for the SDM mailbox RSU subset
+	  (mbox_rsu_status / mbox_rsu_get_spt_offset / mbox_rsu_update)
+	  consumed by the S10/Agilex command handlers below.
+
+config SOCFPGA_RSU_S10_HANDLERS
+	bool
+	depends on SOCFPGA_RSU_CORE
+	depends on SOCFPGA_RSU_SANDBOX
+	default y
+	help
+	  Internal symbol. Auto-y whenever SOCFPGA_RSU_SANDBOX=y, for
+	  the same link-time-correctness reason as SOCFPGA_RSU_CORE.
+
+	  Builds arch/arm/mach-socfpga/rsu_s10.c (the production handlers
+	  for "rsu list", "rsu update", "rsu dtb") into the sandbox via
+	  drivers/misc/socfpga_rsu_s10_handlers.c, which #includes the
+	  ARM .c directly per the uboot-test-harness rule. The handlers'
+	  SDM mailbox calls are stubbed to -EOPNOTSUPP by the sandbox LL
+	  backend, so the handlers exercise the "no firmware" early-out
+	  path end-to-end.
+
+if SANDBOX
+
+config SOCFPGA_RSU_SF_CS
+	int "SPI Flash chip-select used by RSU SPT/CPB (sandbox)"
+	depends on SOCFPGA_RSU_S10_HANDLERS
+	default 0
+	help
+	  Sandbox-side definition of the RSU SPT/CPB chip-select. The
+	  ARM build gets this symbol from arch/arm/mach-socfpga/Kconfig;
+	  this drivers/misc/ entry is wrapped in 'if SANDBOX' so it is
+	  ONLY visible on sandbox builds, where arch/arm/... is not
+	  sourced. That keeps the two definitions mutually exclusive and
+	  avoids the Kconfig symbol-redefinition warning that would
+	  otherwise fire on ARM SoC FPGA builds (which see both files).
+	  The sandbox stubs the SDM mailbox calls to -EOPNOTSUPP, so the
+	  actual chip-select value is never used.
+
+endif # SANDBOX
 
 config ATSHA204A
 	bool "Support for Atmel ATSHA204A module"

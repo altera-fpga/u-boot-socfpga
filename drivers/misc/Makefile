@@ -32,6 +32,7 @@ endif
 obj-$(CONFIG_ALTERA_SYSID) += altera_sysid.o
 obj-$(CONFIG_SOCFPGA_RSU_DM) += socfpga_rsu.o
 obj-$(CONFIG_SOCFPGA_RSU_CORE) += socfpga_rsu_core.o socfpga_rsu_misc.o
+obj-$(CONFIG_SOCFPGA_RSU_S10_HANDLERS) += socfpga_rsu_s10_handlers.o
 obj-$(CONFIG_SOCFPGA_RSU_SANDBOX) += rsu_ll_sandbox.o
 obj-$(CONFIG_ATSHA204A) += atsha204a-i2c.o
 obj-$(CONFIG_CBMEM_CONSOLE) += cbmem_console.o

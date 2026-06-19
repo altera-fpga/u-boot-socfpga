@@ -146,3 +146,65 @@ static int socfpga_test_rsu_slot_by_name_empty(struct unit_test_state *uts)
 SOCFPGA_TEST(socfpga_test_rsu_slot_by_name_empty, 0);
 
 #endif /* CONFIG_SOCFPGA_RSU_CORE */
+
+/*
+ * Handler-routing smoke tests below require the production S10/Agilex
+ * command handlers (arch/arm/mach-socfpga/rsu_s10.c) compiled into the
+ * sandbox via drivers/misc/socfpga_rsu_s10_handlers.c. The sandbox LL
+ * backend stubs the SDM mailbox calls to -EOPNOTSUPP, so each test
+ * verifies that the *production* handler reaches that stub and reports
+ * the expected error message - not that the cmd dispatcher's parser
+ * intercepted the call early. A future refactor that breaks the
+ * handler wiring will print a different error or crash, which is
+ * exactly the regression we want to catch.
+ */
+#if IS_ENABLED(CONFIG_SOCFPGA_RSU_S10_HANDLERS)
+
+static int socfpga_test_rsu_list_no_firmware(struct unit_test_state *uts)
+{
+	ut_asserteq(1, run_command("rsu list", 0));
+	ut_assert_nextlinen("RSU: Firmware or flash content not supporting RSU");
+
+	return 0;
+}
+
+SOCFPGA_TEST(socfpga_test_rsu_list_no_firmware, UTF_CONSOLE);
+
+static int socfpga_test_rsu_update_no_firmware(struct unit_test_state *uts)
+{
+	ut_asserteq(1, run_command("rsu update 0xdeadbeef", 0));
+	ut_assert_nextlinen("RSU: RSU update to 0x00000000deadbeef");
+	ut_assert_nextlinen("RSU: mbox_rsu_update failed");
+
+	return 0;
+}
+
+SOCFPGA_TEST(socfpga_test_rsu_update_no_firmware, UTF_CONSOLE);
+
+/*
+ * rsu_update has its own argv parser (rsu_parse_hex_u64 in rsu_s10.c)
+ * separate from the cmd-dispatcher's rsu_parse_num. Trailing junk and
+ * a missing argument must both be rejected before mbox_rsu_update is
+ * ever called - i.e. the sandbox stub must not print its error banner.
+ *
+ * Per the top-of-file note: run_command() collapses CMD_RET_USAGE and
+ * CMD_RET_FAILURE to the same return value, so we pair each run with
+ * ut_assert_skip_to_linen("rsu - ") to prove the parser rejected argv
+ * up front (CMD_RET_USAGE prints the cmd_usage() banner) rather than
+ * the sandbox mailbox stub firing later and returning -EOPNOTSUPP.
+ * UTF_CONSOLE on SOCFPGA_TEST enables the console capture.
+ */
+static int socfpga_test_rsu_update_bad_arg(struct unit_test_state *uts)
+{
+	ut_asserteq(1, run_command("rsu update", 0));
+	ut_assert_skip_to_linen("rsu - ");
+
+	ut_asserteq(1, run_command("rsu update 12xyz", 0));
+	ut_assert_skip_to_linen("rsu - ");
+
+	return 0;
+}
+
+SOCFPGA_TEST(socfpga_test_rsu_update_bad_arg, UTF_CONSOLE);
+
+#endif /* CONFIG_SOCFPGA_RSU_S10_HANDLERS */

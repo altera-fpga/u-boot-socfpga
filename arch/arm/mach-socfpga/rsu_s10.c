@@ -4,24 +4,25 @@
  *
  */
 
+#include <command.h>
+#include <env.h>
+#include <fdt_support.h>
 #include <limits.h>
 #include <linux/compiler.h>
 #include <linux/errno.h>
 #include <linux/kernel.h>
+#include <linux/libfdt.h>
 #ifdef CONFIG_DM_SPI_FLASH
 #include <dm/device.h>
 #endif
-#include <asm/arch/mailbox_s10.h>
-#include <asm/arch/rsu.h>
-#include <asm/arch/rsu_s10.h>
-#include <command.h>
 #include <rsu_console.h>
-#include <vsprintf.h>
+#include <socfpga_mailbox_rsu.h>
+#include <socfpga_rsu.h>
+#include <socfpga_rsu_flash_if.h>
+#include <socfpga_rsu_s10.h>
 #include <spi.h>
 #include <spi_flash.h>
-#include <env.h>
-#include <fdt_support.h>
-#include <asm/arch/rsu_flash_if.h>
+#include <vsprintf.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 

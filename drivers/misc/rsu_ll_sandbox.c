@@ -35,6 +35,7 @@
  */
 
 #include <linux/errno.h>
+#include <socfpga_mailbox_rsu.h>
 #include <socfpga_rsu_ll.h>
 
 static struct rsu_ll_intf sandbox_intf;
@@ -305,32 +306,36 @@ int rsu_ll_qspi_init(struct rsu_ll_intf **intf)
 }
 
 /*
- * Subcommand backends below are declared in <rsu_console.h> and
- * implemented for real hardware by arch/arm/mach-socfpga/rsu_s10.c.
- * They are NOT part of struct rsu_ll_intf - the cmd dispatcher in
- * cmd/socfpga_rsu.c routes 'rsu update', 'rsu dtb' and 'rsu
- * spt_cpb_list' to these helpers directly. The sandbox build needs
- * equivalents so cmd/socfpga_rsu.c links. They return CMD_RET_FAILURE
- * because the wrapper has already validated argc/argv - the failure
- * is "no SDM mailbox on this host", not "user typo".
+ * SDM mailbox RSU subset stubs. The real implementations live in
+ * arch/arm/mach-socfpga/mailbox_s10.c and talk to the Stratix 10 /
+ * Agilex SDM hardware over the secure mailbox; that mailbox does not
+ * exist on a Linux host, so the sandbox returns -EOPNOTSUPP. Any
+ * non-zero return is enough to drive rsu_s10.c's "Firmware or flash
+ * content not supporting RSU" path through rsu_print_status() (which
+ * always returns -ENOTSUPP itself, so rsu_dtb()'s downstream
+ * `if (err == -ENOTSUPP)` check still matches), and to fail
+ * rsu_update() cleanly with the "RSU: mbox_rsu_update failed" message.
+ *
+ * Declarations live in <socfpga_mailbox_rsu.h>. Implementations are
+ * here (rather than in a separate .c) so the entire sandbox-specific
+ * RSU surface lives in one file.
  */
-int rsu_spt_cpb_list(int argc, char * const argv[])
+int mbox_rsu_status(u32 *resp_buf, u32 resp_buf_len)
 {
-	(void)argc;
-	(void)argv;
-	return CMD_RET_FAILURE;
+	(void)resp_buf;
+	(void)resp_buf_len;
+	return -EOPNOTSUPP;
 }
 
-int rsu_update(int argc, char * const argv[])
+int mbox_rsu_get_spt_offset(u32 *resp_buf, u32 resp_buf_len)
 {
-	(void)argc;
-	(void)argv;
-	return CMD_RET_FAILURE;
+	(void)resp_buf;
+	(void)resp_buf_len;
+	return -EOPNOTSUPP;
 }
 
-int rsu_dtb(int argc, char * const argv[])
+int mbox_rsu_update(u32 *flash_offset)
 {
-	(void)argc;
-	(void)argv;
-	return CMD_RET_FAILURE;
+	(void)flash_offset;
+	return -EOPNOTSUPP;
 }
