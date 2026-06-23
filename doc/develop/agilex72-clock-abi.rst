@@ -5,10 +5,7 @@ Agilex 72 clock dt-binding ABI policy
 
 The Altera Agilex 72 family has its
 clock manager described by the public dt-binding header
-``include/dt-bindings/clock/altr,agilex72-clock.h``. The Linux
-SoCFPGA tree carries a sibling header in
-``altera-innersource/applications.fpga.soc.linux-socfpga-dev``
-(``include/dt-bindings/clock/altr,agilex72-clkmgr.h``).
+``include/dt-bindings/clock/altr,agilex72-clkmgr.h``.
 
 Namespace detach (May 2026)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -17,17 +14,14 @@ Earlier U-Boot bring-up revisions aliased every
 ``AGILEX72_*`` symbol to a matching ``AGILEX5_*`` integer so the
 Agilex 72 driver could be brought up on top of the existing Agilex5
 clock-driver infrastructure. That alias chain has been removed in
-favour of a self-contained integer namespace that **matches the
-Linux header exactly for IDs 0..85**. U-Boot extensions (CORE2/CORE3 for
-pre-V9 A76 silicon, the WDT_CLK alias) live above 85. A DTB compiled
-against either header therefore carries identical clock-reference
-integers, which is the precondition for the longer-term goal of
-having U-Boot consume the upstream Linux DTS verbatim.
+favour of a self-contained integer namespace that matches the Linux
+clock-manager binding. U-Boot uses the same 0..95 integer IDs and
+symbol names defined in ``include/dt-bindings/clock/altr,agilex72-clkmgr.h``.
 
-The two headers still track **different revisions** of the Agilex 72 HPS
-Clock Manager HAS document and therefore use **different symbolic
-names** for a handful of clocks. The underlying integer IDs match,
-so the DTB stays ABI-compatible between U-Boot and Linux.
+Historical note: previous U-Boot revisions carried wrapper headers under
+``include/dt-bindings/clock/altr,agilex72-*.h`` and a U-Boot-specific ABI
+extension range. Those wrappers/extensions were removed when aligning
+with the Linux binding layout.
 
 This file is the canonical record of that split, the rationale, and
 the open coordination items between the U-Boot SoCFPGA maintainers
@@ -50,6 +44,9 @@ produced by either project resolves correctly on the other.
 
 Mapping table
 -------------
+
+This section is retained for historical context only. The current binding
+is the unified ``include/dt-bindings/clock/altr,agilex72-clkmgr.h`` namespace.
 
 The four columns are:
 
@@ -131,7 +128,7 @@ F1 (USB2 OTG clock domain)
    "(20 / 25 MHz)" reading of older HAS revisions is a doc
    artefact, not two distinct clocks.
 
-   ``socfpga_km.dtsi`` reflects this:
+   ``socfpga_agilex72.dtsi`` reflects this:
 
    * ``usb0`` (dwc2) binds ``AGILEX72_HSP_MP_CLK`` with
      ``clock-names = "otg"``. Matches the Linux dwc2 binding.
@@ -171,7 +168,7 @@ F6 (Watchdog clock source)
    ``wdt_clk`` Clock-Manager output; Section 9.8.9 documents the
    existing wire, not a new one.
 
-   ``socfpga_km.dtsi`` therefore binds all four watchdogs to
+   ``socfpga_agilex72.dtsi`` therefore binds all four watchdogs to
    ``AGILEX72_LSP_SYS_FREE_CLK``, matching Linux. The
    binding header keeps ``AGILEX72_WDT_CLK`` as an alias of
    ``AGILEX72_LSP_SYS_FREE_CLK`` (same integer ID) for any
@@ -185,7 +182,7 @@ F7 (EMAC PTP reference clock)
    ``ptp_ref`` timestamp reference. HAS image37 (EMAC/XGMAC clock
    generation) shows ``emac_ptp_ref_clk`` as a distinct
    Clock-Manager output. Linux binds it for every EMAC;
-   ``socfpga_km.dtsi`` now does the same:
+   ``socfpga_agilex72.dtsi`` now does the same:
 
    .. code-block:: dts
 
@@ -206,7 +203,7 @@ F8 (SDMMC ``sdmclk`` naming)
    ``AGILEX72_SDMMC{0,1}_SDMCLK`` on ``mmc0`` / ``mmc1``; the
    U-Boot binding header adds the same spellings as aliases of
    the existing ``AGILEX72_SDMMC{0,1}_CLK`` integer IDs.
-   ``socfpga_km.dtsi`` references the ``_SDMCLK`` form on both
+   ``socfpga_agilex72.dtsi`` references the ``_SDMCLK`` form on both
    MMCs to match Linux. Integer IDs are unchanged.
 
 F2 (GPPLL1 single-output naming)
@@ -265,13 +262,28 @@ F9 (xSPI controller clocking)
                      <&clkmgr AGILEX72_XSPI_CLK>;
        clock-names = "reg-clk", "core-clk";
 
-   The U-Boot binding header adds ``AGILEX72_XSPI_CLK`` as
-   an alias of ``AGILEX72_LSP_MP_CLK`` (same integer ID;
-   same physical lane). ``socfpga_km.dtsi`` rebinds
-   ``xspi@9008000`` to the same two-clock + clock-names form as
-   Linux. The legacy ``xspi_clk: xspi-clk { fixed-clock
-   @200MHz }`` placeholder in the dtsi's local
-   ``clocks { ... }`` block is removed.
+   ``socfpga_agilex72.dtsi`` binds ``xspi@9008000`` to the same
+   two-clock + clock-names form as Linux: ``reg-clk`` on
+   ``AGILEX72_LSP_MP_CLK`` (250 MHz ``mACLK``/``regPCLK`` lane)
+   and ``core-clk`` on ``AGILEX72_XSPI_CLK`` (200 MHz flash
+   domain after the CLKMGR ``xspi_phy`` CTR/divider path; HAS
+   Figure 46 right-hand ``xspi_clk``). The legacy
+   ``xspi_clk: xspi-clk { fixed-clock @200MHz }`` placeholder
+   in the dtsi's local ``clocks { ... }`` block is removed.
+
+   ``AGILEX72_XSPI_PCLK`` (binding ID 77, audit name
+   ``xspi_pclk``) is **audit/bindings-only**: no Agilex 72 DTS
+   consumer references it and Linux does not expose a
+   separate ``xspi_pclk`` clock. It exists so
+   ``cm_print_runtime_clock_tree()`` /
+   ``AGILEX72_CONSUMER_AUDIT`` can enumerate every binding
+   ID. In ``clk-agilex72.c`` it shares the same
+   ``get_rate`` / ``enable`` path as ``AGILEX72_XSPI_CLK``
+   (``clk_get_xspi_phy_clk_hz()`` + ``AGILEX72_PERIPLL_EN_XSPI0``).
+   Despite the ``_pclk`` suffix it is **not** the wrapper
+   ``regPCLK``/``mACLK`` APB path (that is ``reg-clk`` →
+   ``LSP_MP_CLK``) and not the Dedicated PHY ``reg_pclk``
+   (125 MHz ``lsp_sp_clk`` per HAS-GPPLL Table 20).
 
    The U-Boot Cadence XSPI driver
    (``drivers/spi/cadence_xspi.c``) does not consume the
@@ -368,8 +380,8 @@ F11 (handoff-driven per-design rates)
    that state at every ``get_rate`` call and walks CLKMGR-top CTR /
    NoCDIV CSRs for multi-stage peripheral lanes; it falls back to
    the compile-time defaults when no handoff has been applied
-   (mis-configured build without ``HANDOFF_DEMO``,
-   ``HANDOFF_EMBED_DEMO``, or a future on-silicon OCRAM producer).
+   (mis-configured build without ``HANDOFF_EMBED_DEMO``,
+    or a future on-silicon OCRAM producer).
 
    The architectural reasoning behind this split:
 
@@ -394,7 +406,7 @@ F11 (handoff-driven per-design rates)
    ``CONFIG_AGILEX72_CLKMGR_RUNTIME_AUDIT``) cross-checks
    ``clk_get_rate()`` against the same v0.83 default-preset
    goldens on the production handoff path (Simics 6595+ with
-   ``HANDOFF_DEMO``; no ``SKIP_LOCK`` workaround).
+   ``HANDOFF_EMBED_DEMO``; no ``SKIP_LOCK`` workaround).
 
 Architect-confirmed clarifications
 ----------------------------------
@@ -411,7 +423,7 @@ C1 (osc1timer{0,1} pclk source)
 The two timer instances enabled by ``peripllgrp.ennoc[9:8]``
 (``osc1timer{0,1}clken``, i.e. the ``L4SYSTIMER{0,1}`` reset
 domains, mapped to ``timer2`` / ``timer3`` in
-``arch/arm/dts/socfpga_km.dtsi``) had four v0.83 artefacts that
+``arch/arm/dts/socfpga_agilex72.dtsi``) had four v0.83 artefacts that
 did not agree on the pclk source:
 
 * Figure 9-16 *LS PSS Clock Muxes, Dividers, and Gates* drew
@@ -426,17 +438,17 @@ register sheet and the spreadsheet are canonical for v0.83;
 Figure 9-16's lower wrapper block is a labelling bug and has
 been flagged for refresh in the next HAS revision.
 
-Code state: ``timer2`` / ``timer3`` in ``socfpga_km.dtsi``
+Code state: ``timer2`` / ``timer3`` in ``socfpga_agilex72.dtsi``
 bind to ``AGILEX72_LSP_SYS_FREE_CLK`` per the architect verdict;
 no further DTS change is required.
 
 Affected next-rev HAS items: Figure 9-16 lower-rail label.
 
-C2 (CLKMGR demo-handoff cookie words: V9 silicon)
+C2 (CLKMGR embedded handoff cookie words: V9 silicon)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The in-tree demo handoff payload (demo C-array in
-``drivers/clk/altera/agilex72-clkmgr-demo-handoff.c``) programs
+The in-tree embedded handoff payload (``tools/agilex72-handoff-gen.py``,
+embedded via ``agilex72-handoff-blob-demo.c`` on Simics) programs
 two CLKMGR-top cookie words per the V9 register sheet:
 
 * ``0x0915C030`` ``mainpllgrp.en`` — DV cookie ``0xDE0`` (open item:
@@ -450,11 +462,12 @@ committed to V9 (A720+A520) silicon exclusively.
 Architect verdict (received 2026-05-25, JYK): the V9 register sheet
 is canonical; ``KM_HPS_PLL_Reg_Audit.xlsx`` is no longer authoritative.
 
-Code state: single demo-handoff source selected by
-``CONFIG_AGILEX72_CLKMGR_HANDOFF_DEMO=y``. PLL presets are
+Code state: embedded handoff payload in ``tools/agilex72-handoff-gen.py``,
+embedded for Simics via ``CONFIG_AGILEX72_CLKMGR_HANDOFF_EMBED_DEMO=y``.
+PLL presets are
 sourced from DV SYSPRESET0 bin1 (GPPLL0 2000 MHz, GPPLL1 1850 MHz,
 GPPLL2 2500 MHz VCO). Silicon validation pending — see open-item
-list in the demo-handoff source file header.
+list in the generator script header.
 
 1. PLL presets: confirm the 78 CSR values still meet A720/A520
    frequency targets.
@@ -512,7 +525,7 @@ Template C: Compatible string drop
 
     U-Boot handoff series dropped the legacy "altr,km-clkmgr"
     fallback from the driver match table and from
-    socfpga_km.dtsi. New Agilex 72 DTS should use only
+    socfpga_agilex72.dtsi. New Agilex 72 DTS should use only
     "altr,agilex72-clkmgr". Existing v0.8-era DTs that
     list "altr,km-clkmgr" first or only will need to be
     updated.
@@ -528,6 +541,6 @@ Source-of-truth references
   before SDMMC1 / USB31 splits and other v0.83 clock-tree updates
   landed).
 
-If you are touching ``include/dt-bindings/clock/altr,agilex72-clock.h``
+If you are touching ``include/dt-bindings/clock/altr,agilex72-clkmgr.h``
 or the matching driver tables in ``drivers/clk/altera/clk-agilex72.c``,
 keep this file in sync with the change.

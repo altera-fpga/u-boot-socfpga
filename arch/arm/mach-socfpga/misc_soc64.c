@@ -296,5 +296,11 @@ int misc_init_r(void)
 		return smmu_sdm_init();
 #endif
 
+#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72) && \
+	IS_ENABLED(CONFIG_AGILEX72_CLKMGR_RUNTIME_AUDIT)
+	if (agilex72_clkmgr_production_handoff_path())
+		cm_audit_runtime_clock_trees();
+#endif
+
 	return 0;
 }
