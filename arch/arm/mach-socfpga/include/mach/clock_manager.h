@@ -14,11 +14,58 @@ phys_addr_t socfpga_get_clkmgr_addr(void);
 void cm_wait_for_lock(u32 mask);
 int cm_wait_for_fsm(void);
 void cm_print_clock_quick_summary(void);
+#if IS_ENABLED(CONFIG_AGILEX72_CLKMGR_RUNTIME_AUDIT)
+void cm_print_runtime_clock_tree(void);
+int cm_audit_consumer_clock_rates(void);
+int cm_audit_runtime_clock_trees(void);
+#else
+static inline int cm_audit_runtime_clock_trees(void)
+{
+	return 0;
+}
+#endif
 unsigned long cm_get_mpu_clk_hz(void);
 unsigned int cm_get_qspi_controller_clk_hz(void);
 
 #if defined(CONFIG_ARCH_SOCFPGA_SOC64)
 int cm_set_qspi_controller_clk_hz(u32 clk_hz);
+#endif
+
+/*
+ * Agilex 72 Simics / CONFIG_TARGET_SOCFPGA_EMU: skip full GPPLL preset MMIO
+ * (hangs the VP) and only unlock + exit boot mode. See spl_agilex72.c.
+ */
+#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72)
+/*
+ * Production handoff path (embedded demo blob or non-VP-minimal EMU): not the
+ * Simics VP shortcut that skips full GPPLL preset programming.
+ */
+static inline bool agilex72_clkmgr_production_handoff_path(void)
+{
+	if (IS_ENABLED(CONFIG_AGILEX72_CLKMGR_HANDOFF_EMBED_DEMO))
+		return true;
+
+	return !(IS_ENABLED(CONFIG_TARGET_SOCFPGA_EMU) &&
+		 IS_ENABLED(CONFIG_TARGET_SOCFPGA_AGILEX72_SOCDK));
+}
+
+void agilex72_clkmgr_virtual_platform_minimal_init(void);
+int agilex72_clkmgr_refresh_rates_from_csr_if_locked(void);
+void agilex72_clkmgr_print_rate_state(void);
+void agilex72_clkmgr_secure_unlock(void);
+#else
+static inline void agilex72_clkmgr_virtual_platform_minimal_init(void)
+{
+}
+
+static inline int agilex72_clkmgr_refresh_rates_from_csr_if_locked(void)
+{
+	return 0;
+}
+
+static inline void agilex72_clkmgr_print_rate_state(void)
+{
+}
 #endif
 #endif
 

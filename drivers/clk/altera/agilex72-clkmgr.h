@@ -53,9 +53,19 @@ void agilex72_clkmgr_secure_unlock(void);
 void agilex72_clkmgr_pll_cfg5_rearm(void);
 void agilex72_pll_enable(void);
 int agilex72_pll_wait_lock(void);
+int agilex72_clkmgr_audit_dv_preset_rates(bool check_clkouts);
+void agilex72_clkmgr_bisect_reg_abs(u32 base, u32 count);
+void agilex72_clkmgr_bisect_cfg5_rearm_done(void);
+void agilex72_clkmgr_bisect_kv_milestone(const char *first_key, int ret);
 void agilex72_clkmgr_refresh_vco_from_csr(void);
 void agilex72_clkmgr_refresh_c_from_csr(void);
 void agilex72_disable_boot_clk_bypass(void);
+
+void agilex72_clkmgr_virtual_platform_minimal_init(void);
+
+int agilex72_clkmgr_refresh_rates_from_csr_if_locked(void);
+
+void agilex72_clkmgr_print_rate_state(void);
 void agilex72_config_main_pll(unsigned long freq);
 void agilex72_config_periph_pll(unsigned long freq);
 

@@ -40,6 +40,21 @@ static struct agilex72_clkmgr_rate_state agilex72_rate_state = {
 
 static bool agilex72_clkmgr_pll_locked;
 
+#if IS_ENABLED(CONFIG_AGILEX72_CLKMGR_MMIO_TRACE)
+static void agilex72_mmio_trace_write(const char *ctx, int idx, u32 val, u32 addr)
+{
+	if (idx >= 0)
+		printf("AGILEX72_MMIO: %s[%d] writel(0x%08x, 0x%08x)\n", ctx, idx, val, addr);
+	else
+		printf("AGILEX72_MMIO: %s writel(0x%08x, 0x%08x)\n", ctx, val, addr);
+}
+
+static void agilex72_mmio_trace_read(const char *ctx, u32 addr, u32 val)
+{
+	printf("AGILEX72_MMIO: %s readl(0x%08x)->0x%08x\n", ctx, addr, val);
+}
+#endif
+
 const struct agilex72_clkmgr_rate_state *
 agilex72_clkmgr_rate_state(void)
 {
@@ -438,6 +453,9 @@ static bool agilex72_reg_abs_addr_allowed(u32 addr)
 static inline void agilex72_writel(u32 val, u32 addr)
 {
 	pr_debug("agilex72-clkmgr: writel(0x%08x, 0x%08x)\n", val, addr);
+#if IS_ENABLED(CONFIG_AGILEX72_CLKMGR_MMIO_TRACE)
+	agilex72_mmio_trace_write("clkmgr", -1, val, addr);
+#endif
 	writel(val, (void __iomem *)(uintptr_t)addr);
 }
 
@@ -445,6 +463,9 @@ static inline u32 agilex72_readl(u32 addr)
 {
 	u32 val = readl((const void __iomem *)(uintptr_t)addr);
 
+#if IS_ENABLED(CONFIG_AGILEX72_CLKMGR_MMIO_TRACE)
+	agilex72_mmio_trace_read("clkmgr", addr, val);
+#endif
 	return val;
 }
 
@@ -581,8 +602,14 @@ static u64 agilex72_gppll_vco_hz_from_regs(u32 pll_base, u32 glob_reg,
 	u64 vco;
 
 	mode = agilex72_gppll_synth_mode(cfg1, cfg2, cfg5);
-	if (mode != AGILEX72_GPPLL_SYNTH_EQ1)
+	if (mode != AGILEX72_GPPLL_SYNTH_EQ1) {
+		if (IS_ENABLED(CONFIG_TARGET_SOCFPGA_EMU)) {
+			pr_warn("agilex72-clkmgr: %s synth mode %d not decoded on EMU (cfg1=0x%08x cfg2=0x%08x cfg5=0x%08x)\n",
+				pll_name, mode, cfg1, cfg2, cfg5);
+			return 0;
+		}
 		agilex72_gppll_hang_bad_synth(pll_name, cfg1, cfg2, cfg5, mode);
+	}
 
 	if (!fref || !n_div || !mult)
 		return 0;
@@ -869,6 +896,43 @@ void agilex72_clkmgr_pll_cfg5_rearm(void)
 	}
 }
 
+#define AGILEX72_HANDOFF_CLKMGR_TOP_ABS_COUNT	9U
+
+void agilex72_clkmgr_bisect_reg_abs(u32 base, u32 count)
+{
+	if (base == AGILEX72_CLKPLL0_BASE)
+		printf("AGILEX72_BISECT: stage2 pll0 preset done (%u regs)\n", count);
+	else if (base == AGILEX72_CLKPLL1_BASE)
+		printf("AGILEX72_BISECT: stage3 pll1 preset done\n");
+	else if (base == AGILEX72_CLKPLL2_BASE)
+		printf("AGILEX72_BISECT: stage4 pll2 preset done\n");
+	else if (base == SOCFPGA_CLKMGR_ADDRESS)
+		printf("AGILEX72_BISECT: stage%u clkmgr_top%s done\n",
+		       count == AGILEX72_HANDOFF_CLKMGR_TOP_ABS_COUNT ? 8 : 9,
+		       count == AGILEX72_HANDOFF_CLKMGR_TOP_ABS_COUNT ? "" : " dividers");
+}
+
+void agilex72_clkmgr_bisect_cfg5_rearm_done(void)
+{
+	printf("AGILEX72_BISECT: stage5 cfg5 rearm done\n");
+}
+
+void agilex72_clkmgr_bisect_kv_milestone(const char *first_key, int ret)
+{
+	if (!strcmp(first_key, "pll_enable"))
+		printf("AGILEX72_BISECT: stage6 pll_enable+lock ret=%d\n", ret);
+	else if (!strcmp(first_key, "gppll0_c0_div")) {
+		printf("AGILEX72_BISECT: stage7 rate_state kv done\n");
+		if (IS_ENABLED(CONFIG_AGILEX72_CLKMGR_MMIO_TRACE)) {
+			ret = agilex72_clkmgr_audit_dv_preset_rates(true);
+			printf("AGILEX72_BISECT: stage7 DV clkout audit ret=%d\n", ret);
+			agilex72_clkmgr_print_rate_state();
+		}
+	} else if (!strcmp(first_key, "boot_clk_bypass_disable")) {
+		printf("AGILEX72_BISECT: stage10 bootmode exit done\n");
+	}
+}
+
 #define AGILEX72_PLL_STAGE_DELAY_US		5
 
 void agilex72_pll_enable(void)
@@ -902,6 +966,192 @@ void agilex72_pll_enable(void)
 
 #define AGILEX72_PLL_LOCK_TIMEOUT_MS		50
 
+#define AGILEX72_RATE_AUDIT_TOL_PPM		100
+
+static bool agilex72_rate_hz_match(u64 expect, u64 got)
+{
+	u64 delta;
+
+	if (!expect || !got)
+		return false;
+
+	delta = (expect > got) ? (expect - got) : (got - expect);
+	return delta * 1000000ULL <= expect * AGILEX72_RATE_AUDIT_TOL_PPM;
+}
+
+static void agilex72_rate_audit_print_hz(const char *tag, const char *pll,
+					 const char *out, u64 expect, u64 got)
+{
+	const char *verdict = agilex72_rate_hz_match(expect, got) ?
+			      "PASS" : "FAIL";
+
+	printf("AGILEX72_RATE_AUDIT: %s %s expect %llu Hz CSR %llu Hz %s\n",
+	       pll, out, expect, got, verdict);
+}
+
+int agilex72_clkmgr_audit_dv_preset_rates(bool check_clkouts)
+{
+	static const struct {
+		const char *name;
+		u32 pll_base;
+		u64 expect_vco;
+		u32 expect_c0_div, expect_c1_div, expect_c2_div, expect_c3_div;
+		u64 expect_c0_hz, expect_c1_hz, expect_c2_hz, expect_c3_hz;
+	} plls[] = {
+		{
+			"GPPLL0", AGILEX72_CLKPLL0_BASE,
+			AGILEX72_GPPLL0_VCO_HZ,
+			AGILEX72_GPPLL0_C0_DIV, AGILEX72_GPPLL0_C1_DIV,
+			AGILEX72_GPPLL0_C2_DIV, AGILEX72_GPPLL0_C3_DIV,
+			AGILEX72_GPPLL0_C0_HZ, AGILEX72_GPPLL0_C1_HZ,
+			AGILEX72_GPPLL0_C2_HZ, AGILEX72_GPPLL0_C3_HZ,
+		},
+		{
+			"GPPLL1", AGILEX72_CLKPLL1_BASE,
+			AGILEX72_GPPLL1_VCO_HZ,
+			AGILEX72_GPPLL1_C0_DIV, AGILEX72_GPPLL1_C1_DIV,
+			0, 0,
+			AGILEX72_GPPLL1_C0_HZ, AGILEX72_GPPLL1_C1_HZ,
+			0, 0,
+		},
+		{
+			"GPPLL2", AGILEX72_CLKPLL2_BASE,
+			AGILEX72_GPPLL2_VCO_HZ,
+			AGILEX72_GPPLL2_C0_DIV, AGILEX72_GPPLL2_C1_DIV,
+			0, 0,
+			AGILEX72_GPPLL2_C0_HZ, AGILEX72_GPPLL2_C1_HZ,
+			0, 0,
+		},
+	};
+	const struct agilex72_clkmgr_rate_state *state =
+		agilex72_clkmgr_rate_state();
+	u32 stat = agilex72_readl(AGILEX72_CLKMGR_STAT);
+	int fails = 0;
+	size_t i;
+
+	printf("AGILEX72_RATE_AUDIT: DV SYSPRESET0 bin1 vs CSR MAS decode ");
+	printf("(stat=0x%08x lock pll0=%d pll1=%d pll2=%d)\n",
+	       stat,
+	       !!(stat & AGILEX72_CLKMGR_STAT_PLL0_LOCKED),
+	       !!(stat & AGILEX72_CLKMGR_STAT_PLL1_LOCKED),
+	       !!(stat & AGILEX72_CLKMGR_STAT_PLL2_LOCKED));
+
+	if (!state || !state->valid) {
+		printf("AGILEX72_RATE_AUDIT: VCO decode invalid — raw cfg CSRs:\n");
+		for (i = 0; i < ARRAY_SIZE(plls); i++) {
+			u32 cfg1 = agilex72_readl(plls[i].pll_base +
+						      AGILEX72_GPPLL_CFG1_OFF);
+			u32 cfg23 = agilex72_readl(plls[i].pll_base +
+						     AGILEX72_GPPLL_CFG23_OFF);
+
+			printf("  %s cfg1=0x%08x cfg23=0x%08x\n",
+			       plls[i].name, cfg1, cfg23);
+		}
+		printf("AGILEX72_RATE_AUDIT: VERDICT FAIL (CSR VCO decode)\n");
+		return -EINVAL;
+	}
+
+	for (i = 0; i < ARRAY_SIZE(plls); i++) {
+		u32 cfg1 = agilex72_readl(plls[i].pll_base +
+					      AGILEX72_GPPLL_CFG1_OFF);
+		u32 cfg23 = agilex72_readl(plls[i].pll_base +
+					     AGILEX72_GPPLL_CFG23_OFF);
+		u64 vco;
+		u64 c0_hz, c1_hz, c2_hz, c3_hz;
+
+		printf("AGILEX72_RATE_AUDIT: %s cfg1=0x%08x cfg23=0x%08x\n",
+		       plls[i].name, cfg1, cfg23);
+
+		if (i == 0)
+			vco = state->gppll0_vco_hz;
+		else if (i == 1)
+			vco = state->gppll1_vco_hz;
+		else
+			vco = state->gppll2_vco_hz;
+
+		agilex72_rate_audit_print_hz("VCO", plls[i].name, "",
+					     plls[i].expect_vco, vco);
+		if (!agilex72_rate_hz_match(plls[i].expect_vco, vco))
+			fails++;
+
+		if (!check_clkouts)
+			continue;
+
+		if (i == 0) {
+			c0_hz = vco / (state->gppll0_c0_div ? state->gppll0_c0_div : 1);
+			c1_hz = vco / (state->gppll0_c1_div ? state->gppll0_c1_div : 1);
+			c2_hz = vco / (state->gppll0_c2_div ? state->gppll0_c2_div : 1);
+			c3_hz = vco / (state->gppll0_c3_div ? state->gppll0_c3_div : 1);
+			printf("AGILEX72_RATE_AUDIT: GPPLL0 C div KV %u/%u/%u/%u expect %u/%u/%u/%u\n",
+			       state->gppll0_c0_div, state->gppll0_c1_div,
+			       state->gppll0_c2_div, state->gppll0_c3_div,
+			       plls[i].expect_c0_div, plls[i].expect_c1_div,
+			       plls[i].expect_c2_div, plls[i].expect_c3_div);
+			if (state->gppll0_c0_div != plls[i].expect_c0_div ||
+			    state->gppll0_c1_div != plls[i].expect_c1_div ||
+			    state->gppll0_c2_div != plls[i].expect_c2_div ||
+			    state->gppll0_c3_div != plls[i].expect_c3_div) {
+				printf("AGILEX72_RATE_AUDIT: GPPLL0 C-div KV FAIL\n");
+				fails++;
+			}
+			agilex72_rate_audit_print_hz("C0", "GPPLL0", "",
+						     plls[i].expect_c0_hz, c0_hz);
+			agilex72_rate_audit_print_hz("C1", "GPPLL0", "",
+						     plls[i].expect_c1_hz, c1_hz);
+			agilex72_rate_audit_print_hz("C2", "GPPLL0", "",
+						     plls[i].expect_c2_hz, c2_hz);
+			agilex72_rate_audit_print_hz("C3", "GPPLL0", "",
+						     plls[i].expect_c3_hz, c3_hz);
+			if (!agilex72_rate_hz_match(plls[i].expect_c0_hz, c0_hz) ||
+			    !agilex72_rate_hz_match(plls[i].expect_c1_hz, c1_hz) ||
+			    !agilex72_rate_hz_match(plls[i].expect_c2_hz, c2_hz) ||
+			    !agilex72_rate_hz_match(plls[i].expect_c3_hz, c3_hz))
+				fails++;
+		} else if (i == 1) {
+			c0_hz = vco / (state->gppll1_c0_div ? state->gppll1_c0_div : 1);
+			c1_hz = vco / (state->gppll1_c1_div ? state->gppll1_c1_div : 1);
+			printf("AGILEX72_RATE_AUDIT: GPPLL1 C div KV %u/%u expect %u/%u\n",
+			       state->gppll1_c0_div, state->gppll1_c1_div,
+			       plls[i].expect_c0_div, plls[i].expect_c1_div);
+			if (state->gppll1_c0_div != plls[i].expect_c0_div ||
+			    state->gppll1_c1_div != plls[i].expect_c1_div) {
+				printf("AGILEX72_RATE_AUDIT: GPPLL1 C-div KV FAIL\n");
+				fails++;
+			}
+			agilex72_rate_audit_print_hz("C0", "GPPLL1", "",
+						     plls[i].expect_c0_hz, c0_hz);
+			agilex72_rate_audit_print_hz("C1", "GPPLL1", "",
+						     plls[i].expect_c1_hz, c1_hz);
+			if (!agilex72_rate_hz_match(plls[i].expect_c0_hz, c0_hz) ||
+			    !agilex72_rate_hz_match(plls[i].expect_c1_hz, c1_hz))
+				fails++;
+		} else {
+			c0_hz = vco / (state->gppll2_c0_div ? state->gppll2_c0_div : 1);
+			c1_hz = vco / (state->gppll2_c1_div ? state->gppll2_c1_div : 1);
+			printf("AGILEX72_RATE_AUDIT: GPPLL2 C div KV %u/%u expect %u/%u\n",
+			       state->gppll2_c0_div, state->gppll2_c1_div,
+			       plls[i].expect_c0_div, plls[i].expect_c1_div);
+			if (state->gppll2_c0_div != plls[i].expect_c0_div ||
+			    state->gppll2_c1_div != plls[i].expect_c1_div) {
+				printf("AGILEX72_RATE_AUDIT: GPPLL2 C-div KV FAIL\n");
+				fails++;
+			}
+			agilex72_rate_audit_print_hz("C0", "GPPLL2", "",
+						     plls[i].expect_c0_hz, c0_hz);
+			agilex72_rate_audit_print_hz("C1", "GPPLL2", "",
+						     plls[i].expect_c1_hz, c1_hz);
+			if (!agilex72_rate_hz_match(plls[i].expect_c0_hz, c0_hz) ||
+			    !agilex72_rate_hz_match(plls[i].expect_c1_hz, c1_hz))
+				fails++;
+		}
+	}
+
+	printf("AGILEX72_RATE_AUDIT: VERDICT %s (%d mismatch)\n",
+	       fails ? "FAIL" : "PASS", fails);
+
+	return fails ? -EINVAL : 0;
+}
+
 int agilex72_pll_wait_lock(void)
 {
 	int err;
@@ -910,12 +1160,25 @@ int agilex72_pll_wait_lock(void)
 
 	pr_debug("agilex72-clkmgr: PLL wait-for-lock (poll stat[8/10/12])\n");
 
+#if IS_ENABLED(CONFIG_AGILEX72_CLKMGR_MMIO_TRACE)
+	{
+		u32 stat = readl((const void *)(uintptr_t)AGILEX72_CLKMGR_STAT);
+
+		printf("AGILEX72_MMIO: pll_wait_lock start stat=0x%08x (poll @0x%08x)\n",
+		       stat, (u32)AGILEX72_CLKMGR_STAT);
+	}
+#endif
+
 	err = wait_for_bit_le32((const void *)(uintptr_t)AGILEX72_CLKMGR_STAT,
 				AGILEX72_CLKMGR_STAT_ALL_LOCKED, true,
 				AGILEX72_PLL_LOCK_TIMEOUT_MS, false);
 	if (err) {
 		u32 stat = readl((const void *)(uintptr_t)AGILEX72_CLKMGR_STAT);
 
+#if IS_ENABLED(CONFIG_AGILEX72_CLKMGR_MMIO_TRACE)
+		agilex72_mmio_trace_read("pll_wait_lock timeout", AGILEX72_CLKMGR_STAT,
+					 stat);
+#endif
 		pr_err("agilex72-clkmgr: PLL lock timeout, stat=0x%08x (locked: pll0=%d pll1=%d pll2=%d)\n",
 		       stat,
 		       !!(stat & AGILEX72_CLKMGR_STAT_PLL0_LOCKED),
@@ -951,6 +1214,7 @@ void agilex72_disable_boot_clk_bypass(void)
 
 		pr_err("agilex72-clkmgr: BUSY did not clear after BOOTMODE exit, stat=0x%08x\n",
 		       stat);
+		hang();
 	}
 
 	clrbits_le32((void *)(uintptr_t)(SOCFPGA_CLKMGR_ADDRESS +
@@ -959,6 +1223,121 @@ void agilex72_disable_boot_clk_bypass(void)
 	clrbits_le32((void *)(uintptr_t)(SOCFPGA_CLKMGR_ADDRESS +
 					 AGILEX72_CLKMGR_PERICTL_EXTCNTRST),
 		     AGILEX72_PERICTL_EXTCNTRST_RELEASE);
+}
+
+void agilex72_clkmgr_virtual_platform_minimal_init(void)
+{
+	agilex72_clkmgr_secure_unlock();
+	agilex72_disable_boot_clk_bypass();
+	agilex72_clkmgr_refresh_rates_from_csr_if_locked();
+}
+
+/*
+ * Simics / EMU: GPLLs arrive pre-programmed and locked. Derive
+ * rate_state from CSR readback without preset or pll_enable MMIO.
+ */
+int agilex72_clkmgr_refresh_rates_from_csr_if_locked(void)
+{
+	u32 stat = agilex72_readl(AGILEX72_CLKMGR_STAT);
+
+	if (IS_ENABLED(CONFIG_TARGET_SOCFPGA_EMU)) {
+		/*
+		 * Simics VP: VCO from cfg_1/cfg_23 only. Skip
+		 * refresh_c_from_csr() — non-VCOPH crsel can hang().
+		 * C dividers remain at compile-time defaults in rate_state.
+		 */
+		agilex72_clkmgr_refresh_vco_from_csr();
+		if (!agilex72_rate_state.valid) {
+			printf("clkmgr: GPPLL VCO CSR decode failed (stat=0x%08x)\n", stat);
+			return -EINVAL;
+		}
+		agilex72_clkmgr_pll_locked = true;
+	} else if ((stat & AGILEX72_CLKMGR_STAT_ALL_LOCKED) ==
+		   AGILEX72_CLKMGR_STAT_ALL_LOCKED) {
+		agilex72_clkmgr_refresh_vco_from_csr();
+		agilex72_clkmgr_refresh_c_from_csr();
+		agilex72_clkmgr_pll_locked = true;
+	} else {
+		return agilex72_pll_wait_lock();
+	}
+
+	pr_info("agilex72-clkmgr: rates from CSR (no GPPLL reprogram)\n");
+	pr_info("  GPPLL0 VCO %llu Hz  C %u/%u/%u/%u\n",
+		agilex72_rate_state.gppll0_vco_hz,
+		agilex72_rate_state.gppll0_c0_div,
+		agilex72_rate_state.gppll0_c1_div,
+		agilex72_rate_state.gppll0_c2_div,
+		agilex72_rate_state.gppll0_c3_div);
+	pr_info("  GPPLL1 VCO %llu Hz  C %u/%u\n",
+		agilex72_rate_state.gppll1_vco_hz,
+		agilex72_rate_state.gppll1_c0_div,
+		agilex72_rate_state.gppll1_c1_div);
+	pr_info("  GPPLL2 VCO %llu Hz  C %u/%u\n",
+		agilex72_rate_state.gppll2_vco_hz,
+		agilex72_rate_state.gppll2_c0_div,
+		agilex72_rate_state.gppll2_c1_div);
+
+	return 0;
+}
+
+void agilex72_clkmgr_print_rate_state(void)
+{
+	const struct agilex72_clkmgr_rate_state *state = agilex72_clkmgr_rate_state();
+	u32 stat = agilex72_readl(AGILEX72_CLKMGR_STAT);
+	u64 hz;
+
+	printf("clkmgr: CLKMGR stat=0x%08x (pll0=%d pll1=%d pll2=%d)\n",
+	       stat,
+	       !!(stat & AGILEX72_CLKMGR_STAT_PLL0_LOCKED),
+	       !!(stat & AGILEX72_CLKMGR_STAT_PLL1_LOCKED),
+	       !!(stat & AGILEX72_CLKMGR_STAT_PLL2_LOCKED));
+
+	if (!state || !state->valid) {
+		static const struct {
+			u32 base;
+			const char *name;
+		} plls[] = {
+			{ AGILEX72_CLKPLL0_BASE, "GPPLL0" },
+			{ AGILEX72_CLKPLL1_BASE, "GPPLL1" },
+			{ AGILEX72_CLKPLL2_BASE, "GPPLL2" },
+		};
+		size_t i;
+
+		printf("GPPLL CSR rates: VCO decode failed — raw CSRs:\n");
+		for (i = 0; i < ARRAY_SIZE(plls); i++) {
+			u32 cfg1 = agilex72_readl(plls[i].base + AGILEX72_GPPLL_CFG1_OFF);
+			u32 cfg23 = agilex72_readl(plls[i].base + AGILEX72_GPPLL_CFG23_OFF);
+
+			printf("  %s cfg1=0x%08x cfg23=0x%08x\n", plls[i].name, cfg1, cfg23);
+		}
+		return;
+	}
+
+	printf("GPPLL CSR rates (Simics/VP readback, no reprogram):\n");
+	printf("  GPPLL0 VCO %llu kHz  C %u/%u/%u/%u\n",
+	       state->gppll0_vco_hz / 1000,
+	       state->gppll0_c0_div, state->gppll0_c1_div,
+	       state->gppll0_c2_div, state->gppll0_c3_div);
+	hz = state->gppll0_vco_hz / (state->gppll0_c0_div ? state->gppll0_c0_div : 1);
+	printf("    C0 %llu kHz  C1 %llu kHz  C2 %llu kHz  C3 %llu kHz\n",
+	       hz / 1000,
+	       (state->gppll0_vco_hz / (state->gppll0_c1_div ? state->gppll0_c1_div : 1)) / 1000,
+	       (state->gppll0_vco_hz / (state->gppll0_c2_div ? state->gppll0_c2_div : 1)) / 1000,
+	       (state->gppll0_vco_hz / (state->gppll0_c3_div ? state->gppll0_c3_div : 1)) / 1000);
+	printf("  GPPLL1 VCO %llu kHz  C %u/%u\n",
+	       state->gppll1_vco_hz / 1000,
+	       state->gppll1_c0_div, state->gppll1_c1_div);
+	hz = state->gppll1_vco_hz / (state->gppll1_c0_div ? state->gppll1_c0_div : 1);
+	printf("    comp0/DSU parent %llu kHz / %llu kHz\n",
+	       hz / 1000,
+	       (state->gppll1_vco_hz / (state->gppll1_c1_div ? state->gppll1_c1_div : 1)) / 1000);
+	printf("  GPPLL2 VCO %llu kHz  C %u/%u\n",
+	       state->gppll2_vco_hz / 1000,
+	       state->gppll2_c0_div, state->gppll2_c1_div);
+	hz = state->gppll2_vco_hz / (state->gppll2_c0_div ? state->gppll2_c0_div : 1);
+	printf("    core2/3 parent %llu kHz / %llu kHz\n",
+	       hz / 1000,
+	       (state->gppll2_vco_hz / (state->gppll2_c1_div ? state->gppll2_c1_div : 1)) / 1000);
 }
 
 void agilex72_config_main_pll(unsigned long freq)
