@@ -35,6 +35,17 @@ void clk_mgr_init_from_blob(void)
 	size_t size;
 	int ret;
 
+	pr_debug("agilex72-clkmgr: handoff start\n");
+	if (IS_ENABLED(CONFIG_AGILEX72_CLKMGR_HANDOFF_EMBED_DEMO)) {
+		pr_info("agilex72-clkmgr: applying demo handoff (V9, SYSPRESET0 bin1)\n");
+		pr_info("agilex72-clkmgr: GPPLL presets from DV; silicon validation pending\n");
+	}
+
+#if !IS_ENABLED(CONFIG_TARGET_SOCFPGA_EMU)
+	agilex72_clkmgr_secure_unlock();
+	pr_debug("agilex72-clkmgr: stage1 unlock done\n");
+#endif
+
 	ret = agilex72_handoff_get_blob(&blob, &size);
 	if (ret) {
 		pr_err("agilex72-handoff: no blob source available (%d)\n", ret);
@@ -44,7 +55,9 @@ void clk_mgr_init_from_blob(void)
 	ret = agilex72_handoff_parse_and_apply(blob, size);
 	if (ret) {
 		pr_err("agilex72-handoff: blob parse/apply failed: %d\n", ret);
-		if (ret == -ETIMEDOUT)
-			hang();
+		hang();
 	}
+
+	if (IS_ENABLED(CONFIG_AGILEX72_CLKMGR_HANDOFF_EMBED_DEMO))
+		pr_info("agilex72-clkmgr: demo handoff applied (V9 SYSPRESET0 bin1)\n");
 }
