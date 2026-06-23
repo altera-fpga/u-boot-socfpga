@@ -17,12 +17,14 @@
 #include <clk-uclass.h>
 #include <dt-bindings/clock/altr,agilex72-clkmgr.h>
 
+#include "agilex72-clkmgr.h"
 #include "clk-agilex72.h"
 
 DECLARE_GLOBAL_DATA_PTR;
 
 static u64 agilex72_vco_hz(int idx)
 {
+	const struct agilex72_clkmgr_rate_state *state;
 	static const u64 fallback[AGILEX72_GPPLL_IDX_MAX] = {
 		AGILEX72_GPPLL0_VCO_HZ,
 		AGILEX72_GPPLL1_VCO_HZ,
@@ -32,7 +34,16 @@ static u64 agilex72_vco_hz(int idx)
 	if (idx < 0 || idx >= AGILEX72_GPPLL_IDX_MAX)
 		return 0;
 
-	return fallback[idx];
+	state = agilex72_clkmgr_rate_state();
+	if (!state || !state->valid)
+		return fallback[idx];
+
+	if (idx == AGILEX72_GPPLL0_IDX)
+		return state->gppll0_vco_hz;
+	if (idx == AGILEX72_GPPLL1_IDX)
+		return state->gppll1_vco_hz;
+
+	return state->gppll2_vco_hz;
 }
 
 enum {
@@ -49,6 +60,7 @@ enum {
 
 static u32 agilex72_c_div(int idx)
 {
+	const struct agilex72_clkmgr_rate_state *state;
 	static const u32 fallback[AGILEX72_GPPLL_C_IDX_MAX] = {
 		AGILEX72_GPPLL0_C0_DIV,
 		AGILEX72_GPPLL0_C1_DIV,
@@ -59,11 +71,43 @@ static u32 agilex72_c_div(int idx)
 		AGILEX72_GPPLL2_C0_DIV,
 		AGILEX72_GPPLL2_C1_DIV,
 	};
+	u32 slot = 0;
 
 	if (idx < 0 || idx >= AGILEX72_GPPLL_C_IDX_MAX)
 		return 1;
 
-	return fallback[idx];
+	state = agilex72_clkmgr_rate_state();
+	if (!state)
+		return fallback[idx];
+
+	switch (idx) {
+	case AGILEX72_GPPLL0_C0_IDX:
+		slot = state->gppll0_c0_div;
+		break;
+	case AGILEX72_GPPLL0_C1_IDX:
+		slot = state->gppll0_c1_div;
+		break;
+	case AGILEX72_GPPLL0_C2_IDX:
+		slot = state->gppll0_c2_div;
+		break;
+	case AGILEX72_GPPLL0_C3_IDX:
+		slot = state->gppll0_c3_div;
+		break;
+	case AGILEX72_GPPLL1_C0_IDX:
+		slot = state->gppll1_c0_div;
+		break;
+	case AGILEX72_GPPLL1_C1_IDX:
+		slot = state->gppll1_c1_div;
+		break;
+	case AGILEX72_GPPLL2_C0_IDX:
+		slot = state->gppll2_c0_div;
+		break;
+	case AGILEX72_GPPLL2_C1_IDX:
+		slot = state->gppll2_c1_div;
+		break;
+	}
+
+	return slot ? slot : fallback[idx];
 }
 
 static u64 agilex72_gppll0_c0_hz(void)
@@ -177,14 +221,16 @@ static u32 clkmgr_mainpll_apu_sysfreeclk_div(struct socfpga_clk_plat *plat)
 				       AGILEX72_CLKMGR_MAINPLL_NOCDIV_APU_SYSFREECLK_SHIFT);
 }
 
+static bool clkmgr_csr_is_trusted(void)
+{
+	const struct agilex72_clkmgr_rate_state *state = agilex72_clkmgr_rate_state();
+
+	return state && state->valid;
+}
+
 static bool clkmgr_in_bootmode(struct socfpga_clk_plat *plat)
 {
 	return !!(CM_REG_READL(plat, CLKMGR_STAT) & CLKMGR_STAT_BOOTMODE);
-}
-
-static bool clkmgr_csr_is_trusted(struct socfpga_clk_plat *plat)
-{
-	return plat && !clkmgr_in_bootmode(plat);
 }
 
 static u32 clkmgr_boot_clk_hz(struct socfpga_clk_plat *plat)
@@ -202,7 +248,7 @@ static u64 clkmgr_ctr_src_parent_hz(struct socfpga_clk_plat *plat, u32 ctr_off,
 {
 	u32 src;
 
-	if (!clkmgr_csr_is_trusted(plat))
+	if (!clkmgr_csr_is_trusted())
 		return pll_parent_hz;
 
 	src = (CM_REG_READL(plat, ctr_off) & AGILEX72_CLKMGR_FREE_CTR_SRC_MASK)
@@ -262,7 +308,7 @@ static u32 clkmgr_gated_ctr_rate(struct socfpga_clk_plat *plat,
 	if (CM_REG_READL(plat, AGILEX72_CLKMGR_MAINPLL_BYPASS) & d->bypass_bit)
 		return clkmgr_boot_clk_hz(plat);
 
-	if (!clkmgr_csr_is_trusted(plat))
+	if (!clkmgr_csr_is_trusted())
 		return d->fallback_hz;
 
 	parent = clkmgr_ctr_src_parent_hz(plat, d->ctr_off, d->pll_parent_hz());
@@ -287,7 +333,7 @@ static u32 clkmgr_perip_ctr_rate(struct socfpga_clk_plat *plat, u32 ctr_off,
 	if (CM_REG_READL(plat, AGILEX72_CLKMGR_PERIPLL_BYPASS) & bypass_bit)
 		return clkmgr_boot_clk_hz(plat);
 
-	if (!clkmgr_csr_is_trusted(plat))
+	if (!clkmgr_csr_is_trusted())
 		return fallback_hz;
 
 	parent = clkmgr_ctr_src_parent_hz(plat, ctr_off, pll_parent_hz);
@@ -360,12 +406,13 @@ static u32 clk_get_lsp_main_clk_hz(struct socfpga_clk_plat *plat)
 	if (clkmgr_in_bootmode(plat))
 		return clkmgr_boot_clk_hz(plat);
 
-	if (!clkmgr_csr_is_trusted(plat))
+	if (!clkmgr_csr_is_trusted())
 		return (u32)AGILEX72_LSP_MAIN_HZ;
 
 	div = clkmgr_ctr_effective_div(plat, AGILEX72_CLKMGR_LSPNOC_FREE_CTR,
 				       AGILEX72_CLKMGR_PERICTL_EXTCNTRST,
-				       AGILEX72_PERICTL_EXTCNTRST_LSPNOC, 0);
+				       AGILEX72_PERICTL_EXTCNTRST_LSPNOC,
+				       AGILEX72_CNTRST_HOLD_DIV_NONE);
 	return (u32)(clkmgr_ctr_src_parent_hz(plat, AGILEX72_CLKMGR_LSPNOC_FREE_CTR,
 					      agilex72_gppll0_c1_hz()) / div);
 }
@@ -378,12 +425,13 @@ static u32 clk_get_lsp_sp_clk_hz(struct socfpga_clk_plat *plat)
 	if (clkmgr_in_bootmode(plat))
 		return clkmgr_boot_clk_hz(plat);
 
-	if (!clkmgr_csr_is_trusted(plat))
+	if (!clkmgr_csr_is_trusted())
 		return (u32)AGILEX72_LSP_SP_HZ;
 
 	div_lspnoc = clkmgr_ctr_effective_div(plat, AGILEX72_CLKMGR_LSPNOC_FREE_CTR,
 					      AGILEX72_CLKMGR_PERICTL_EXTCNTRST,
-					      AGILEX72_PERICTL_EXTCNTRST_LSPNOC, 0);
+					      AGILEX72_PERICTL_EXTCNTRST_LSPNOC,
+					      AGILEX72_CNTRST_HOLD_DIV_NONE);
 	div_lspsp = clkmgr_nocdiv_div(plat, AGILEX72_CLKMGR_NOCDIV_LSPSP_SHIFT);
 	return (u32)(clkmgr_ctr_src_parent_hz(plat, AGILEX72_CLKMGR_LSPNOC_FREE_CTR,
 					      base) / div_lspnoc / div_lspsp);
@@ -397,12 +445,13 @@ static u32 clk_get_lsp_mp_clk_hz(struct socfpga_clk_plat *plat)
 	if (clkmgr_in_bootmode(plat))
 		return clkmgr_boot_clk_hz(plat);
 
-	if (!clkmgr_csr_is_trusted(plat))
+	if (!clkmgr_csr_is_trusted())
 		return (u32)AGILEX72_LSP_MP_HZ;
 
 	div_lspnoc = clkmgr_ctr_effective_div(plat, AGILEX72_CLKMGR_LSPNOC_FREE_CTR,
 					      AGILEX72_CLKMGR_PERICTL_EXTCNTRST,
-					      AGILEX72_PERICTL_EXTCNTRST_LSPNOC, 0);
+					      AGILEX72_PERICTL_EXTCNTRST_LSPNOC,
+					      AGILEX72_CNTRST_HOLD_DIV_NONE);
 	div_lspmp = clkmgr_nocdiv_div(plat, AGILEX72_CLKMGR_NOCDIV_LSPMP_SHIFT);
 	return (u32)(clkmgr_ctr_src_parent_hz(plat, AGILEX72_CLKMGR_LSPNOC_FREE_CTR,
 					      base) / div_lspnoc / div_lspmp);
@@ -412,15 +461,47 @@ static u32 clk_get_sdmmc_clk_hz(struct socfpga_clk_plat *plat, u32 peripctr_shif
 {
 	u32 rate;
 
-	if (!clkmgr_csr_is_trusted(plat))
+	if (!clkmgr_csr_is_trusted())
 		return (u32)AGILEX72_SDMMC_HZ;
 
 	rate = clkmgr_perip_ctr_rate(plat, AGILEX72_CLKMGR_MEMDEVPHY_FREE_CTR,
 				     AGILEX72_PERIPLL_BYPASS_MEMDEVPHY,
-				     AGILEX72_PERICTL_EXTCNTRST_MEMDEVPHY, 0,
+				     AGILEX72_PERICTL_EXTCNTRST_MEMDEVPHY,
+				     AGILEX72_CNTRST_HOLD_DIV_NONE,
 				     agilex72_gppll0_c3_hz(),
 				     AGILEX72_MEMPHY_HZ);
 	return rate / clkmgr_peripctr_div(plat, peripctr_shift);
+}
+
+static u32 clk_get_hsp_mp_clk_hz(struct socfpga_clk_plat *plat)
+{
+	if (!clkmgr_csr_is_trusted())
+		return (u32)AGILEX72_HSP_MP_HZ;
+
+	return clkmgr_perip_ctr_rate(plat, AGILEX72_CLKMGR_NOC_FREE_CTR,
+				     AGILEX72_PERIPLL_BYPASS_NOC,
+				     AGILEX72_PERICTL_EXTCNTRST_NONE,
+				     AGILEX72_CNTRST_HOLD_DIV_NONE,
+				     agilex72_gppll0_c0_hz(),
+				     AGILEX72_HSP_MAIN_HZ) /
+	       clkmgr_nocdiv_div(plat, AGILEX72_CLKMGR_NOCDIV_HSPMP_SHIFT);
+}
+
+static u32 clk_get_xspi_phy_clk_hz(struct socfpga_clk_plat *plat)
+{
+	u32 rate;
+
+	if (!clkmgr_csr_is_trusted())
+		return (u32)AGILEX72_XSPIPHY_HZ;
+
+	rate = clkmgr_perip_ctr_rate(plat, AGILEX72_CLKMGR_XSPIPHY_FREE_CTR,
+				     AGILEX72_PERIPLL_BYPASS_XSPIPHY,
+				     AGILEX72_PERICTL_EXTCNTRST_XSPIPHY,
+				     AGILEX72_CNTRST_HOLD_DIV_NONE,
+				     agilex72_gppll0_c3_hz(),
+				     AGILEX72_XSPIPHY_HZ);
+
+	return rate / clkmgr_peripctr_div(plat, AGILEX72_CLKMGR_PERIPCTR_XSPIPHY_SHIFT);
 }
 
 static bool clkmgr_perip_gate_enabled(struct socfpga_clk_plat *plat, u32 en_bit)
@@ -428,10 +509,24 @@ static bool clkmgr_perip_gate_enabled(struct socfpga_clk_plat *plat, u32 en_bit)
 	return !!(CM_REG_READL(plat, AGILEX72_CLKMGR_PERIPLL_EN) & en_bit);
 }
 
+static bool clkmgr_perip_ennoc_gate_enabled(struct socfpga_clk_plat *plat, u32 en_bit)
+{
+	return !!(CM_REG_READL(plat, AGILEX72_CLKMGR_PERIPLL_ENNOC) & en_bit);
+}
+
 static u32 clkmgr_perip_gated_rate(struct socfpga_clk_plat *plat, u32 rate,
 				   u32 en_bit, bool check_gate)
 {
 	if (check_gate && rate && !clkmgr_perip_gate_enabled(plat, en_bit))
+		return 0;
+
+	return rate;
+}
+
+static u32 clkmgr_ennoc_gated_rate(struct socfpga_clk_plat *plat, u32 rate,
+				   u32 en_bit, bool check_gate)
+{
+	if (check_gate && rate && !clkmgr_perip_ennoc_gate_enabled(plat, en_bit))
 		return 0;
 
 	return rate;
@@ -444,12 +539,13 @@ static u32 clk_get_emaca_div_hz(struct socfpga_clk_plat *plat)
 	if (clkmgr_in_bootmode(plat))
 		return clkmgr_boot_clk_hz(plat);
 
-	if (!clkmgr_csr_is_trusted(plat))
+	if (!clkmgr_csr_is_trusted())
 		return (u32)AGILEX72_EMAC_HZ;
 
 	rate = clkmgr_perip_ctr_rate(plat, AGILEX72_CLKMGR_EMACA_CTR,
 				     AGILEX72_PERIPLL_BYPASS_EMACA,
-				     AGILEX72_PERICTL_EXTCNTRST_EMACA, 0,
+				     AGILEX72_PERICTL_EXTCNTRST_EMACA,
+				     AGILEX72_CNTRST_HOLD_DIV_NONE,
 				     agilex72_gppll0_c0_hz(),
 				     AGILEX72_EMAC_HZ);
 
@@ -463,12 +559,13 @@ static u32 clk_get_emacb_div_hz(struct socfpga_clk_plat *plat)
 	if (clkmgr_in_bootmode(plat))
 		return clkmgr_boot_clk_hz(plat);
 
-	if (!clkmgr_csr_is_trusted(plat))
+	if (!clkmgr_csr_is_trusted())
 		return (u32)AGILEX72_EMACB_HZ;
 
 	rate = clkmgr_perip_ctr_rate(plat, AGILEX72_CLKMGR_EMACB_CTR,
 				     AGILEX72_PERIPLL_BYPASS_EMACB,
-				     AGILEX72_PERICTL_EXTCNTRST_EMACB, 0,
+				     AGILEX72_PERICTL_EXTCNTRST_EMACB,
+				     AGILEX72_CNTRST_HOLD_DIV_NONE,
 				     agilex72_gppll0_c0_hz(),
 				     AGILEX72_EMACB_HZ);
 
@@ -495,7 +592,8 @@ static u32 clk_get_s2f_user_hz(struct socfpga_clk_plat *plat, u32 ctr_off,
 {
 	u32 rate;
 
-	rate = clkmgr_perip_ctr_rate(plat, ctr_off, bypass_bit, cntrst_bit, 0,
+	rate = clkmgr_perip_ctr_rate(plat, ctr_off, bypass_bit, cntrst_bit,
+				     AGILEX72_CNTRST_HOLD_DIV_NONE,
 				     agilex72_gppll0_c1_hz(),
 				     AGILEX72_S2F_USER_HZ);
 
@@ -510,14 +608,15 @@ static u32 clk_get_lsp_sys_free_clk_hz(struct socfpga_clk_plat *plat)
 	if (clkmgr_in_bootmode(plat))
 		return clkmgr_boot_clk_hz(plat);
 
-	if (!clkmgr_csr_is_trusted(plat))
+	if (!clkmgr_csr_is_trusted())
 		return (u32)AGILEX72_LSP_SYS_HZ;
 
 	base = clkmgr_ctr_src_parent_hz(plat, AGILEX72_CLKMGR_LSPNOC_FREE_CTR,
 					agilex72_gppll0_c1_hz());
 	div_lspnoc = clkmgr_ctr_effective_div(plat, AGILEX72_CLKMGR_LSPNOC_FREE_CTR,
 					      AGILEX72_CLKMGR_PERICTL_EXTCNTRST,
-					      AGILEX72_PERICTL_EXTCNTRST_LSPNOC, 0);
+					      AGILEX72_PERICTL_EXTCNTRST_LSPNOC,
+					      AGILEX72_CNTRST_HOLD_DIV_NONE);
 	div_lspsys = clkmgr_nocdiv_div(plat, AGILEX72_CLKMGR_NOCDIV_LSPSYS_SHIFT);
 	return (u32)(base / div_lspnoc / div_lspsys);
 }
@@ -527,14 +626,15 @@ static u32 clk_get_emac_clk_hz(struct socfpga_clk_plat *plat, u32 emac_id)
 	u32 rate;
 
 	if (emac_id == AGILEX72_EMAC_PTP_CLK) {
-		if (!clkmgr_csr_is_trusted(plat))
+		if (!clkmgr_csr_is_trusted())
 			return (u32)AGILEX72_EMAC_PTP_HZ;
 
 		rate = clkmgr_perip_ctr_rate(plat, AGILEX72_CLKMGR_EMACPTP_FREE_CTR,
 					     AGILEX72_PERIPLL_BYPASS_EMACPTP,
-					     AGILEX72_PERICTL_EXTCNTRST_EMACPTP, 0,
-					    agilex72_gppll0_c0_hz(),
-					    AGILEX72_EMAC_PTP_HZ);
+					     AGILEX72_PERICTL_EXTCNTRST_EMACPTP,
+					     AGILEX72_CNTRST_HOLD_DIV_NONE,
+					     agilex72_gppll0_c0_hz(),
+					     AGILEX72_EMAC_PTP_HZ);
 		return clkmgr_perip_gated_rate(plat, rate,
 					       AGILEX72_PERIPLL_EN_EMACPTP, true);
 	}
@@ -586,10 +686,12 @@ static ulong socfpga_clk_get_rate(struct clk *clk)
 		return agilex72_vco_hz(AGILEX72_GPPLL2_IDX);
 
 	case AGILEX72_HSP_NOC_FREE_CLK:
-		if (!clkmgr_csr_is_trusted(plat))
+		if (!clkmgr_csr_is_trusted())
 			return AGILEX72_HSP_MAIN_HZ;
 		return clkmgr_perip_ctr_rate(plat, AGILEX72_CLKMGR_NOC_FREE_CTR,
-					     AGILEX72_PERIPLL_BYPASS_NOC, 0, 0,
+					      AGILEX72_PERIPLL_BYPASS_NOC,
+				     AGILEX72_PERICTL_EXTCNTRST_NONE,
+				     AGILEX72_CNTRST_HOLD_DIV_NONE,
 					     agilex72_gppll0_c0_hz(),
 					     AGILEX72_HSP_MAIN_HZ);
 	case AGILEX72_LSP_NOC_FREE_CLK:
@@ -622,16 +724,16 @@ static ulong socfpga_clk_get_rate(struct clk *clk)
 	case AGILEX72_LSP_MAIN_FREE_CLK:
 		return clk_get_lsp_main_clk_hz(plat);
 	case AGILEX72_LSP_MAIN_CLK:
-		return clkmgr_perip_gated_rate(plat, clk_get_lsp_main_clk_hz(plat),
-					       AGILEX72_PERIPLL_EN_LSP_MAIN, true);
+		return clkmgr_ennoc_gated_rate(plat, clk_get_lsp_main_clk_hz(plat),
+					       AGILEX72_PERIPLL_ENNOC_MAIN, true);
 	case AGILEX72_LSP_SYS_FREE_CLK:
 		return clk_get_lsp_sys_free_clk_hz(plat);
 	case AGILEX72_LSP_MP_CLK:
-		return clkmgr_perip_gated_rate(plat, clk_get_lsp_mp_clk_hz(plat),
-					       AGILEX72_PERIPLL_EN_LSP_MP, true);
+		return clkmgr_ennoc_gated_rate(plat, clk_get_lsp_mp_clk_hz(plat),
+					       AGILEX72_PERIPLL_ENNOC_MP, true);
 	case AGILEX72_XSPI_CLK:
 	case AGILEX72_XSPI_PCLK:
-		return clkmgr_perip_gated_rate(plat, clk_get_lsp_mp_clk_hz(plat),
+		return clkmgr_perip_gated_rate(plat, clk_get_xspi_phy_clk_hz(plat),
 					       AGILEX72_PERIPLL_EN_XSPI0, true);
 	case AGILEX72_DMA_0_CORE_CLK:
 	case AGILEX72_DMA_1_CORE_CLK:
@@ -652,19 +754,19 @@ static ulong socfpga_clk_get_rate(struct clk *clk)
 		return clkmgr_perip_gated_rate(plat, clk_get_lsp_mp_clk_hz(plat),
 					       AGILEX72_PERIPLL_EN_I3C1, true);
 	case AGILEX72_LSP_SP_CLK:
-		return clkmgr_perip_gated_rate(plat, clk_get_lsp_sp_clk_hz(plat),
-					       AGILEX72_PERIPLL_EN_LSP_SP, true);
+		return clkmgr_ennoc_gated_rate(plat, clk_get_lsp_sp_clk_hz(plat),
+					       AGILEX72_PERIPLL_ENNOC_SP, true);
 	case AGILEX72_SPIM_0_CLK:
-		return clkmgr_perip_gated_rate(plat, clk_get_lsp_sp_clk_hz(plat),
+		return clkmgr_perip_gated_rate(plat, clk_get_lsp_main_clk_hz(plat),
 					       AGILEX72_PERIPLL_EN_SPIM0, true);
 	case AGILEX72_SPIM_1_CLK:
-		return clkmgr_perip_gated_rate(plat, clk_get_lsp_sp_clk_hz(plat),
+		return clkmgr_perip_gated_rate(plat, clk_get_lsp_main_clk_hz(plat),
 					       AGILEX72_PERIPLL_EN_SPIM1, true);
 	case AGILEX72_SPIS_0_CLK:
-		return clkmgr_perip_gated_rate(plat, clk_get_lsp_sp_clk_hz(plat),
+		return clkmgr_perip_gated_rate(plat, clk_get_lsp_main_clk_hz(plat),
 					       AGILEX72_PERIPLL_EN_SPIS0, true);
 	case AGILEX72_SPIS_1_CLK:
-		return clkmgr_perip_gated_rate(plat, clk_get_lsp_sp_clk_hz(plat),
+		return clkmgr_perip_gated_rate(plat, clk_get_lsp_main_clk_hz(plat),
 					       AGILEX72_PERIPLL_EN_SPIS1, true);
 	case AGILEX72_I2C_0_PCLK:
 		return clkmgr_perip_gated_rate(plat, clk_get_lsp_sp_clk_hz(plat),
@@ -697,67 +799,58 @@ static ulong socfpga_clk_get_rate(struct clk *clk)
 		return clkmgr_perip_gated_rate(plat, clk_get_lsp_sp_clk_hz(plat),
 					       AGILEX72_PERIPLL_EN_SPTIMER1, true);
 	case AGILEX72_HSP_MAIN_FREE_CLK:
-		if (!clkmgr_csr_is_trusted(plat))
+		if (!clkmgr_csr_is_trusted())
 			return AGILEX72_HSP_MAIN_HZ;
 		return clkmgr_perip_ctr_rate(plat, AGILEX72_CLKMGR_NOC_FREE_CTR,
-					     AGILEX72_PERIPLL_BYPASS_NOC, 0, 0,
+					      AGILEX72_PERIPLL_BYPASS_NOC,
+				     AGILEX72_PERICTL_EXTCNTRST_NONE,
+				     AGILEX72_CNTRST_HOLD_DIV_NONE,
 					     agilex72_gppll0_c0_hz(),
 					     AGILEX72_HSP_MAIN_HZ);
 	case AGILEX72_HSP_MAIN_CLK:
-		if (!clkmgr_csr_is_trusted(plat))
+		if (!clkmgr_csr_is_trusted())
 			return AGILEX72_HSP_MAIN_HZ;
-		return clkmgr_perip_gated_rate(plat,
+		return clkmgr_ennoc_gated_rate(plat,
 			clkmgr_perip_ctr_rate(plat, AGILEX72_CLKMGR_NOC_FREE_CTR,
-					      AGILEX72_PERIPLL_BYPASS_NOC, 0, 0,
+					      AGILEX72_PERIPLL_BYPASS_NOC,
+					     AGILEX72_PERICTL_EXTCNTRST_NONE,
+					     AGILEX72_CNTRST_HOLD_DIV_NONE,
 					      agilex72_gppll0_c0_hz(),
 					      AGILEX72_HSP_MAIN_HZ),
-			AGILEX72_PERIPLL_EN_LSP_MAIN, true);
+			AGILEX72_PERIPLL_ENNOC_MAIN, true);
 	case AGILEX72_USB31_BUS_CLK_EARLY:
-		if (!clkmgr_csr_is_trusted(plat))
+		if (!clkmgr_csr_is_trusted())
 			return AGILEX72_HSP_MAIN_HZ;
-		return clkmgr_perip_gated_rate(plat,
+		return clkmgr_ennoc_gated_rate(plat,
 			clkmgr_perip_ctr_rate(plat, AGILEX72_CLKMGR_NOC_FREE_CTR,
-					      AGILEX72_PERIPLL_BYPASS_NOC, 0, 0,
+					      AGILEX72_PERIPLL_BYPASS_NOC,
+					     AGILEX72_PERICTL_EXTCNTRST_NONE,
+					     AGILEX72_CNTRST_HOLD_DIV_NONE,
 					      agilex72_gppll0_c0_hz(),
 					      AGILEX72_HSP_MAIN_HZ),
-			AGILEX72_PERIPLL_EN_USB31, true);
+			AGILEX72_PERIPLL_ENNOC_USB31, true);
 	case AGILEX72_USB2OTG_HCLK:
-		if (!clkmgr_csr_is_trusted(plat))
-			return AGILEX72_HSP_MAIN_HZ;
-		return clkmgr_perip_gated_rate(plat,
-			clkmgr_perip_ctr_rate(plat, AGILEX72_CLKMGR_NOC_FREE_CTR,
-					      AGILEX72_PERIPLL_BYPASS_NOC, 0, 0,
-					      agilex72_gppll0_c0_hz(),
-					      AGILEX72_HSP_MAIN_HZ),
-			AGILEX72_PERIPLL_EN_USB0, true);
-		return clkmgr_perip_gated_rate(plat,
-			clkmgr_perip_ctr_rate(plat, AGILEX72_CLKMGR_NOC_FREE_CTR,
-					      AGILEX72_PERIPLL_BYPASS_NOC, 0, 0,
-					      agilex72_gppll0_c0_hz(),
-					      AGILEX72_HSP_MAIN_HZ) /
-			clkmgr_nocdiv_div(plat, AGILEX72_CLKMGR_NOCDIV_HSPMP_SHIFT),
-			AGILEX72_PERIPLL_EN_DMA1, true);
+		return clkmgr_ennoc_gated_rate(plat, clk_get_hsp_mp_clk_hz(plat),
+					       AGILEX72_PERIPLL_ENNOC_USB0, true);
 	case AGILEX72_HSP_SYS_FREE_CLK:
-		if (!clkmgr_csr_is_trusted(plat))
+		if (!clkmgr_csr_is_trusted())
 			return AGILEX72_HSP_SYS_HZ;
 		return clkmgr_perip_ctr_rate(plat, AGILEX72_CLKMGR_NOC_FREE_CTR,
-					     AGILEX72_PERIPLL_BYPASS_NOC, 0, 0,
+					      AGILEX72_PERIPLL_BYPASS_NOC,
+				     AGILEX72_PERICTL_EXTCNTRST_NONE,
+				     AGILEX72_CNTRST_HOLD_DIV_NONE,
 					     agilex72_gppll0_c0_hz(),
 					     AGILEX72_HSP_MAIN_HZ) /
 		       clkmgr_nocdiv_div(plat, AGILEX72_CLKMGR_NOCDIV_HSPSYS_SHIFT);
 	case AGILEX72_HSP_MP_CLK:
-		if (!clkmgr_csr_is_trusted(plat))
-			return AGILEX72_HSP_MP_HZ;
-		return clkmgr_perip_ctr_rate(plat, AGILEX72_CLKMGR_NOC_FREE_CTR,
-					     AGILEX72_PERIPLL_BYPASS_NOC, 0, 0,
-					     agilex72_gppll0_c0_hz(),
-					     AGILEX72_HSP_MAIN_HZ) /
-		       clkmgr_nocdiv_div(plat, AGILEX72_CLKMGR_NOCDIV_HSPMP_SHIFT);
+		return clk_get_hsp_mp_clk_hz(plat);
 	case AGILEX72_HSP_SP_CLK:
-		if (!clkmgr_csr_is_trusted(plat))
+		if (!clkmgr_csr_is_trusted())
 			return AGILEX72_HSP_SP_HZ;
 		return clkmgr_perip_ctr_rate(plat, AGILEX72_CLKMGR_NOC_FREE_CTR,
-					     AGILEX72_PERIPLL_BYPASS_NOC, 0, 0,
+					      AGILEX72_PERIPLL_BYPASS_NOC,
+				     AGILEX72_PERICTL_EXTCNTRST_NONE,
+				     AGILEX72_CNTRST_HOLD_DIV_NONE,
 					     agilex72_gppll0_c0_hz(),
 					     AGILEX72_HSP_MAIN_HZ) /
 		       clkmgr_nocdiv_div(plat, AGILEX72_CLKMGR_NOCDIV_HSPSP_SHIFT);
@@ -767,39 +860,45 @@ static ulong socfpga_clk_get_rate(struct clk *clk)
 	case AGILEX72_CCU_CLK:
 		return clkmgr_gated_ctr_rate(plat, &desc_ccu, true);
 	case AGILEX72_APU_SYS_FREE_CLK:
-		if (!clkmgr_csr_is_trusted(plat))
+		if (!clkmgr_csr_is_trusted())
 			return AGILEX72_APU_SYS_FREE_HZ;
 		return clk_get_ccu_free_clk_hz(plat) /
 		       clkmgr_mainpll_apu_sysfreeclk_div(plat);
 
 	case AGILEX72_SDMMC0_SDMCLK:
 	case AGILEX72_SDMMC0_PHY_CLK:
-	case AGILEX72_SDMMC0_SDPHY_REG_CLK:
 		return clkmgr_perip_gated_rate(plat,
 			clk_get_sdmmc_clk_hz(plat,
 					     AGILEX72_CLKMGR_PERIPCTR_SDMMC0_SHIFT),
 			AGILEX72_PERIPLL_EN_SDMMC0,
 			clk->id == AGILEX72_SDMMC0_SDMCLK);
+	case AGILEX72_SDMMC0_SDPHY_REG_CLK:
+		return clkmgr_perip_gated_rate(plat, clk_get_lsp_mp_clk_hz(plat),
+					       AGILEX72_PERIPLL_EN_SDMMC0, false);
 	case AGILEX72_SDMMC1_SDMCLK:
 	case AGILEX72_SDMMC1_PHY_CLK:
-	case AGILEX72_SDMMC1_SDPHY_REG_CLK:
 		return clkmgr_perip_gated_rate(plat,
 			clk_get_sdmmc_clk_hz(plat,
 					     AGILEX72_CLKMGR_PERIPCTR_SDMMC1_SHIFT),
 			AGILEX72_PERIPLL_EN_SDMMC1,
 			clk->id == AGILEX72_SDMMC1_SDMCLK);
+	case AGILEX72_SDMMC1_SDPHY_REG_CLK:
+		return clkmgr_perip_gated_rate(plat, clk_get_lsp_mp_clk_hz(plat),
+					       AGILEX72_PERIPLL_EN_SDMMC1, false);
 
 	/* EMAC */
 	case AGILEX72_EMAC_A_FREE_CLK:
 		return clkmgr_perip_ctr_rate(plat, AGILEX72_CLKMGR_EMACA_CTR,
 					     AGILEX72_PERIPLL_BYPASS_EMACA,
-					     AGILEX72_PERICTL_EXTCNTRST_EMACA, 0,
+					     AGILEX72_PERICTL_EXTCNTRST_EMACA,
+					     AGILEX72_CNTRST_HOLD_DIV_NONE,
 					     agilex72_gppll0_c0_hz(),
 					     AGILEX72_EMAC_HZ);
 	case AGILEX72_EMAC_B_FREE_CLK:
 		return clkmgr_perip_ctr_rate(plat, AGILEX72_CLKMGR_EMACB_CTR,
 					     AGILEX72_PERIPLL_BYPASS_EMACB,
-					     AGILEX72_PERICTL_EXTCNTRST_EMACB, 0,
+					     AGILEX72_PERICTL_EXTCNTRST_EMACB,
+					     AGILEX72_CNTRST_HOLD_DIV_NONE,
 					     agilex72_gppll0_c0_hz(),
 					     AGILEX72_EMACB_HZ);
 	case AGILEX72_EMAC_PTP_FREE_CLK:
@@ -821,44 +920,39 @@ static ulong socfpga_clk_get_rate(struct clk *clk)
 
 	case AGILEX72_USB31_SUSPEND_CLK:
 	case AGILEX72_USB31_FREE_CLK:
-		if (!clkmgr_csr_is_trusted(plat))
+		if (!clkmgr_csr_is_trusted())
 			return AGILEX72_USB31_REF_HZ;
 		return clkmgr_perip_ctr_rate(plat, AGILEX72_CLKMGR_USB31_FREE_CTR,
 					     AGILEX72_PERIPLL_BYPASS_USB31,
-					     AGILEX72_PERICTL_EXTCNTRST_USB31, 0,
+					     AGILEX72_PERICTL_EXTCNTRST_USB31,
+					     AGILEX72_CNTRST_HOLD_DIV_NONE,
 					     agilex72_gppll0_c0_hz(),
 					     AGILEX72_USB31_REF_HZ);
 
 	case AGILEX72_MEMDEVICE_PHY_FREE_CLK:
-		if (!clkmgr_csr_is_trusted(plat))
+		if (!clkmgr_csr_is_trusted())
 			return AGILEX72_MEMPHY_HZ;
 		return clkmgr_perip_ctr_rate(plat, AGILEX72_CLKMGR_MEMDEVPHY_FREE_CTR,
 					     AGILEX72_PERIPLL_BYPASS_MEMDEVPHY,
-					     AGILEX72_PERICTL_EXTCNTRST_MEMDEVPHY, 0,
+					     AGILEX72_PERICTL_EXTCNTRST_MEMDEVPHY,
+					     AGILEX72_CNTRST_HOLD_DIV_NONE,
 					     agilex72_gppll0_c3_hz(),
 					     AGILEX72_MEMPHY_HZ);
 	case AGILEX72_XSPI_PHY_FREE_CLK:
-		if (!clkmgr_csr_is_trusted(plat))
+		if (!clkmgr_csr_is_trusted())
 			return AGILEX72_XSPIPHY_HZ;
 		return clkmgr_perip_ctr_rate(plat, AGILEX72_CLKMGR_XSPIPHY_FREE_CTR,
 					     AGILEX72_PERIPLL_BYPASS_XSPIPHY,
-					     AGILEX72_PERICTL_EXTCNTRST_XSPIPHY, 0,
+					     AGILEX72_PERICTL_EXTCNTRST_XSPIPHY,
+					     AGILEX72_CNTRST_HOLD_DIV_NONE,
 					     agilex72_gppll0_c3_hz(),
 					     AGILEX72_XSPIPHY_HZ);
 	case AGILEX72_XSPI_PHY_CLK:
-		if (!clkmgr_csr_is_trusted(plat))
-			return AGILEX72_XSPIPHY_HZ;
-		return clkmgr_perip_gated_rate(plat,
-			clkmgr_perip_ctr_rate(plat, AGILEX72_CLKMGR_XSPIPHY_FREE_CTR,
-					      AGILEX72_PERIPLL_BYPASS_XSPIPHY,
-					      AGILEX72_PERICTL_EXTCNTRST_XSPIPHY, 0,
-					      agilex72_gppll0_c3_hz(),
-					      AGILEX72_XSPIPHY_HZ) /
-			clkmgr_peripctr_div(plat, AGILEX72_CLKMGR_PERIPCTR_XSPIPHY_SHIFT),
-			AGILEX72_PERIPLL_EN_XSPI0, true);
+		return clkmgr_perip_gated_rate(plat, clk_get_xspi_phy_clk_hz(plat),
+					       AGILEX72_PERIPLL_EN_XSPI0_PHY, true);
 
 	case AGILEX72_GPIO_DB_FREE_CLK:
-		if (!clkmgr_csr_is_trusted(plat))
+		if (!clkmgr_csr_is_trusted())
 			return AGILEX72_GPIO_DB_FREE_HZ;
 		return (u32)(clkmgr_ctr_src_parent_hz(plat,
 						      AGILEX72_CLKMGR_GPIODB_FREE_CTR,
@@ -866,7 +960,7 @@ static ulong socfpga_clk_get_rate(struct clk *clk)
 			     clkmgr_free_ctr_div(plat,
 						 AGILEX72_CLKMGR_GPIODB_FREE_CTR));
 	case AGILEX72_GPIO_DB_CLK:
-		if (!clkmgr_csr_is_trusted(plat))
+		if (!clkmgr_csr_is_trusted())
 			return AGILEX72_GPIO_DB_HZ;
 		if (!clkmgr_perip_gate_enabled(plat, AGILEX72_PERIPLL_EN_GPIODB))
 			return 0;
@@ -878,48 +972,52 @@ static ulong socfpga_clk_get_rate(struct clk *clk)
 			     clkmgr_gpiodbclk_div(plat));
 
 	case AGILEX72_CS_AT_CLK:
-		if (!clkmgr_csr_is_trusted(plat))
+		if (!clkmgr_csr_is_trusted())
 			return AGILEX72_CS_AT_HZ;
-		return clkmgr_perip_gated_rate(plat,
+		return clkmgr_ennoc_gated_rate(plat,
 			(u32)(clkmgr_ctr_src_parent_hz(plat,
 				AGILEX72_CLKMGR_LSPNOC_FREE_CTR,
 				agilex72_gppll0_c1_hz()) /
 			clkmgr_ctr_effective_div(plat, AGILEX72_CLKMGR_LSPNOC_FREE_CTR,
 						 AGILEX72_CLKMGR_PERICTL_EXTCNTRST,
-						 AGILEX72_PERICTL_EXTCNTRST_LSPNOC, 0) /
+						 AGILEX72_PERICTL_EXTCNTRST_LSPNOC,
+						 AGILEX72_CNTRST_HOLD_DIV_NONE) /
 			clkmgr_nocdiv_div(plat, AGILEX72_CLKMGR_NOCDIV_CSAT_SHIFT)),
-			AGILEX72_PERIPLL_EN_CS, true);
+			AGILEX72_PERIPLL_ENNOC_CS, true);
 	case AGILEX72_CS_PDBG_CLK:
-		if (!clkmgr_csr_is_trusted(plat))
+		if (!clkmgr_csr_is_trusted())
 			return AGILEX72_CS_PDBG_HZ;
-		return clkmgr_perip_gated_rate(plat,
+		return clkmgr_ennoc_gated_rate(plat,
 			(u32)(clkmgr_ctr_src_parent_hz(plat,
 				AGILEX72_CLKMGR_LSPNOC_FREE_CTR,
 				agilex72_gppll0_c1_hz()) /
 			clkmgr_ctr_effective_div(plat, AGILEX72_CLKMGR_LSPNOC_FREE_CTR,
 						 AGILEX72_CLKMGR_PERICTL_EXTCNTRST,
-						 AGILEX72_PERICTL_EXTCNTRST_LSPNOC, 0) /
+						 AGILEX72_PERICTL_EXTCNTRST_LSPNOC,
+						 AGILEX72_CNTRST_HOLD_DIV_NONE) /
 			clkmgr_nocdiv_div(plat, AGILEX72_CLKMGR_NOCDIV_CSPDBG_SHIFT)),
-			AGILEX72_PERIPLL_EN_CS, true);
+			AGILEX72_PERIPLL_ENNOC_CS, true);
 	case AGILEX72_TRACE_FREE_CLK:
-		if (!clkmgr_csr_is_trusted(plat))
+		if (!clkmgr_csr_is_trusted())
 			return AGILEX72_CS_TRACE_HZ;
 		return clkmgr_perip_ctr_rate(plat, AGILEX72_CLKMGR_TRACE_FREE_CTR,
 					     AGILEX72_PERIPLL_BYPASS_TRACE,
-					     AGILEX72_PERICTL_EXTCNTRST_TRACE, 0,
+					     AGILEX72_PERICTL_EXTCNTRST_TRACE,
+					     AGILEX72_CNTRST_HOLD_DIV_NONE,
 					     agilex72_gppll0_c2_hz(),
 					     AGILEX72_CS_TRACE_HZ);
 	case AGILEX72_CS_TRACE_CLK:
-		if (!clkmgr_csr_is_trusted(plat))
+		if (!clkmgr_csr_is_trusted())
 			return AGILEX72_CS_TRACE_HZ;
-		return clkmgr_perip_gated_rate(plat,
+		return clkmgr_ennoc_gated_rate(plat,
 			clkmgr_perip_ctr_rate(plat, AGILEX72_CLKMGR_TRACE_FREE_CTR,
 					      AGILEX72_PERIPLL_BYPASS_TRACE,
-					      AGILEX72_PERICTL_EXTCNTRST_TRACE, 0,
+					      AGILEX72_PERICTL_EXTCNTRST_TRACE,
+					      AGILEX72_CNTRST_HOLD_DIV_NONE,
 					      agilex72_gppll0_c2_hz(),
 					      AGILEX72_CS_TRACE_HZ) /
 			clkmgr_nocdiv_div(plat, AGILEX72_CLKMGR_NOCDIV_CSTRACE_SHIFT),
-			AGILEX72_PERIPLL_EN_CS, true);
+			AGILEX72_PERIPLL_ENNOC_CS, true);
 
 	/* SoC-to-FPGA user clocks */
 	case AGILEX72_S2F_USER0_FREE_CLK:
@@ -960,7 +1058,7 @@ static ulong socfpga_clk_get_rate(struct clk *clk)
 		return agilex72_gppll0_c6_hz();
 
 	default:
-		return -ENXIO;
+		return 0;
 	}
 }
 
@@ -975,6 +1073,14 @@ static int clkmgr_check_mainpll_gate(struct socfpga_clk_plat *plat, u32 en_bit)
 static int clkmgr_check_perip_gate(struct socfpga_clk_plat *plat, u32 en_bit)
 {
 	if (!clkmgr_perip_gate_enabled(plat, en_bit))
+		return -EIO;
+
+	return 0;
+}
+
+static int clkmgr_check_ennoc_gate(struct socfpga_clk_plat *plat, u32 en_bit)
+{
+	if (!clkmgr_perip_ennoc_gate_enabled(plat, en_bit))
 		return -EIO;
 
 	return 0;
@@ -995,16 +1101,16 @@ static int socfpga_clk_enable(struct clk *clk)
 	case AGILEX72_CCU_CLK:
 		return clkmgr_check_mainpll_gate(plat, AGILEX72_MAINPLL_EN_CCU);
 	case AGILEX72_LSP_MAIN_CLK:
-		return clkmgr_check_perip_gate(plat, AGILEX72_PERIPLL_EN_LSP_MAIN);
+		return clkmgr_check_ennoc_gate(plat, AGILEX72_PERIPLL_ENNOC_MAIN);
 	case AGILEX72_LSP_MP_CLK:
-		return clkmgr_check_perip_gate(plat, AGILEX72_PERIPLL_EN_LSP_MP);
+		return clkmgr_check_ennoc_gate(plat, AGILEX72_PERIPLL_ENNOC_MP);
 	case AGILEX72_LSP_SP_CLK:
-		return clkmgr_check_perip_gate(plat, AGILEX72_PERIPLL_EN_LSP_SP);
+		return clkmgr_check_ennoc_gate(plat, AGILEX72_PERIPLL_ENNOC_SP);
 	case AGILEX72_HSP_MAIN_CLK:
 	case AGILEX72_USB31_BUS_CLK_EARLY:
-		return clkmgr_check_perip_gate(plat, AGILEX72_PERIPLL_EN_LSP_MAIN);
+		return clkmgr_check_ennoc_gate(plat, AGILEX72_PERIPLL_ENNOC_MAIN);
 	case AGILEX72_USB2OTG_HCLK:
-		return clkmgr_check_perip_gate(plat, AGILEX72_PERIPLL_EN_USB0);
+		return clkmgr_check_ennoc_gate(plat, AGILEX72_PERIPLL_ENNOC_USB0);
 	case AGILEX72_EMAC0_CLK:
 		return clkmgr_check_perip_gate(plat, AGILEX72_PERIPLL_EN_EMAC0);
 	case AGILEX72_EMAC1_CLK:
@@ -1033,7 +1139,7 @@ static int socfpga_clk_enable(struct clk *clk)
 	case AGILEX72_XSPI_PCLK:
 		return clkmgr_check_perip_gate(plat, AGILEX72_PERIPLL_EN_XSPI0);
 	case AGILEX72_XSPI_PHY_CLK:
-		return clkmgr_check_perip_gate(plat, AGILEX72_PERIPLL_EN_XSPI0);
+		return clkmgr_check_perip_gate(plat, AGILEX72_PERIPLL_EN_XSPI0_PHY);
 	case AGILEX72_SDMMC0_SDMCLK:
 		return clkmgr_check_perip_gate(plat, AGILEX72_PERIPLL_EN_SDMMC0);
 	case AGILEX72_SDMMC1_SDMCLK:
@@ -1045,7 +1151,7 @@ static int socfpga_clk_enable(struct clk *clk)
 	case AGILEX72_CS_AT_CLK:
 	case AGILEX72_CS_PDBG_CLK:
 	case AGILEX72_CS_TRACE_CLK:
-		return clkmgr_check_perip_gate(plat, AGILEX72_PERIPLL_EN_CS);
+		return clkmgr_check_ennoc_gate(plat, AGILEX72_PERIPLL_ENNOC_CS);
 	default:
 		return 0;
 	}
@@ -1053,6 +1159,12 @@ static int socfpga_clk_enable(struct clk *clk)
 
 static int socfpga_clk_probe(struct udevice *dev)
 {
+	int ret = agilex72_clkmgr_apply_handoff(NULL, 0);
+
+	if (ret)
+		debug("agilex72-clkmgr: handoff returned %d (continuing with fallback)\n",
+		      ret);
+
 	return 0;
 }
 
