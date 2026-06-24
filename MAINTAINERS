@@ -179,7 +179,8 @@ F:	drivers/misc/socfpga_rsu.c
 F:	drivers/power/domain/altr-pmgr-agilex5.c
 F:	drivers/sysreset/sysreset_socfpga*
 F:	include/rsu_console.h
-F:	test/cmd/socfpga_rsu.c
+F:	include/test/socfpga.h
+F:	test/socfpga/
 F:	test_asan/rsu/
 
 ARM AMLOGIC SOC SUPPORT

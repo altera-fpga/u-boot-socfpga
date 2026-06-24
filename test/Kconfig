@@ -119,6 +119,7 @@ source "test/env/Kconfig"
 source "test/image/Kconfig"
 source "test/lib/Kconfig"
 source "test/optee/Kconfig"
+source "test/socfpga/Kconfig"
 source "test/fdt_overlay/Kconfig"
 
 endif  # UNIT_TEST

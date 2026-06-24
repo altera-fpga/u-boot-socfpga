@@ -3,20 +3,25 @@
  * Tests for Altera SoC FPGA rsu command (usage path).
  *
  * Copyright (C) 2026 Altera Corporation <www.altera.com>
+ *
+ * Suite-local tests are registered with SOCFPGA_TEST(...) and surface
+ * under the 'socfpga' suite as 'rsu_<what>' (the suite prefix
+ * 'socfpga_test_' is stripped by the runner; see
+ * test/cmd_ut.c:run_suite and test/test-main.c:test_matches).
  */
 
 #include <command.h>
-#include <test/cmd.h>
+#include <test/socfpga.h>
 #include <test/ut.h>
 
-static int cmd_ut_socfpga_rsu_usage(struct unit_test_state *uts)
+static int socfpga_test_rsu_usage(struct unit_test_state *uts)
 {
 	ut_asserteq(CMD_RET_USAGE, run_command("rsu", 0));
 
 	return 0;
 }
 
-CMD_TEST(cmd_ut_socfpga_rsu_usage, 0);
+SOCFPGA_TEST(socfpga_test_rsu_usage, 0);
 
 /*
  * Malformed numeric arguments (non-digit characters, overflow, trailing junk)
@@ -26,7 +31,7 @@ CMD_TEST(cmd_ut_socfpga_rsu_usage, 0);
  * parsing is performed up-front and the rsu_init() call is never reached on
  * the error path.
  */
-static int cmd_ut_socfpga_rsu_bad_slot(struct unit_test_state *uts)
+static int socfpga_test_rsu_bad_slot(struct unit_test_state *uts)
 {
 	ut_asserteq(CMD_RET_USAGE,
 		    run_command("rsu slot_get_info foo", 0));
@@ -38,9 +43,9 @@ static int cmd_ut_socfpga_rsu_bad_slot(struct unit_test_state *uts)
 	return 0;
 }
 
-CMD_TEST(cmd_ut_socfpga_rsu_bad_slot, 0);
+SOCFPGA_TEST(socfpga_test_rsu_bad_slot, 0);
 
-static int cmd_ut_socfpga_rsu_bad_size(struct unit_test_state *uts)
+static int socfpga_test_rsu_bad_size(struct unit_test_state *uts)
 {
 	/*
 	 * slot_program_buf takes <slot> <buffer> <size>; an INT_MAX+1 size
@@ -56,4 +61,4 @@ static int cmd_ut_socfpga_rsu_bad_size(struct unit_test_state *uts)
 	return 0;
 }
 
-CMD_TEST(cmd_ut_socfpga_rsu_bad_size, 0);
+SOCFPGA_TEST(socfpga_test_rsu_bad_size, 0);

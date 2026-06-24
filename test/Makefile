@@ -15,6 +15,7 @@ ifneq ($(CONFIG_HUSH_PARSER),)
 obj-$(CONFIG_$(PHASE_)CMDLINE) += hush/
 endif
 obj-$(CONFIG_UT_OPTEE) += optee/
+obj-$(CONFIG_UT_SOCFPGA) += socfpga/
 obj-y += ut.o
 
 ifeq ($(CONFIG_XPL_BUILD),)
