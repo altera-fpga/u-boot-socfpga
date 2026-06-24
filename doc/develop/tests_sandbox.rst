@@ -31,6 +31,8 @@ Some of the available tests are:
   - tracing: test/trace/test-trace.sh tests the tracing system
     (see :doc:`trace`).
   - verified boot: test/py/tests/test_vboot.py
+  - SoC FPGA drivers: ``ut socfpga`` covers Altera SoC FPGA drivers
+    (RSU today; see :doc:`tests_socfpga_sandbox`).
 
 If you change or enhance any U-Boot subsystem, you should write or expand a
 test and include it with your patch series submission. Test coverage in some

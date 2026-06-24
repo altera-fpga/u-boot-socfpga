@@ -85,6 +85,7 @@ Testing
    pytest/index
    tests_writing
    tests_sandbox
+   tests_socfpga_sandbox
    binman_tests
 
 Refactoring

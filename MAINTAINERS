@@ -173,6 +173,7 @@ F:	board/intel/agilex-socdk/
 F:	cmd/socfpga_rsu.c
 F:	configs/socfpga_*
 F:	doc/board/intel/
+F:	doc/develop/tests_socfpga_sandbox.rst
 F:	doc/device-tree-bindings/misc/altr,socfpga-rsu.yaml
 F:	drivers/ddr/altera/
 F:	drivers/misc/rsu_ll_sandbox.c
