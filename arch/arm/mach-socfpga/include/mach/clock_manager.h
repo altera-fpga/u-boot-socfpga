@@ -32,6 +32,8 @@ int cm_set_qspi_controller_clk_hz(u32 clk_hz);
 #include <asm/arch/clock_manager_agilex.h>
 #elif IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5)
 #include <asm/arch/clock_manager_agilex5.h>
+#elif IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72)
+#include <asm/arch/clock_manager_agilex72.h>
 #elif IS_ENABLED(CONFIG_ARCH_SOCFPGA_N5X)
 #include <asm/arch/clock_manager_n5x.h>
 #endif
