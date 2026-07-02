@@ -421,14 +421,13 @@ Table of Contents
 	via the board_boot_script_verify() hook (arch/arm/mach-socfpga/
 	board.c), mirroring board_fit_image_post_process() for FIT images.
 
-	Enforcement timing is identical for both roots of trust: each is
-	gated behind its own Kconfig, defaults to n, and is inert until a
-	follow-up enablement PR turns it on in lockstep with a build that
-	produces the corresponding signed boot.scr.
+	Enforcement timing differs by root of trust:
 		- RSA FIT path: CONFIG_BOOTSCR_FIT_SIGNATURE (depends on
-		  CONFIG_FIT_SIGNATURE) flips on once a GSRD/Yocto build
-		  produces a signed FIT boot.scr and embeds the public key
-		  as 'required' in the control device tree.
+		  CONFIG_FIT_SIGNATURE) is y on the secure SoC64 defconfigs
+		  listed below. It must be paired with a GSRD/Yocto build that
+		  produces a signed FIT boot.scr and embeds the public key as
+		  'required' in the control device tree (meta-altera-fpga
+		  ES-14537 on wrynose / wrynose_next).
 		- VAB path: CONFIG_SOCFPGA_SECURE_VAB_AUTH_BOOTSCR (depends
 		  on CONFIG_SOCFPGA_SECURE_VAB_AUTH) flips on once the boot
 		  media's boot.scr is packaged with a VAB certificate.
@@ -442,30 +441,75 @@ Table of Contents
 		  own data (the same convention board_fit_image_post_process()
 		  relies on for kernel/fdt nodes), not only appended to the
 		  outer FIT container, and smoke-test
-		  "source ${scriptaddr}[:script]" against that production
-		  boot.scr on a *_vab_defconfig board before shipping.
+		  "source ${scriptaddr}" (default signed configuration) against
+		  that production boot.scr on a *_vab_defconfig board before
+		  shipping. Do not use "source ${scriptaddr}:script" under
+		  BOOTSCR_FIT_SIGNATURE — that path only hash-checks the
+		  subimage and is refused.
 
-	When CONFIG_BOOTSCR_FIT_SIGNATURE is later enabled, env helpers that
-	source a FIT subimage by name (for example SoC64 fatscript's
-	"source ${scriptaddr}:script") must be updated to source through a
-	signed configuration instead; that path only runs fit_image_verify()
-	and is refused under BOOTSCR_FIT_SIGNATURE. Track that env update in
-	the BOOTSCR enablement / meta integration PR.
+	With CONFIG_BOOTSCR_FIT_SIGNATURE=y, non-DISTRO SoC64 fatscript uses
+	scriptfile=boot.scr and sources through the FIT default signed
+	configuration ("source ${scriptaddr}"), not "source ${scriptaddr}:script".
+	The latter only runs fit_image_verify() and is refused under
+	BOOTSCR_FIT_SIGNATURE. Deferred boards (agilex72, N5X, …) keep
+	scriptfile=u-boot.scr and the legacy :script path because common.h
+	selects fatscript strings at compile time via the
+	SOCFPGA_SOC64_FATSCRIPT_ENV helper macro
+	(IS_ENABLED(CONFIG_BOOTSCR_FIT_SIGNATURE)).
 
-	Turning RSA FIT enforcement on is a lockstep change with the
-	GSRD / Yocto build: the meta-layer must switch from the legacy
-	mkimage -T script boot.scr to a signed FIT boot.scr (with a
-	'configurations' node and the public key injected as 'required'
-	into the control device tree embedded in U-Boot proper) at the
-	same time, or the board stops booting. See
+	RSA FIT enforcement is a lockstep change with the GSRD / Yocto build:
+	the meta-layer must ship a signed FIT boot.scr (with a
+	'configurations' node and the public key injected as 'required' into
+	the control device tree embedded in U-Boot proper) before this
+	defconfig flip lands. That lockstep is complete for ES-14537: auth
+	mechanism (#937), meta signing on wrynose/wrynose_next, and family
+	Yocto CI / board smoke with signed images. See
 	doc/usage/fit/signature.rst for the FIT signing flow.
 
-	The non-secure defconfigs deliberately keep RSA FIT protection OFF
-	for bring-up and emulation and must NOT be used for shipping
-	firmware:
+	Boot-script authentication status by defconfig:
+
+		defconfig                          boot.scr enforced?
+		---------------------------------- ------------------
+		socfpga_stratix10_defconfig        yes (BOOTSCR_FIT_SIGNATURE=y)
+		socfpga_agilex_defconfig           yes (BOOTSCR_FIT_SIGNATURE=y)
+		socfpga_agilex5_defconfig          yes (BOOTSCR_FIT_SIGNATURE=y)
+		socfpga_agilex5_oobe2_defconfig    yes (BOOTSCR_FIT_SIGNATURE=y)
+		socfpga_agilex_vab_defconfig       yes (inherits agilex base)
+		socfpga_agilex5_vab_defconfig      yes (inherits agilex5 base)
+		socfpga_agilex72_defconfig         NO  - deferred (KM Yocto
+		                                       signing follow-on;
+		                                       intentional ES-14537 Q3
+		                                       scope — not a gap in
+		                                       this enablement PR)
+		socfpga_n5x_defconfig              NO  - deferred (N5X not in
+		                                       ES-14537 Q3 scope)
+		socfpga_n5x_vab_defconfig          NO  - deferred (N5X not in
+		                                       ES-14537 Q3 scope)
+		socfpga_stratix10_legacy_defconfig NO  - see warning below
+		socfpga_agilex_legacy_defconfig    NO  - see warning below
+		socfpga_agilex5_debug2_defconfig   NO  - see warning below
+		socfpga_agilex5_emu_defconfig      NO  - see warning below
+
+	Note: *_vab_defconfig files that #include a base defconfig listed
+	above inherit its RSA FIT boot-script enforcement
+	(CONFIG_BOOTSCR_FIT_SIGNATURE). CONFIG_SOCFPGA_SECURE_VAB_AUTH_BOOTSCR
+	remains off unless explicitly enabled (separate VAB script path).
+
+	WARNING: The defconfigs below deliberately keep boot-script (and, for
+	several, kernel FIT) authentication OFF. They exist for HW bring-up,
+	debug and pre-silicon emulation, or to preserve the legacy uImage
+	boot flow. They provide NO boot-chain integrity guarantee and MUST
+	NOT be used for shipping / production firmware:
 		- socfpga_stratix10_legacy_defconfig (no CONFIG_FIT;
 		  non-ATF legacy flow, no image authentication)
 		- socfpga_agilex_legacy_defconfig (no CONFIG_FIT;
 		  non-ATF legacy flow, no image authentication)
-		- socfpga_agilex5_debug2_defconfig (CONFIG_SPL_FIT_SIGNATURE=n)
-		- socfpga_agilex5_emu_defconfig (CONFIG_SPL_FIT_SIGNATURE=n)
+		- socfpga_agilex5_debug2_defconfig (CONFIG_SPL_FIT_SIGNATURE=n,
+		  CONFIG_LEGACY_IMAGE_FORMAT=y; debug/emulation only)
+		- socfpga_agilex5_emu_defconfig (CONFIG_SPL_FIT_SIGNATURE=n,
+		  CONFIG_LEGACY_IMAGE_FORMAT=y; emulation only)
+
+	Enabling protection on these would require turning on the full
+	signed-FIT chain (CONFIG_SPL_FIT_SIGNATURE=y and dropping
+	CONFIG_LEGACY_IMAGE_FORMAT), which changes the boot flow they exist
+	to provide; harden a production defconfig instead.

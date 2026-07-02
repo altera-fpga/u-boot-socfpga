@@ -209,6 +209,18 @@
 
 #else
 
+#if IS_ENABLED(CONFIG_BOOTSCR_FIT_SIGNATURE)
+#define SOCFPGA_SOC64_FATSCRIPT_ENV \
+	"scriptfile=boot.scr\0" \
+	"fatscript=if fatload mmc 0:1 ${scriptaddr} ${scriptfile};" \
+		   "then source ${scriptaddr}; fi\0"
+#else
+#define SOCFPGA_SOC64_FATSCRIPT_ENV \
+	"scriptfile=u-boot.scr\0" \
+	"fatscript=if fatload mmc 0:1 ${scriptaddr} ${scriptfile};" \
+		   "then source ${scriptaddr}:script; fi\0"
+#endif
+
 #if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5) || IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72)
 #define CFG_EXTRA_ENV_SETTINGS \
 	"kernel_comp_addr_r=0x9000000\0" \
@@ -253,9 +265,7 @@
 		" else fdt set /clocks/qspi-clk clock-frequency" \
 		" ${qspi_clock}; echo QSPI clock frequency updated; fi; fi\0" \
 	"scriptaddr=0x02100000\0" \
-	"scriptfile=u-boot.scr\0" \
-	"fatscript=if fatload mmc 0:1 ${scriptaddr} ${scriptfile};" \
-		   "then source ${scriptaddr}:script; fi\0" \
+	SOCFPGA_SOC64_FATSCRIPT_ENV \
 	"nandroot=ubi0:rootfs\0" \
 	"nandload=ubi part root; ubi readvol ${loadaddr} kernel; ubi readvol ${fdt_addr} dtb\0" \
 	"nandboot=setenv bootargs " CONFIG_BOOTARGS \
@@ -314,9 +324,7 @@
 		" else fdt set /clocks/qspi-clk clock-frequency" \
 		" ${qspi_clock}; echo QSPI clock frequency updated; fi; fi\0" \
 	"scriptaddr=0x02100000\0" \
-	"scriptfile=u-boot.scr\0" \
-	"fatscript=if fatload mmc 0:1 ${scriptaddr} ${scriptfile};" \
-		   "then source ${scriptaddr}:script; fi\0" \
+	SOCFPGA_SOC64_FATSCRIPT_ENV \
 	"nandfitboot=setenv bootargs " CONFIG_BOOTARGS \
 			" root=${nandroot} rw rootwait rootfstype=ubifs ubi.mtd=1; " \
 			"bootm ${loadaddr}\0" \
