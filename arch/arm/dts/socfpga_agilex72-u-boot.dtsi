@@ -1,0 +1,570 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * U-Boot additions
+ *
+ * Copyright (C) 2025 Altera Corporation <www.altera.com>
+ */
+
+#include "socfpga_soc64_fit-u-boot.dtsi"
+
+/{
+	memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		bootph-all;
+	};
+
+	soc {
+		bootph-all;
+
+		socfpga_ccu: socfpga-ccu {
+			compatible = "intel,socfpga-dtreg";
+			#address-cells = <1>;
+			#size-cells = <1>;
+			bootph-all;
+
+			/* DSU0 */
+			i_ccu_caiu0@6000000 {
+				reg = <0x6000000 0x00001000>;
+				intel,offset-settings =
+					/* CAIU0UEDR */
+					<0x00000100 0x0000001b 0x0000001f>,
+					/* CAIU0UEIR */
+					<0x00000104 0x0000001b 0x0000001f>,
+					/* CAIU0AMIGR */
+					<0x000003c0 0x00000001 0x0000001f>,
+					/* CAIU0MIFSR */
+					<0x000003c4 0x00000000 0x07070777>,
+					/* CAIU0GPR0: DII0_OSPI_32MB (BLR0/BHR0/AR0) */
+					<0x0000404 0x00004000 0xffffffff>,
+					<0x0000408 0x00000000 0x000000ff>,
+					<0x0000400 0xc0d00040 0xc3f03edf>,
+					/* CAIU0GPR1: DII1_GIC (BLR1/BHR1/AR1) */
+					<0x00000414 0x00007000 0xffffffff>,
+					<0x00000418 0x00000000 0x000000ff>,
+					<0x00000410 0xc0900240 0xc3f03edf>,
+					/* CAIU0GPR4: DII0_LWSOC2NOC_640MB_128MB (BLR4/BHR4/AR4) */
+					<0x00000444 0x00018000 0xffffffff>,
+					<0x00000448 0x00000000 0x000000ff>,
+					<0x00000440 0xc0f00040 0xc3f03edf>,
+					/* CAIU0GPR5: DII0_LWSOC2NOC_640MB_512MB (BLR5/BHR5/AR5) */
+					<0x00000454 0x00020000 0xffffffff>,
+					<0x00000458 0x00000000 0x000000ff>,
+					<0x00000450 0xc1100040 0xc3f03edf>,
+					/* CAIU0GPR6: DII0_SOC2NOC_1GB (BLR6/BHR6/AR6) */
+					<0x00000464 0x00040000 0xffffffff>,
+					<0x00000468 0x00000000 0x000000ff>,
+					<0x00000460 0xc1200040 0xc3f03edf>,
+					/* CAIU0GPR7: DMI_SDRAM_2GB (BLR7/BHR7/AR7) */
+					<0x00000474 0x00080000 0xffffffff>,
+					<0x00000478 0x00000000 0x000000ff>,
+					<0x00000470 0x81200056 0xc3f03edf>,
+					/* CAIU0GPR8: DII0_LWSOC2NOC_3GB (BLR8/BHR8/AR8) */
+					<0x00000484 0x00100000 0xffffffff>,
+					<0x00000488 0x00000000 0x000000ff>,
+					<0x00000480 0xc1400040 0xc3f03edf>,
+					/* CAIU0GPR9: DII0_SOC2NOC_15GB (BLR9/BHR9/AR9) */
+					<0x00000494 0x00400000 0xffffffff>,
+					<0x00000498 0x00000000 0x000000ff>,
+					<0x00000490 0xc1600040 0xc3f03edf>,
+					/* CAIU0GPR10: DMI_SDRAM_30GB (BLR10/BHR10/AR10) */
+					<0x000004a4 0x00800000 0xffffffff>,
+					<0x000004a8 0x00000000 0x000000ff>,
+					<0x000004a0 0x81600056 0xc3f03edf>,
+					/* CAIU0GPR11: DII0_SOC2NOC_240GB (BLR11/BHR11/AR11) */
+					<0x000004b4 0x04000000 0xffffffff>,
+					<0x000004b8 0x00000000 0x000000ff>,
+					<0x000004b0 0xc1a00040 0xc3f03edf>,
+					/* CAIU0GPR12: DMI_SDRAM_480GB (BLR12/BHR12/AR12) */
+					<0x000004c4 0x08000000 0xffffffff>,
+					<0x000004c8 0x00000000 0x000000ff>,
+					<0x000004c0 0x81a00056 0xc3f03edf>,
+					/* CAIU0CCR0 / CCR1 / CCR2: allocate credits */
+					<0x00000c00 0x00101010 0x00ffffff>,
+					<0x00000c04 0x00101010 0x00ffffff>,
+					<0x00000c08 0x00101010 0x00ffffff>;
+				bootph-all;
+			};
+
+			/* DSU1 */
+			i_ccu_caiu1@6001000 {
+				reg = <0x6001000 0x00001000>;
+				intel,offset-settings =
+					/* CAIU1UEDR */
+					<0x00000100 0x0000001b 0x0000001f>,
+					/* CAIU1UEIR */
+					<0x00000104 0x0000001b 0x0000001f>,
+					/* CAIU1AMIGR */
+					<0x000003c0 0x00000001 0x0000001f>,
+					/* CAIU1MIFSR */
+					<0x000003c4 0x00000000 0x07070777>,
+					/* CAIU1GPR0: DII0_OSPI_32MB (BLR0/BHR0/AR0) */
+					<0x0000404 0x00004000 0xffffffff>,
+					<0x0000408 0x00000000 0x000000ff>,
+					<0x00000400 0xc0d00040 0xc3f03edf>,
+					/* CAIU1GPR1: DII1_GIC (BLR1/BHR1/AR1) */
+					<0x00000414 0x00007000 0xffffffff>,
+					<0x00000418 0x00000000 0x000000ff>,
+					<0x00000410 0xc0900240 0xc3f03edf>,
+					/* CAIU1GPR4: DII0_LWSOC2NOC_640MB_128MB (BLR4/BHR4/AR4) */
+					<0x00000444 0x00018000 0xffffffff>,
+					<0x00000448 0x00000000 0x000000ff>,
+					<0x00000440 0xc0f00040 0xc3f03edf>,
+					/* CAIU1GPR5: DII0_LWSOC2NOC_640MB_512MB (BLR5/BHR5/AR5) */
+					<0x00000454 0x00020000 0xffffffff>,
+					<0x00000458 0x00000000 0x000000ff>,
+					<0x00000450 0xc1100040 0xc3f03edf>,
+					/* CAIU1GPR6: DII0_SOC2NOC_1GB (BLR6/BHR6/AR6) */
+					<0x00000464 0x00040000 0xffffffff>,
+					<0x00000468 0x00000000 0x000000ff>,
+					<0x00000460 0xc1200040 0xc3f03edf>,
+					/* CAIU1GPR7: DMI_SDRAM_2GB (BLR7/BHR7/AR7) */
+					<0x00000474 0x00080000 0xffffffff>,
+					<0x00000478 0x00000000 0x000000ff>,
+					<0x00000470 0x81200056 0xc3f03edf>,
+					/* CAIU1GPR8: DII0_LWSOC2NOC_3GB (BLR8/BHR8/AR8) */
+					<0x00000484 0x00100000 0xffffffff>,
+					<0x00000488 0x00000000 0x000000ff>,
+					<0x00000480 0xc1400040 0xc3f03edf>,
+					/* CAIU1GPR9: DII0_SOC2NOC_15GB (BLR9/BHR9/AR9) */
+					<0x00000494 0x00400000 0xffffffff>,
+					<0x00000498 0x00000000 0x000000ff>,
+					<0x00000490 0xc1600040 0xc3f03edf>,
+					/* CAIU1GPR10: DMI_SDRAM_30GB (BLR10/BHR10/AR10) */
+					<0x000004a4 0x00800000 0xffffffff>,
+					<0x000004a8 0x00000000 0x000000ff>,
+					<0x000004a0 0x81600056 0xc3f03edf>,
+					/* CAIU1GPR11: DII0_SOC2NOC_240GB (BLR11/BHR11/AR11) */
+					<0x000004b4 0x04000000 0xffffffff>,
+					<0x000004b8 0x00000000 0x000000ff>,
+					<0x000004b0 0xc1a00040 0xc3f03edf>,
+					/* CAIU1GPR12: DMI_SDRAM_480GB (BLR12/BHR12/AR12) */
+					<0x000004c4 0x08000000 0xffffffff>,
+					<0x000004c8 0x00000000 0x000000ff>,
+					<0x000004c0 0x81a00056 0xc3f03edf>,
+					/* CAIU1CCR0 / CCR1 / CCR2: allocate credits */
+					<0x00000c00 0x00101010 0x00ffffff>,
+					<0x00000c04 0x00101010 0x00ffffff>,
+					<0x00000c08 0x00101010 0x00ffffff>;
+				bootph-all;
+			};
+
+			/* FPGA2SOC (NCAIU0; RTL: XAIU0) */
+			i_ccu_ncaiu0@6002000 {
+				reg = <0x6002000 0x00001000>;
+				intel,offset-settings =
+					/* XAIU0UEDR */
+					<0x00000100 0x0000001f 0x0000001f>,
+					/* XAIU0UEIR */
+					<0x00000104 0x0000001f 0x0000001f>,
+					/* XAIU0AMIGR */
+					<0x000003c0 0x00000001 0x0000001f>,
+					/* XAIU0MIFSR */
+					<0x000003c4 0x00000000 0x07070777>,
+					/* XAIU0GPR0: DII0_OSPI_32MB (BLR0/BHR0/AR0) */
+					<0x0000404 0x00004000 0xffffffff>,
+					<0x0000408 0x00000000 0x000000ff>,
+					<0x00000400 0xc0d00040 0xc3f03edf>,
+					/* XAIU0GPR1: DII1_GIC (BLR1/BHR1/AR1) */
+					<0x00000414 0x00007000 0xffffffff>,
+					<0x00000418 0x00000000 0x000000ff>,
+					<0x00000410 0xc0900240 0xc3f03edf>,
+					/* XAIU0GPR2: DII0_PSS_8000000 (BLR2/BHR2/AR2) */
+					<0x00000424 0x00008000 0xffffffff>,
+					<0x00000428 0x00000000 0x000000ff>,
+					<0x00000420 0xc0f00040 0xc3f03edf>,
+					/* XAIU0GPR3: DII0_PSS_10000000 (BLR3/BHR3/AR3) */
+					<0x00000434 0x00010000 0xffffffff>,
+					<0x00000438 0x00000000 0x000000ff>,
+					<0x00000430 0xc0f00040 0xc3f03edf>,
+					/* XAIU0GPR4: DII0_LWSOC2NOC_640MB_128MB (BLR4/BHR4/AR4) */
+					<0x00000444 0x00018000 0xffffffff>,
+					<0x00000448 0x00000000 0x000000ff>,
+					<0x00000440 0xc0f00040 0xc3f03edf>,
+					/* XAIU0GPR5: DII0_LWSOC2NOC_640MB_512MB (BLR5/BHR5/AR5) */
+					<0x00000454 0x00020000 0xffffffff>,
+					<0x00000458 0x00000000 0x000000ff>,
+					<0x00000450 0xc1100040 0xc3f03edf>,
+					/* XAIU0GPR6: DII0_SOC2NOC_1GB (BLR6/BHR6/AR6) */
+					<0x00000464 0x00040000 0xffffffff>,
+					<0x00000468 0x00000000 0x000000ff>,
+					<0x00000460 0xc1200040 0xc3f03edf>,
+					/* XAIU0GPR7: DMI_SDRAM_2GB (BLR7/BHR7/AR7) */
+					<0x00000474 0x00080000 0xffffffff>,
+					<0x00000478 0x00000000 0x000000ff>,
+					<0x00000470 0x81200056 0xc3f03edf>,
+					/* XAIU0GPR8: DII0_LWSOC2NOC_3GB (BLR8/BHR8/AR8) */
+					<0x00000484 0x00100000 0xffffffff>,
+					<0x00000488 0x00000000 0x000000ff>,
+					<0x00000480 0xc1400040 0xc3f03edf>,
+					/* XAIU0GPR9: DII0_SOC2NOC_15GB (BLR9/BHR9/AR9) */
+					<0x00000494 0x00400000 0xffffffff>,
+					<0x00000498 0x00000000 0x000000ff>,
+					<0x00000490 0xc1600040 0xc3f03edf>,
+					/* XAIU0GPR10: DMI_SDRAM_30GB (BLR10/BHR10/AR10) */
+					<0x000004a4 0x00800000 0xffffffff>,
+					<0x000004a8 0x00000000 0x000000ff>,
+					<0x000004a0 0x81600056 0xc3f03edf>,
+					/* XAIU0GPR11: DII0_SOC2NOC_240GB (BLR11/BHR11/AR11) */
+					<0x000004b4 0x04000000 0xffffffff>,
+					<0x000004b8 0x00000000 0x000000ff>,
+					<0x000004b0 0xc1a00040 0xc3f03edf>,
+					/* XAIU0GPR12: DMI_SDRAM_480GB (BLR12/BHR12/AR12) */
+					<0x000004c4 0x08000000 0xffffffff>,
+					<0x000004c8 0x00000000 0x000000ff>,
+					<0x000004c0 0x81a00056 0xc3f03edf>,
+					/* XAIU0CCR0 / CCR1 / CCR2: allocate credits */
+					<0x00000c00 0x00101010 0x00ffffff>,
+					<0x00000c04 0x00101010 0x00ffffff>,
+					<0x00000c08 0x00101010 0x00ffffff>;
+				bootph-all;
+			};
+
+			/* GIC_M (NCAIU1; RTL: XAIU1) */
+			i_ccu_ncaiu1@6003000 {
+				reg = <0x6003000 0x00001000>;
+				intel,offset-settings =
+					/* XAIU1UEDR */
+					<0x00000100 0x0000001f 0x0000001f>,
+					/* XAIU1UEIR */
+					<0x00000104 0x0000001f 0x0000001f>,
+					/* XAIU1AMIGR */
+					<0x000003c0 0x00000001 0x0000001f>,
+					/* XAIU1MIFSR */
+					<0x000003c4 0x00000000 0x07070777>,
+					/* XAIU1GPR7: DMI_SDRAM_2GB (BLR7/BHR7/AR7) */
+					<0x00000474 0x00080000 0xffffffff>,
+					<0x00000478 0x00000000 0x000000ff>,
+					<0x00000470 0x81200056 0xc3f03edf>,
+					/* XAIU1GPR10: DMI_SDRAM_30GB (BLR10/BHR10/AR10) */
+					<0x000004a4 0x00800000 0xffffffff>,
+					<0x000004a8 0x00000000 0x000000ff>,
+					<0x000004a0 0x81600056 0xc3f03edf>,
+					/* XAIU1GPR12: DMI_SDRAM_480GB (BLR12/BHR12/AR12) */
+					<0x000004c4 0x08000000 0xffffffff>,
+					<0x000004c8 0x00000000 0x000000ff>,
+					<0x000004c0 0x81a00056 0xc3f03edf>,
+					/* XAIU1CCR0 / CCR1 / CCR2: allocate credits */
+					<0x00000c00 0x00101010 0x00ffffff>,
+					<0x00000c04 0x00101010 0x00ffffff>,
+					<0x00000c08 0x00101010 0x00ffffff>;
+				bootph-all;
+			};
+
+			/* SMMU (NCAIU2; RTL: XAIU2) */
+			i_ccu_ncaiu2@6004000 {
+				reg = <0x6004000 0x00001000>;
+				intel,offset-settings =
+					/* XAIU2UEDR */
+					<0x00000100 0x0000001f 0x0000001f>,
+					/* XAIU2UEIR */
+					<0x00000104 0x0000001f 0x0000001f>,
+					/* XAIU2AMIGR */
+					<0x000003c0 0x00000001 0x0000001f>,
+					/* XAIU2MIFSR */
+					<0x000003c4 0x00000000 0x07070777>,
+					/* XAIU2GPR7: DMI_SDRAM_2GB (BLR7/BHR7/AR7) */
+					<0x00000474 0x00080000 0xffffffff>,
+					<0x00000478 0x00000000 0x000000ff>,
+					<0x00000470 0x81200056 0xc3f03edf>,
+					/* XAIU2GPR10: DMI_SDRAM_30GB (BLR10/BHR10/AR10) */
+					<0x000004a4 0x00800000 0xffffffff>,
+					<0x000004a8 0x00000000 0x000000ff>,
+					<0x000004a0 0x81600056 0xc3f03edf>,
+					/* XAIU2GPR12: DMI_SDRAM_480GB (BLR12/BHR12/AR12) */
+					<0x000004c4 0x08000000 0xffffffff>,
+					<0x000004c8 0x00000000 0x000000ff>,
+					<0x000004c0 0x81a00056 0xc3f03edf>,
+					/* XAIU2CCR0 / CCR1 / CCR2: allocate credits */
+					<0x00000c00 0x00101010 0x00ffffff>,
+					<0x00000c04 0x00101010 0x00ffffff>,
+					<0x00000c08 0x00101010 0x00ffffff>;
+				bootph-all;
+			};
+
+			/* HSP NOC (NCAIU3; RTL: XAIU3) */
+			i_ccu_ncaiu3@6005000 {
+				reg = <0x6005000 0x00001000>;
+				intel,offset-settings =
+					/* XAIU3UEDR */
+					<0x00000100 0x0000001f 0x0000001f>,
+					/* XAIU3UEIR */
+					<0x00000104 0x0000001f 0x0000001f>,
+					/* XAIU3AMIGR */
+					<0x000003c0 0x00000001 0x0000001f>,
+					/* XAIU3MIFSR */
+					<0x000003c4 0x00000000 0x07070777>,
+					/* XAIU3GPR1: DII1_GIC (BLR1/BHR1/AR1) */
+					<0x00000414 0x00007000 0xffffffff>,
+					<0x00000418 0x00000000 0x000000ff>,
+					<0x00000410 0xc0900240 0xc3f03edf>,
+					/* XAIU3GPR7: DMI_SDRAM_2GB (BLR7/BHR7/AR7) */
+					<0x00000474 0x00080000 0xffffffff>,
+					<0x00000478 0x00000000 0x000000ff>,
+					<0x00000470 0x81200056 0xc3f03edf>,
+					/* XAIU3GPR10: DMI_SDRAM_30GB (BLR10/BHR10/AR10) */
+					<0x000004a4 0x00800000 0xffffffff>,
+					<0x000004a8 0x00000000 0x000000ff>,
+					<0x000004a0 0x81600056 0xc3f03edf>,
+					/* XAIU3GPR12: DMI_SDRAM_480GB (BLR12/BHR12/AR12) */
+					<0x000004c4 0x08000000 0xffffffff>,
+					<0x000004c8 0x00000000 0x000000ff>,
+					<0x000004c0 0x81a00056 0xc3f03edf>,
+					/* XAIU3CCR0 / CCR1 / CCR2: allocate credits */
+					<0x00000c00 0x00101010 0x00ffffff>,
+					<0x00000c04 0x00101010 0x00ffffff>,
+					<0x00000c08 0x00101010 0x00ffffff>;
+				bootph-all;
+			};
+
+			/* DCE0 */
+			i_ccu_dce0@6006000 {
+				reg = <0x6006000 0x00001000>;
+				intel,offset-settings =
+					/* DCEUUEDR0 */
+					<0x00000140 0x0000001f 0x0000001f>,
+					/* DCEUUEIR0 */
+					<0x00000144 0x0000001f 0x0000001f>,
+					/* DCEUAMIGR0 */
+					<0x000003c0 0x00000001 0x0000001f>,
+					/* DCEUMIFSR0 */
+					<0x000003c4 0x00000000 0x07070777>,
+					/* DCEUGPR7: DMI_SDRAM_2GB (BLR7/BHR7/AR7) */
+					<0x00000474 0x00080000 0xffffffff>,
+					<0x00000478 0x00000000 0x000000ff>,
+					<0x00000470 0x81200056 0xc3f03edf>,
+					/* DCEUGPR10: DMI_SDRAM_30GB (BLR10/BHR10/AR10) */
+					<0x000004a4 0x00800000 0xffffffff>,
+					<0x000004a8 0x00000000 0x000000ff>,
+					<0x000004a0 0x81600056 0xc3f03edf>,
+					/* DCEUGPR12: DMI_SDRAM_480GB (BLR12/BHR12/AR12) */
+					<0x000004c4 0x08000000 0xffffffff>,
+					<0x000004c8 0x00000000 0x000000ff>,
+					<0x000004c0 0x81a00056 0xc3f03edf>,
+					/* DCEUCCR0 / CCR1 / CCR2: allocate credits */
+					<0x00000c00 0x00101010 0x00ffffff>,
+					<0x00000c04 0x00101010 0x00ffffff>,
+					<0x00000c08 0x00101010 0x00ffffff>;
+				bootph-all;
+			};
+
+			/* DCE1 */
+			i_ccu_dce1@6007000 {
+				reg = <0x6007000 0x00001000>;
+				intel,offset-settings =
+					/* DCEUUEDR1 */
+					<0x00000140 0x0000001f 0x0000001f>,
+					/* DCEUUEIR1 */
+					<0x00000144 0x0000001f 0x0000001f>,
+					/* DCEUAMIGR1 */
+					<0x000003c0 0x00000001 0x0000001f>,
+					/* DCEUMIFSR1 */
+					<0x000003c4 0x00000000 0x07070777>,
+					/* DCEUGPR7: DMI_SDRAM_2GB (BLR7/BHR7/AR7) */
+					<0x00000474 0x00080000 0xffffffff>,
+					<0x00000478 0x00000000 0x000000ff>,
+					<0x00000470 0x81200056 0xc3f03edf>,
+					/* DCEUGPR10: DMI_SDRAM_30GB (BLR10/BHR10/AR10) */
+					<0x000004a4 0x00800000 0xffffffff>,
+					<0x000004a8 0x00000000 0x000000ff>,
+					<0x000004a0 0x81600056 0xc3f03edf>,
+					/* DCEUGPR12: DMI_SDRAM_480GB (BLR12/BHR12/AR12) */
+					<0x000004c4 0x08000000 0xffffffff>,
+					<0x000004c8 0x00000000 0x000000ff>,
+					<0x000004c0 0x81a00056 0xc3f03edf>,
+					/* DCEUCCR0 / CCR1 / CCR2: allocate credits */
+					<0x00000c00 0x00101010 0x00ffffff>,
+					<0x00000c04 0x00101010 0x00ffffff>,
+					<0x00000c08 0x00101010 0x00ffffff>;
+				bootph-all;
+			};
+
+			/* DMI0 */
+			i_ccu_dmi0@6008000 {
+				reg = <0x6008000 0x00001000>;
+				intel,offset-settings =
+					/* DMIUUEDR0 */
+					<0x00000100 0x00000017 0x0000001f>,
+					/* DMIUUEIR0 */
+					<0x00000104 0x00000017 0x0000001f>,
+					/* DMIUSMCTCR */
+					<0x00000300 0x00000001 0x00000003>,
+					<0x00000300 0x00000003 0x00000003>,
+					/* DMIUSMCAPR (SMC Allocation Policy) */
+					<0x00000308 0x0000000C 0x0000001F>;
+				/* DMIUSMCISR: TagInitDone (bit 0); polling DataInitDone hangs */
+				intel,poll-settings =
+					<0x0000030c 0x00000001 200>;
+				bootph-all;
+			};
+
+			/* DMI1 */
+			i_ccu_dmi1@6009000 {
+				reg = <0x6009000 0x00001000>;
+				intel,offset-settings =
+					/* DMIUUEDR1 */
+					<0x00000100 0x00000017 0x0000001f>,
+					/* DMIUUEIR1 */
+					<0x00000104 0x00000017 0x0000001f>,
+					/* DMIUSMCTCR */
+					<0x00000300 0x00000001 0x00000003>,
+					<0x00000300 0x00000003 0x00000003>,
+					/* DMIUSMCAPR (SMC Allocation Policy) */
+					<0x00000308 0x0000000C 0x0000001F>;
+				/* DMIUSMCISR: TagInitDone (bit 0); polling DataInitDone hangs */
+				intel,poll-settings =
+					<0x0000030c 0x00000001 200>;
+				bootph-all;
+			};
+
+			/* DII0 */
+			i_ccu_dii0@600b000 {
+				reg = <0x600b000 0x00001000>;
+				intel,offset-settings =
+					/* DIIUUEDR0 */
+					<0x00000118 0x00000003 0x0000001f>,
+					/* DIIUUEIR0 */
+					<0x0000011c 0x00000003 0x0000001f>;
+				bootph-all;
+			};
+
+			/* DII1 */
+			i_ccu_dii1@600c000 {
+				reg = <0x600c000 0x00001000>;
+				intel,offset-settings =
+					/* DIIUUEDR1 */
+					<0x00000118 0x00000003 0x0000001f>,
+					/* DIIUUEIR1 */
+					<0x0000011c 0x00000003 0x0000001f>;
+				bootph-all;
+			};
+
+			/* DVE0 */
+			i_ccu_dve0@600e000 {
+				reg = <0x600e000 0x00001000>;
+				intel,offset-settings =
+					/* DVEUUEDR */
+					<0x00000140 0x0000001f 0x0000001f>,
+					/* DVEUUEIR */
+					<0x00000144 0x0000001f 0x0000001f>;
+				bootph-all;
+			};
+		};
+	};
+};
+
+&clkmgr {
+	bootph-all;
+};
+
+&gpio1 {
+	/* Configure GPIO 1 pin 3 as output pin with value 0 during GPIO probe */
+	portb: gpio-controller@0{
+		sdio_sel {
+			gpio-hog;
+			gpios = <3 GPIO_ACTIVE_HIGH>;
+			output-low;
+		};
+	};
+};
+
+&i2c0 {
+	reset-names = "i2c";
+};
+
+&i2c1 {
+	reset-names = "i2c";
+};
+
+&i2c2 {
+	reset-names = "i2c";
+};
+
+&i2c3 {
+	reset-names = "i2c";
+};
+
+&mmc {
+	resets = <&rst SDMMC0_RESET>, <&rst SDMMC0_SOFTPHY_RESET>;
+};
+
+&mmc1 {
+	resets = <&rst SDMMC1_RESET>, <&rst SDMMC1_SOFTPHY_RESET>;
+};
+
+&porta {
+	bank-name = "porta";
+};
+
+&portb {
+	bank-name = "portb";
+};
+
+&xspi {
+	bootph-all;
+};
+
+&sdm_xspi {
+	bootph-all;
+};
+
+&rst {
+	compatible = "altr,rst-mgr";
+	/*
+	 * modrst_base = rstmgr_base + 0x20 (MPUMODRST). Bank 0 at byte 0 of
+	 * modrst_base is not used; bank 1 (PER0MODRST) is the first consumer-
+	 * visible bank, keeping reset IDs consistent with the AGILEX72 Linux DTS and
+	 * Agilex.
+	 */
+	altr,modrst-offset = <0x20>;
+	bootph-all;
+};
+
+&sdr {
+	compatible = "altr,sdr-ctl-agilex72";
+	reg = <0x18000000 0x400000>;
+	/*
+	 * AGILEX72 reset manager has no HPS-side DDR/scheduler reset bit
+	 * (BRGMODRST only exposes fpga2soc); the DDR subsystem is released
+	 * by the SDM before U-Boot, so no "resets" property is needed here.
+	 */
+	bootph-all;
+};
+
+/*
+ * AGILEX72 splits the System Manager into three independent register windows
+ * (LS / HS / APU). Each window is matched as a UCLASS_SYSCON device by
+ * adding the "syscon" compatible here so the Linux DT stays free of the
+ * U-Boot-only string. socfpga_get_sys_mgr_addr() probes all three aliases
+ * in SPL (board_init_f), so all three need bootph-pre-ram.
+ */
+&sysmgr_ls {
+	compatible = "altr,sys-mgr-agilex72", "altr,sys-mgr", "syscon";
+	bootph-pre-ram;
+};
+
+&sysmgr_hs {
+	compatible = "altr,sys-mgr-agilex72", "altr,sys-mgr", "syscon";
+	bootph-pre-ram;
+};
+
+&sysmgr_apu {
+	compatible = "altr,sys-mgr-agilex72", "altr,sys-mgr", "syscon";
+	bootph-pre-ram;
+};
+
+/ {
+	aliases {
+		sysmgr-ls  = &sysmgr_ls;
+		sysmgr-hs  = &sysmgr_hs;
+		sysmgr-apu = &sysmgr_apu;
+	};
+};
+
+&uart0 {
+	bootph-all;
+};
+
+&watchdog0 {
+	bootph-all;
+};

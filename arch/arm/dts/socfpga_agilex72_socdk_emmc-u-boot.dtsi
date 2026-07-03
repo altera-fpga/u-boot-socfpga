@@ -1,0 +1,56 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * U-Boot additions for AGILEX72 SocDK eMMC
+ *
+ * Copyright (C) 2026 Altera Corporation <www.altera.com>
+ */
+
+#include "socfpga_agilex72_socdk-u-boot.dtsi"
+
+/{
+	model = "SoCFPGA AGILEX72 SoCDK eMMC";
+};
+
+&mmc {
+	/delete-property/ no-mmc;
+	/delete-property/ cap-sd-highspeed;
+	no-sd;
+	no-sdio;
+	disable-wp;
+	non-removable;
+	cap-mmc-highspeed;
+	vmmc-supply = <&sd_emmc_power>;
+	vqmmc-supply = <&emmc_io_1v8_reg>;
+	max-frequency = <200000000>;
+	bus-width = <4>;
+	bootph-all;
+};
+
+&mmc1 {
+	/delete-property/ no-mmc;
+	/delete-property/ cap-sd-highspeed;
+	no-sd;
+	no-sdio;
+	disable-wp;
+	non-removable;
+	cap-mmc-highspeed;
+	vmmc-supply = <&sd_emmc_power>;
+	vqmmc-supply = <&emmc_io_1v8_reg>;
+	max-frequency = <200000000>;
+	bus-width = <4>;
+	bootph-all;
+};
+
+&gmac0 {
+	status = "okay";
+};
+
+&gmac2 {
+	status = "okay";
+};
+
+#if !defined(CONFIG_SOCFPGA_SECURE_VAB_AUTH)
+&fdt_0_blob {
+	filename = "arch/arm/dts/socfpga_agilex72_socdk_emmc.dtb";
+};
+#endif
