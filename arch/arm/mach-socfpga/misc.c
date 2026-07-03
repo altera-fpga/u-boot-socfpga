@@ -295,36 +295,64 @@ void socfpga_get_managers_addr(void)
 		hang();
 }
 
-void socfpga_get_sys_mgr_addr(void)
+static void sysmgr_bind_region(const char *alias, enum socfpga_sysmgr_region region)
 {
-	int ret;
 	struct udevice *dev;
-	ofnode node;
 	phys_addr_t addr;
+	ofnode node;
+	int ret;
 
-	/* Look up sysmgr alias */
-	node = ofnode_get_aliases_node("sysmgr");
+	node = ofnode_get_aliases_node(alias);
 	if (!ofnode_valid(node)) {
-		printf("'sysmgr' alias not found in device tree\n");
+		printf("Altera system manager alias '%s' not found\n", alias);
 		hang();
 	}
 
 	ret = uclass_get_device_by_ofnode(UCLASS_SYSCON, node, &dev);
 	if (ret) {
-		printf("Altera system manager init failed: %d\n", ret);
+		printf("Altera system manager '%s' init failed: %d\n",
+		       alias, ret);
 		hang();
 	}
 
-	/* Read and store sysmgr region addresses */
-	socfpga_sysmgr_region_count = 0;
-	for (int i = 0; i < SYS_MGR_REGION_MAX; i++) {
-		addr = dev_read_addr_index(dev, i);
-
-		/* Stop if no more regions are defined in DT */
-		if (addr == FDT_ADDR_T_NONE)
-			break;
-		socfpga_sysmgr_base[socfpga_sysmgr_region_count++] = addr;
+	addr = dev_read_addr(dev);
+	if (addr == FDT_ADDR_T_NONE) {
+		printf("Altera system manager '%s' address not found\n", alias);
+		hang();
 	}
+
+	socfpga_sysmgr_base[region] = addr;
+	socfpga_sysmgr_region_count++;
+}
+
+void socfpga_get_sys_mgr_addr(void)
+{
+	static const struct {
+		const char *alias;
+		enum socfpga_sysmgr_region region;
+	} sysmgr_multi[] = {
+		{ "sysmgr-ls",  SYS_MGR_LS_CORE  },
+		{ "sysmgr-hs",  SYS_MGR_HS_CORE  },
+		{ "sysmgr-apu", SYS_MGR_APU_CORE },
+	};
+	int i;
+
+	socfpga_sysmgr_region_count = 0;
+
+	/*
+	 * Probe per-region aliases. Platforms with a split System Manager
+	 * (e.g. AGILEX72) define "sysmgr-ls/hs/apu" aliases; single-instance
+	 * platforms define only "sysmgr". Bind whichever aliases are present
+	 * and fall back to the legacy "sysmgr" alias when none are found.
+	 */
+	for (i = 0; i < ARRAY_SIZE(sysmgr_multi); i++) {
+		if (ofnode_valid(ofnode_get_aliases_node(sysmgr_multi[i].alias)))
+			sysmgr_bind_region(sysmgr_multi[i].alias,
+					   sysmgr_multi[i].region);
+	}
+
+	if (!socfpga_sysmgr_region_count)
+		sysmgr_bind_region("sysmgr", SYS_MGR_ROOT);
 }
 
 phys_addr_t socfpga_get_rstmgr_addr(void)

@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0+ */
 /*
- * Copyright (C) 2013-2017 Altera Corporation <www.altera.com>
+ * Copyright (C) 2013-2017, 2025 Altera Corporation <www.altera.com>
  */
 
 #ifndef _SYSTEM_MANAGER_H_
@@ -41,7 +41,121 @@ phys_addr_t socfpga_get_sysmgr_addr(void);
 phys_addr_t socfpga_get_sysmgr_addr_region(enum socfpga_sysmgr_region region);
 
 #if defined(CONFIG_ARCH_SOCFPGA_SOC64)
+#include <asm/io.h>
 #include <asm/arch/system_manager_soc64.h>
+
+/*
+ * Unified System Manager access helpers.
+ *
+ * Four access styles are supported and may be freely mixed:
+ *   1. Direct MMIO via socfpga_get_sysmgr_addr[_region]() + offset using
+ *      writel()/readl()/clrsetbits_le32(). Bypasses DM; correct in SPL.
+ *   2. Region-aware helpers sysmgr_{ls,hs,apu}_{read,write,update}() --
+ *      alias-resolved ("sysmgr-{ls,hs,apu}") and dispatched through
+ *      altr_sysmgr_ops. Use from fixed-region call sites.
+ *   3. Device-explicit sysmgr_dev_{read,write,update}() for callers
+ *      that resolve a sysmgr phandle themselves (e.g. EMAC drivers
+ *      walking `altr,sysmgr-syscon`).
+ *   4. Region-agnostic sysmgr_{read,write,update}() trampolines that
+ *      resolve the "sysmgr" device-tree alias. Retained for back-compat
+ *      with single-region SoC64 callers. On the multi-region AGILEX72 family
+ *      they target whichever node owns the "sysmgr" alias (LS-core in
+ *      the current AGILEX72 Device Tree), which is the right default but is
+ *      a foot-gun for HS- or APU-region work; new AGILEX72-capable code
+ *      should call (2) or (3) with an explicit region/device instead.
+ *
+ * In SPL (CONFIG_XPL_BUILD) every helper compiles to direct MMIO using
+ * the address resolved at platform init. In U-Boot proper the helpers
+ * go through altr_sysmgr_ops, which dispatches between direct MMIO at
+ * EL3 and INTEL_SIP_SMC_REG_* SMCs at lower ELs.
+ *
+ * Returns 0 on success, negative errno on failure (SPL always returns 0).
+ */
+
+struct udevice;
+
+#if defined(CONFIG_XPL_BUILD)
+
+static inline int sysmgr_write(u32 offset, u32 value)
+{
+	writel(value, socfpga_get_sysmgr_addr() + offset);
+	return 0;
+}
+
+static inline int sysmgr_read(u32 offset, u32 *value)
+{
+	*value = readl(socfpga_get_sysmgr_addr() + offset);
+	return 0;
+}
+
+static inline int sysmgr_update(u32 offset, u32 mask, u32 value)
+{
+	clrsetbits_le32(socfpga_get_sysmgr_addr() + offset,
+			mask, value & mask);
+	return 0;
+}
+
+/*
+ * Mirror the U-Boot-proper fall-back: when the requested region is not
+ * present in the platform (every SoC except AGILEX72 has region count 1),
+ * resolve to the single sysmgr block. socfpga_get_sysmgr_addr_region()
+ * returns 0 for an out-of-range index, which we use as the cue.
+ */
+static inline phys_addr_t _sysmgr_region_base(enum socfpga_sysmgr_region region)
+{
+	phys_addr_t base = socfpga_get_sysmgr_addr_region(region);
+
+	return base ? base : socfpga_get_sysmgr_addr();
+}
+
+#define _SYSMGR_REGION_INLINE(_name, _region)				\
+static inline int sysmgr_##_name##_write(u32 offset, u32 value)		\
+{									\
+	writel(value, _sysmgr_region_base(_region) + offset);		\
+	return 0;							\
+}									\
+static inline int sysmgr_##_name##_read(u32 offset, u32 *value)		\
+{									\
+	*value = readl(_sysmgr_region_base(_region) + offset);		\
+	return 0;							\
+}									\
+static inline int sysmgr_##_name##_update(u32 offset, u32 mask, u32 value) \
+{									\
+	clrsetbits_le32(_sysmgr_region_base(_region) + offset,		\
+			mask, value & mask);				\
+	return 0;							\
+}
+
+_SYSMGR_REGION_INLINE(ls,  SYS_MGR_LS_CORE)
+_SYSMGR_REGION_INLINE(hs,  SYS_MGR_HS_CORE)
+_SYSMGR_REGION_INLINE(apu, SYS_MGR_APU_CORE)
+
+#undef _SYSMGR_REGION_INLINE
+
+#else /* !CONFIG_XPL_BUILD */
+
+int sysmgr_write(u32 offset, u32 value);
+int sysmgr_read(u32 offset, u32 *value);
+int sysmgr_update(u32 offset, u32 mask, u32 value);
+
+int sysmgr_ls_write(u32 offset, u32 value);
+int sysmgr_ls_read(u32 offset, u32 *value);
+int sysmgr_ls_update(u32 offset, u32 mask, u32 value);
+
+int sysmgr_hs_write(u32 offset, u32 value);
+int sysmgr_hs_read(u32 offset, u32 *value);
+int sysmgr_hs_update(u32 offset, u32 mask, u32 value);
+
+int sysmgr_apu_write(u32 offset, u32 value);
+int sysmgr_apu_read(u32 offset, u32 *value);
+int sysmgr_apu_update(u32 offset, u32 mask, u32 value);
+
+int sysmgr_dev_write(struct udevice *dev, u32 offset, u32 value);
+int sysmgr_dev_read(struct udevice *dev, u32 offset, u32 *value);
+int sysmgr_dev_update(struct udevice *dev, u32 offset, u32 mask, u32 value);
+
+#endif /* CONFIG_XPL_BUILD */
+
 #else
 #define SYSMGR_ROMCODEGRP_CTRL_WARMRSTCFGPINMUX	BIT(0)
 #define SYSMGR_ROMCODEGRP_CTRL_WARMRSTCFGIO	BIT(1)

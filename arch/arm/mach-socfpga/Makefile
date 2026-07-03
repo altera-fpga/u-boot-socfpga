@@ -10,6 +10,9 @@ obj-y	+= board.o
 obj-y	+= clock_manager.o
 obj-y	+= misc.o
 obj-$(CONFIG_ARCH_SOCFPGA_SOC64) += altera-sysmgr.o
+ifndef CONFIG_XPL_BUILD
+obj-$(CONFIG_ARCH_SOCFPGA_SOC64) += altera-sysmgr-helpers.o
+endif
 
 ifdef CONFIG_ARCH_SOCFPGA_GEN5
 obj-y	+= clock_manager_gen5.o
