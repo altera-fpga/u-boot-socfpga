@@ -49,7 +49,7 @@
 /*
  * U-Boot run time memory configurations
  */
-#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5)
+#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5) || IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72)
 #define CFG_SYS_INIT_RAM_ADDR	0x0
 #define CFG_SYS_INIT_RAM_SIZE	0x80000
 #else
@@ -136,7 +136,7 @@
 
 #include <config_distro_bootcmd.h>
 
-#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5)
+#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5) || IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72)
 
 #define CFG_EXTRA_ENV_SETTINGS \
 	"kernel_addr_r=0x82000000\0" \
@@ -148,6 +148,8 @@
 	"loadaddr=" __stringify(CONFIG_SYS_LOAD_ADDR) "\0" \
 	"bootfile=" CONFIG_BOOTFILE "\0" \
 	"mmcroot=/dev/mmcblk0p2\0" \
+	"mmc0root=/dev/mmcblk0p2\0" \
+	"mmc1root=/dev/mmcblk1p2\0" \
 	"mtdids=" CONFIG_MTDIDS_DEFAULT "\0" \
 	"mtdparts=" CONFIG_MTDPARTS_DEFAULT "\0" \
 	"linux_qspi_enable=if sf probe; then " \
@@ -203,11 +205,11 @@
 	"smc_fid_wr=0xC2000008\0" \
 	"smc_fid_upd=0xC2000009\0 " \
 	BOOTENV
-#endif /*#IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5)*/
+#endif /*#IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5) || IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72)*/
 
 #else
 
-#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5)
+#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5) || IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72)
 #define CFG_EXTRA_ENV_SETTINGS \
 	"kernel_comp_addr_r=0x9000000\0" \
 	"kernel_comp_size=0x01000000\0" \
@@ -325,13 +327,13 @@
 	"smc_fid_wr=0xC2000008\0" \
 	"smc_fid_upd=0xC2000009\0 "
 
-#endif /* IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5)  no distro boot */
+#endif /* AGILEX5 || AGILEX72: no distro boot */
 #endif /*#if IS_ENABLED(CONFIG_DISTRO_DEFAULTS)*/
 
 /*
  * External memory configurations
  */
-#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5)
+#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5) || IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72)
 #define PHYS_SDRAM_1			0x80000000
 #define PHYS_SDRAM_1_SIZE		(1 * 1024 * 1024 * 1024)
 #define CFG_SYS_SDRAM_BASE		0x80000000

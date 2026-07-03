@@ -9,7 +9,11 @@
 #include <asm/arch/mailbox_s10.h>
 #include <asm/arch/smmu_s10.h>
 #include <spl.h>
+#include <dm/device.h>
 #include <dm/uclass.h>
+
+#define MMC_0 0
+#define MMC_1 1
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -25,12 +29,17 @@ static int spl_node_to_boot_device(int node)
 	struct udevice *parent;
 	const char *prop;
 
-	if (!uclass_get_device_by_of_offset(UCLASS_MMC, node, &parent))
-		return BOOT_DEVICE_MMC1;
-	else if (!uclass_get_device_by_of_offset(UCLASS_SPI_FLASH, node, &parent))
+	if (!uclass_get_device_by_of_offset(UCLASS_MMC, node, &parent)) {
+		if (dev_seq(parent) == MMC_0)
+			return BOOT_DEVICE_MMC1;
+		else if (dev_seq(parent) == MMC_1)
+			return BOOT_DEVICE_MMC2;
+		return -ENODEV;
+	} else if (!uclass_get_device_by_of_offset(UCLASS_SPI_FLASH, node, &parent)) {
 		return BOOT_DEVICE_SPI;
-	else if (!uclass_get_device_by_of_offset(UCLASS_MTD, node, &parent))
+	} else if (!uclass_get_device_by_of_offset(UCLASS_MTD, node, &parent)) {
 		return BOOT_DEVICE_NAND;
+	}
 
 	prop = fdt_getprop(blob, node, "device_type", NULL);
 	if (prop) {
