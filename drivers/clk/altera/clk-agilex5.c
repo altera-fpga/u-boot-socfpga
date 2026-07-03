@@ -253,7 +253,7 @@ static void clk_basic_init(struct udevice *dev,
 	/* Read handoff for PWRGATE configuration */
 	socfpga_handoff_read((void *)SOC64_HANDOFF_PERI, handoff_table, len);
 
-	if (IS_ENABLED(CONFIG_TARGET_SOCFPGA_AGILEX5_EMU)) {
+	if (IS_ENABLED(CONFIG_TARGET_SOCFPGA_EMU)) {
 		/* Take both PLL out of reset and power up */
 		CM_REG_SETBITS(plat, CLKMGR_MAINPLL_PLLGLOB,
 			       CLKMGR_PLLGLOB_PD_MASK | CLKMGR_PLLGLOB_RST_MASK);

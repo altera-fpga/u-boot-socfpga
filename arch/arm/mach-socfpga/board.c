@@ -150,8 +150,8 @@ int board_fit_config_name_match(const char *name)
 {
 	char board_name[10];
 
-#if IS_ENABLED(CONFIG_TARGET_SOCFPGA_AGILEX5_EMU)
-	sprintf(board_name, "board_%u", 0); /* Hardcoded board ID */
+#if IS_ENABLED(CONFIG_TARGET_SOCFPGA_EMU)
+	sprintf(board_name, "board_%u", 0); /* Hardcoded board ID since Simics no support */
 #else
 	sprintf(board_name, "board_%u", socfpga_get_board_id());
 #endif

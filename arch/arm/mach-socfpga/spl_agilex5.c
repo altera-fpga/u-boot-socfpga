@@ -73,7 +73,7 @@ void board_init_f(ulong dummy)
 	socfpga_pinmux_init();
 	sysmgr_config_usb3();
 
-	if (!IS_ENABLED(CONFIG_TARGET_SOCFPGA_AGILEX5_EMU)) {
+	if (!IS_ENABLED(CONFIG_TARGET_SOCFPGA_EMU)) {
 		/* Ensure watchdog is paused when debugging is happening */
 		writel(SYSMGR_WDDBG_PAUSE_ALL_CPU,
 		       socfpga_get_sysmgr_addr() + SYSMGR_SOC64_WDDBG);
@@ -91,7 +91,7 @@ void board_init_f(ulong dummy)
 		hang();
 	}
 
-	if (!IS_ENABLED(CONFIG_TARGET_SOCFPGA_AGILEX5_EMU)) {
+	if (!IS_ENABLED(CONFIG_TARGET_SOCFPGA_EMU)) {
 		/*
 		 * Enable watchdog as early as possible before initializing other
 		 * component. Watchdog need to be enabled after clock driver because

@@ -152,7 +152,7 @@ void spl_perform_arch_fixups(struct spl_image_info *spl_image)
 		hang();
 	}
 
-#if !IS_ENABLED(CONFIG_TARGET_SOCFPGA_AGILEX5_EMU)
+#if !IS_ENABLED(CONFIG_TARGET_SOCFPGA_EMU)
 	mbox_hps_stage_notify(HPS_EXECUTION_STATE_SSBL);
 #endif
 }
