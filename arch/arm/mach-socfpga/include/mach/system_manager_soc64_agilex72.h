@@ -1,0 +1,85 @@
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Copyright (C) 2026 Altera Corporation <www.altera.com>
+ */
+
+#ifndef _SYSTEM_MANAGER_SOC64_AGILEX72_H_
+#define _SYSTEM_MANAGER_SOC64_AGILEX72_H_
+
+/*
+ * AGILEX72 register-offset map (per-region).
+ *
+ * Each macro below is a plain byte offset *within the sysmgr region
+ * that physically hosts the register*. Pair every macro with the
+ * matching per-region helper to dispatch the access:
+ *
+ *   - SYS_MGR_LS_CORE  registers ->  sysmgr_ls_*()
+ *   - SYS_MGR_HS_CORE  registers ->  sysmgr_hs_*()
+ *   - SYS_MGR_APU_CORE registers ->  sysmgr_apu_*()
+ *
+ * Do not combine these macros with socfpga_get_sysmgr_addr() directly:
+ * that returns the LS base, so HS/APU offsets paired with it would land
+ * in the wrong register block. Use
+ * socfpga_get_sysmgr_addr_region(SYS_MGR_*_CORE) + OFFSET when a raw
+ * pointer is genuinely required.
+ */
+
+/* SYS_MGR_LS_CORE registers */
+#define SYSMGR_SOC64_SILICONID_1		0x18
+#define SYSMGR_SOC64_SILICONID_2		0x1C
+#define SYSMGR_SOC64_FPGAINTF_EN1		0x2C
+#define SYSMGR_SOC64_FPGAINTF_EN2		0x30
+#define SYSMGR_SOC64_FPGA_CONFIG		0x40
+#define SYSMGR_SOC64_SEC_CTRL_SLT		0x44
+#define SYSMGR_SOC64_OSC_TRIM			0x48
+#define SYSMGR_SOC64_DMAC0_CTRL_STATUS_REG	0x4C
+#define SYSMGR_SOC64_DMAC1_CTRL_STATUS_REG	0x50
+#define SYSMGR_SOC64_WDDBG			0xAC
+
+/* SYS_MGR_HS_CORE registers */
+#define SYSMGR_SOC64_USB1_L3MASTER		0x18
+#define SYSMGR_SOC64_USB0_L3MASTER		0x1C
+#define SYSMGR_SOC64_TSN_GLOBAL			0x3C
+#define SYSMGR_SOC64_TSN_0			0x6C
+#define SYSMGR_SOC64_TSN_1			0x74
+#define SYSMGR_SOC64_TSN_2			0x7C
+#define SYSMGR_SOC64_TSN_0_ACE			0x70
+#define SYSMGR_SOC64_TSN_1_ACE			0x78
+#define SYSMGR_SOC64_TSN_2_ACE			0x80
+#define SYSMGR_SOC64_BOOT_SCRATCH_POR0		0x600
+#define SYSMGR_SOC64_BOOT_SCRATCH_POR1		0x604
+#define SYSMGR_SOC64_BOOT_SCRATCH_COLD0		0x680
+#define SYSMGR_SOC64_BOOT_SCRATCH_COLD1		0x684
+#define SYSMGR_SOC64_BOOT_SCRATCH_COLD2		0x688
+#define SYSMGR_SOC64_BOOT_SCRATCH_COLD3		0x68C
+#define SYSMGR_SOC64_BOOT_SCRATCH_COLD4		0x690
+#define SYSMGR_SOC64_BOOT_SCRATCH_COLD5		0x694
+#define SYSMGR_SOC64_BOOT_SCRATCH_COLD6		0x698
+#define SYSMGR_SOC64_BOOT_SCRATCH_COLD7		0x69C
+#define SYSMGR_SOC64_BOOT_SCRATCH_COLD8		0x6A0
+#define SYSMGR_SOC64_BOOT_SCRATCH_COLD9		0x6A4
+
+/* SYS_MGR_APU_CORE registers */
+#define SYSMGR_SOC64_MPU_STATUS			0x20
+#define SYSMGR_SOC64_FPGA2SOC_CTRL		0xD8
+
+/* Field masks for SYS_MGR_HS_CORE boot scratch registers. */
+#define SYSMGR_SCRATCH_REG_0_QSPI_REFCLK_MASK		GENMASK(31, 0)
+#define ALT_SYSMGR_SCRATCH_REG_3_DDR_RESET_TYPE_MASK	GENMASK(31, 29)
+#define ALT_SYSMGR_SCRATCH_REG_3_DDR_RESET_TYPE_SHIFT	29
+#define ALT_SYSMGR_SCRATCH_REG_3_DDR_PORT_INFO_MASK	BIT(27)
+#define ALT_SYSMGR_SCRATCH_REG_3_DDR_EMIF_INFO_MASK	BIT(28)
+#define ALT_SYSMGR_SCRATCH_REG_3_DDR_PORT_EMIF_INFO_MASK	GENMASK(28, 27)
+#define ALT_SYSMGR_SCRATCH_REG_3_DDR_DBE_MASK	BIT(1)
+#define ALT_SYSMGR_SCRATCH_REG_3_OCRAM_DBE_MASK	BIT(0)
+#define ALT_SYSMGR_SCRATCH_REG_POR_0_DDR_PROGRESS_MASK	BIT(0)
+
+#define SYSMGR_SOC64_EMAC_GLOBAL	SYSMGR_SOC64_TSN_GLOBAL
+#define SYSMGR_SOC64_EMAC0		SYSMGR_SOC64_TSN_0
+#define SYSMGR_SOC64_EMAC1		SYSMGR_SOC64_TSN_1
+#define SYSMGR_SOC64_EMAC2		SYSMGR_SOC64_TSN_2
+#define SYSMGR_SOC64_EMAC0_ACE		SYSMGR_SOC64_TSN_0_ACE
+#define SYSMGR_SOC64_EMAC1_ACE		SYSMGR_SOC64_TSN_1_ACE
+#define SYSMGR_SOC64_EMAC2_ACE		SYSMGR_SOC64_TSN_2_ACE
+
+#endif /* _SYSTEM_MANAGER_SOC64_AGILEX72_H_ */

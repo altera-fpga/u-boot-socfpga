@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- *  Copyright (C) 2012-2025 Altera Corporation <www.altera.com>
+ *  Copyright (C) 2012-2026 Altera Corporation <www.altera.com>
  */
 
 #include <config.h>
@@ -34,7 +34,8 @@ DECLARE_GLOBAL_DATA_PTR;
 
 phys_addr_t socfpga_clkmgr_base __section(".data");
 phys_addr_t socfpga_rstmgr_base __section(".data");
-phys_addr_t socfpga_sysmgr_base __section(".data");
+phys_addr_t socfpga_sysmgr_base[SYS_MGR_REGION_MAX] __section(".data");
+int socfpga_sysmgr_region_count __section(".data");
 
 #ifdef CONFIG_SYS_L2_PL310
 static const struct pl310_regs *const pl310 =
@@ -178,7 +179,7 @@ int arch_cpu_init(void)
 	 * timeout value is still active which might too short for Linux
 	 * booting.
 	 */
-#if !IS_ENABLED(CONFIG_TARGET_SOCFPGA_AGILEX5_EMU)
+#if !IS_ENABLED(CONFIG_TARGET_SOCFPGA_EMU)
 	hw_watchdog_init();
 #endif
 #else
@@ -272,9 +273,10 @@ void socfpga_get_managers_addr(void)
 
 	if (!IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX) &&
 	    !IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX7M) &&
-	    !IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5)) {
+	    !IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5) &&
+	    !IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72)) {
 		ret = socfpga_get_base_addr("altr,sys-mgr",
-					    &socfpga_sysmgr_base);
+					    &socfpga_sysmgr_base[SYS_MGR_ROOT]);
 		if (ret)
 			hang();
 	}
@@ -284,7 +286,8 @@ void socfpga_get_managers_addr(void)
 					    &socfpga_clkmgr_base);
 	else if (!IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX) &&
 		 !IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX7M) &&
-		 !IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5))
+		 !IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5) &&
+		 !IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72))
 		ret = socfpga_get_base_addr("altr,clk-mgr",
 					    &socfpga_clkmgr_base);
 
@@ -296,20 +299,31 @@ void socfpga_get_sys_mgr_addr(void)
 {
 	int ret;
 	struct udevice *dev;
+	ofnode node;
+	phys_addr_t addr;
 
-	ofnode node = ofnode_get_aliases_node("sysmgr");
-
+	/* Look up sysmgr alias */
+	node = ofnode_get_aliases_node("sysmgr");
 	if (!ofnode_valid(node)) {
 		printf("'sysmgr' alias not found in device tree\n");
 		hang();
 	}
 
-	ret = uclass_get_device_by_ofnode(UCLASS_NOP, node, &dev);
+	ret = uclass_get_device_by_ofnode(UCLASS_SYSCON, node, &dev);
 	if (ret) {
 		printf("Altera system manager init failed: %d\n", ret);
 		hang();
-	} else {
-		socfpga_sysmgr_base = (phys_addr_t)dev_read_addr(dev);
+	}
+
+	/* Read and store sysmgr region addresses */
+	socfpga_sysmgr_region_count = 0;
+	for (int i = 0; i < SYS_MGR_REGION_MAX; i++) {
+		addr = dev_read_addr_index(dev, i);
+
+		/* Stop if no more regions are defined in DT */
+		if (addr == FDT_ADDR_T_NONE)
+			break;
+		socfpga_sysmgr_base[socfpga_sysmgr_region_count++] = addr;
 	}
 }
 
@@ -320,7 +334,15 @@ phys_addr_t socfpga_get_rstmgr_addr(void)
 
 phys_addr_t socfpga_get_sysmgr_addr(void)
 {
-	return socfpga_sysmgr_base;
+	return socfpga_sysmgr_base[SYS_MGR_ROOT];
+}
+
+phys_addr_t socfpga_get_sysmgr_addr_region(enum socfpga_sysmgr_region region)
+{
+	if (region < SYS_MGR_ROOT || region >= socfpga_sysmgr_region_count)
+		return 0;
+
+	return socfpga_sysmgr_base[region];
 }
 
 phys_addr_t socfpga_get_clkmgr_addr(void)

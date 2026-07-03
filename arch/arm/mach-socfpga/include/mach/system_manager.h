@@ -6,7 +6,39 @@
 #ifndef _SYSTEM_MANAGER_H_
 #define _SYSTEM_MANAGER_H_
 
+#include <asm/types.h>
+
+/*
+ * socfpga_sysmgr_region:
+ *
+ * Identifiers for System Manager (SYS_MGR) register regions in SoCFPGA devices.
+ *
+ * Region 0 is shared between:
+ *   - Legacy SoCs (single SYS_MGR base)
+ *   - New SoCs (LS core region)
+ *
+ * Additional regions are used for new SoCs:
+ *   - SYS_MGR_HS_CORE
+ *   - SYS_MGR_APU_CORE
+ *
+ * SYS_MGR_LS_CORE is provided as an alias for region 0 on new SoCs.
+ */
+enum socfpga_sysmgr_region {
+	/* Region 0 = legacy base or LS core on new SoCs */
+	SYS_MGR_ROOT = 0,
+
+	/* Additional regions for new SoCs */
+	SYS_MGR_HS_CORE,
+	SYS_MGR_APU_CORE,
+
+	SYS_MGR_REGION_MAX
+};
+
+/* Alias for readability on new SoCs */
+#define SYS_MGR_LS_CORE SYS_MGR_ROOT
+
 phys_addr_t socfpga_get_sysmgr_addr(void);
+phys_addr_t socfpga_get_sysmgr_addr_region(enum socfpga_sysmgr_region region);
 
 #if defined(CONFIG_ARCH_SOCFPGA_SOC64)
 #include <asm/arch/system_manager_soc64.h>

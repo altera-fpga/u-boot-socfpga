@@ -6,20 +6,32 @@
 /*
  * This driver supports the SOCFPGA System Manager Register block which
  * aggregates different peripheral function into one area.
+ *
  * On 64 bit ARM parts, the system manager only can be accessed during
  * EL3 mode. At lower exception level a SMC call is required to perform
  * the read and write operation.
+ *
+ * The driver registers under UCLASS_SYSCON so that it can be discovered by
+ * generic syscon consumers (for example, the EMAC drivers via
+ * "altr,sysmgr-syscon" phandles). When CONFIG_SYSCON is enabled, the
+ * syscon uclass automatically builds a regmap from the device's "reg"
+ * property; consumers that call syscon_node_to_regmap() therefore work
+ * transparently. This driver itself only needs the base address and so
+ * reads it directly via dev_read_addr_ptr() to remain functional in SPL
+ * builds where the regmap framework may not be available.
  */
 
-#define LOG_CATEGORY UCLASS_NOP
+#define LOG_CATEGORY UCLASS_SYSCON
 
 #include <dm.h>
 #include <log.h>
-#include <misc.h>
 #include <asm/io.h>
 #include <asm/system.h>
 #include <asm/arch/altera-sysmgr.h>
 #include <asm/arch/smc_api.h>
+#include <asm/arch/system_manager.h>
+#include <dm/device_compat.h>
+#include <dm/read.h>
 #include <linux/delay.h>
 #include <linux/err.h>
 #include <linux/intel-smc.h>
@@ -77,17 +89,28 @@ static int altr_sysmgr_write_generic(struct udevice *dev, u32 *addr, u32 value)
 
 static int altr_sysmgr_probe(struct udevice *dev)
 {
-	fdt_addr_t addr;
 	struct altr_sysmgr_priv *altr_priv = dev_get_priv(dev);
 
 	debug("%s: %s(dev=%p):\n", __func__, dev->name, dev);
-	addr = dev_read_addr(dev);
-	if (addr == FDT_ADDR_T_NONE) {
-		pr_err("%s dev_read_addr() failed\n", dev->name);
-		return -ENODEV;
+
+	/*
+	 * Read the base address directly from the "reg" property. Using
+	 * dev_read_addr_ptr() avoids a hard dependency on the regmap
+	 * framework, which is desirable because SPL on SoCFPGA SoC64
+	 * platforms uses direct MMIO via the inline sysmgr_*() helpers
+	 * and does not necessarily enable CONFIG_SPL_REGMAP.
+	 *
+	 * Consumers that need a regmap (for example EMAC drivers that
+	 * call syscon_node_to_regmap()) still get one transparently:
+	 * the syscon uclass pre_probe path builds a regmap from the
+	 * same "reg" property when CONFIG_SYSCON is enabled.
+	 */
+	altr_priv->regs = dev_read_addr_ptr(dev);
+	if (!altr_priv->regs) {
+		pr_err("%s: failed to read base address\n", dev->name);
+		return -EINVAL;
 	}
 
-	altr_priv->regs = (void __iomem *)addr;
 	return 0;
 }
 
@@ -104,7 +127,7 @@ static const struct udevice_id altr_sysmgr_ids[] = {
 
 U_BOOT_DRIVER(altr_sysmgr) = {
 	.name	= "altr_sysmgr",
-	.id	= UCLASS_NOP,
+	.id	= UCLASS_SYSCON,
 	.of_match = altr_sysmgr_ids,
 	.probe	= altr_sysmgr_probe,
 	.ops	= &sysmgr_ops,
