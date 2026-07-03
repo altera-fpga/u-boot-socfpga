@@ -175,6 +175,7 @@ static const struct altr_sysmgr_ops sysmgr_ops = {
 
 static const struct udevice_id altr_sysmgr_ids[] = {
 	{ .compatible = "altr,sys-mgr-s10" },
+	{ .compatible = "altr,sys-mgr-agilex72" },
 	{ .compatible = "altr,sys-mgr" },
 	{ },
 };

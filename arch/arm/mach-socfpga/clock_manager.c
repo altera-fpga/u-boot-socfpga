@@ -89,21 +89,37 @@ int cm_set_qspi_controller_clk_hz(u32 clk_hz)
 	clk_khz = clk_hz / 1000;
 	printf("QSPI: Reference clock at %d kHz\n", clk_khz);
 
-	reg = (readl(socfpga_get_sysmgr_addr() +
-		     SYSMGR_SOC64_BOOT_SCRATCH_COLD0)) &
-		     ~(SYSMGR_SCRATCH_REG_0_QSPI_REFCLK_MASK);
-
-	writel((clk_khz & SYSMGR_SCRATCH_REG_0_QSPI_REFCLK_MASK) | reg,
-	       socfpga_get_sysmgr_addr() + SYSMGR_SOC64_BOOT_SCRATCH_COLD0);
+	/*
+	 * Boot scratch registers sit in the High-Speed Core sysmgr block
+	 * on AGILEX72; the per-region helper transparently falls back to the
+	 * single sysmgr instance on every other SoC64.
+	 */
+	if (sysmgr_hs_read(SYSMGR_SOC64_BOOT_SCRATCH_COLD0, &reg)) {
+		pr_warn("%s: sysmgr COLD0 read failed; cannot record QSPI refclk\n",
+			__func__);
+		return -EIO;
+	}
+	reg &= ~SYSMGR_SCRATCH_REG_0_QSPI_REFCLK_MASK;
+	reg |= clk_khz & SYSMGR_SCRATCH_REG_0_QSPI_REFCLK_MASK;
+	if (sysmgr_hs_write(SYSMGR_SOC64_BOOT_SCRATCH_COLD0, reg)) {
+		pr_warn("%s: sysmgr COLD0 write failed; QSPI refclk not recorded\n",
+			__func__);
+		return -EIO;
+	}
 
 	return 0;
 }
 
 unsigned int cm_get_qspi_controller_clk_hz(void)
 {
-	return (readl(socfpga_get_sysmgr_addr() +
-		     SYSMGR_SOC64_BOOT_SCRATCH_COLD0) &
-		     SYSMGR_SCRATCH_REG_0_QSPI_REFCLK_MASK) * 1000;
+	u32 reg = 0;
+
+	if (sysmgr_hs_read(SYSMGR_SOC64_BOOT_SCRATCH_COLD0, &reg)) {
+		pr_warn("%s: sysmgr COLD0 read failed; reporting 0 Hz\n",
+			__func__);
+		return 0;
+	}
+	return (reg & SYSMGR_SCRATCH_REG_0_QSPI_REFCLK_MASK) * 1000;
 }
 #endif
 

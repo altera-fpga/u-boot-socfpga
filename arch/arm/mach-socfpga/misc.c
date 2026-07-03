@@ -35,7 +35,6 @@ DECLARE_GLOBAL_DATA_PTR;
 phys_addr_t socfpga_clkmgr_base __section(".data");
 phys_addr_t socfpga_rstmgr_base __section(".data");
 phys_addr_t socfpga_sysmgr_base[SYS_MGR_REGION_MAX] __section(".data");
-int socfpga_sysmgr_region_count __section(".data");
 
 #ifdef CONFIG_SYS_L2_PL310
 static const struct pl310_regs *const pl310 =
@@ -322,7 +321,6 @@ static void sysmgr_bind_region(const char *alias, enum socfpga_sysmgr_region reg
 	}
 
 	socfpga_sysmgr_base[region] = addr;
-	socfpga_sysmgr_region_count++;
 }
 
 void socfpga_get_sys_mgr_addr(void)
@@ -337,13 +335,12 @@ void socfpga_get_sys_mgr_addr(void)
 	};
 	int i;
 
-	socfpga_sysmgr_region_count = 0;
-
 	/*
 	 * Probe per-region aliases. Platforms with a split System Manager
 	 * (e.g. AGILEX72) define "sysmgr-ls/hs/apu" aliases; single-instance
 	 * platforms define only "sysmgr". Bind whichever aliases are present
-	 * and fall back to the legacy "sysmgr" alias when none are found.
+	 * and fall back to the legacy "sysmgr" alias when the root region
+	 * (SYS_MGR_ROOT / SYS_MGR_LS_CORE) was not bound.
 	 */
 	for (i = 0; i < ARRAY_SIZE(sysmgr_multi); i++) {
 		if (ofnode_valid(ofnode_get_aliases_node(sysmgr_multi[i].alias)))
@@ -351,7 +348,7 @@ void socfpga_get_sys_mgr_addr(void)
 					   sysmgr_multi[i].region);
 	}
 
-	if (!socfpga_sysmgr_region_count)
+	if (!socfpga_sysmgr_base[SYS_MGR_ROOT])
 		sysmgr_bind_region("sysmgr", SYS_MGR_ROOT);
 }
 
@@ -367,7 +364,7 @@ phys_addr_t socfpga_get_sysmgr_addr(void)
 
 phys_addr_t socfpga_get_sysmgr_addr_region(enum socfpga_sysmgr_region region)
 {
-	if (region < SYS_MGR_ROOT || region >= socfpga_sysmgr_region_count)
+	if (region < SYS_MGR_ROOT || region >= SYS_MGR_REGION_MAX)
 		return 0;
 
 	return socfpga_sysmgr_base[region];

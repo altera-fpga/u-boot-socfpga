@@ -44,15 +44,19 @@ const struct cm_config * const cm_get_default_config(void)
 
 const unsigned int cm_get_osc_clk_hz(void)
 {
-#ifdef CONFIG_XPL_BUILD
+	u32 cached = 0;
 
+#ifdef CONFIG_XPL_BUILD
 	u32 clock = readl(SOC64_HANDOFF_CLOCK_OSC);
 
-	writel(clock,
-	       socfpga_get_sysmgr_addr() + SYSMGR_SOC64_BOOT_SCRATCH_COLD1);
+	if (sysmgr_hs_write(SYSMGR_SOC64_BOOT_SCRATCH_COLD1, clock))
+		pr_warn("%s: sysmgr COLD1 write failed; osc clock not cached\n",
+			__func__);
 #endif
-	return readl(socfpga_get_sysmgr_addr() +
-		     SYSMGR_SOC64_BOOT_SCRATCH_COLD1);
+	if (sysmgr_hs_read(SYSMGR_SOC64_BOOT_SCRATCH_COLD1, &cached))
+		pr_warn("%s: sysmgr COLD1 read failed; reporting 0 Hz\n",
+			__func__);
+	return cached;
 }
 
 const unsigned int cm_get_intosc_clk_hz(void)
@@ -62,12 +66,17 @@ const unsigned int cm_get_intosc_clk_hz(void)
 
 const unsigned int cm_get_fpga_clk_hz(void)
 {
+	u32 cached = 0;
+
 #ifdef CONFIG_XPL_BUILD
 	u32 clock = readl(SOC64_HANDOFF_CLOCK_FPGA);
 
-	writel(clock,
-	       socfpga_get_sysmgr_addr() + SYSMGR_SOC64_BOOT_SCRATCH_COLD2);
+	if (sysmgr_hs_write(SYSMGR_SOC64_BOOT_SCRATCH_COLD2, clock))
+		pr_warn("%s: sysmgr COLD2 write failed; FPGA clock not cached\n",
+			__func__);
 #endif
-	return readl(socfpga_get_sysmgr_addr() +
-		     SYSMGR_SOC64_BOOT_SCRATCH_COLD2);
+	if (sysmgr_hs_read(SYSMGR_SOC64_BOOT_SCRATCH_COLD2, &cached))
+		pr_warn("%s: sysmgr COLD2 read failed; reporting 0 Hz\n",
+			__func__);
+	return cached;
 }

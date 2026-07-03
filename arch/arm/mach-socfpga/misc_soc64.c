@@ -41,6 +41,14 @@
 #define JTAG_ID_MASK	0xCFF0FFFF
 
 /*
+ * Shorthand alias for an excessively long SDR mask name used in
+ * is_fpga_config_ready(); avoids a checkpatch line-length warning
+ * without losing the upstream macro reference.
+ */
+#define POR1_USER_MODE_MASK \
+	ALT_SYSMGR_SCRATCH_REG_POR_1_REVA_WORKAROUND_USER_MODE_MASK
+
+/*
  * FPGA programming support for SoC FPGA Stratix 10
  */
 static Altera_desc altera_fpga[] = {
@@ -62,9 +70,15 @@ static Altera_desc altera_fpga[] = {
 
 u32 socfpga_get_jtag_id(void)
 {
-	u32 jtag_id;
+	u32 jtag_id = 0;
 
-	jtag_id = readl(socfpga_get_sysmgr_addr() + SYSMGR_SOC64_BOOT_SCRATCH_COLD4);
+	/*
+	 * JTAG ID is stashed in BOOT_SCRATCH_COLD4, which lives in the
+	 * High-Speed Core sysmgr block on AGILEX72 and in the single sysmgr
+	 * block on every other SoC64; the fallback handles both.
+	 */
+	if (sysmgr_hs_read(SYSMGR_SOC64_BOOT_SCRATCH_COLD4, &jtag_id))
+		debug("Failed to read JTAG ID via sysmgr; using default.\n");
 
 	if (!jtag_id) {
 		debug("Failed to read JTAG ID. Default JTAG ID to A36F4_JTAG_ID.\n");
@@ -137,10 +151,14 @@ int arch_early_init_r(void)
 #if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5)
 bool is_agilex5_reva_workaround_required(void)
 {
-	u32 reg;
+	u32 reg = 0;
 	bool status;
 
-	reg = readl(socfpga_get_sysmgr_addr() + SYSMGR_SOC64_BOOT_SCRATCH_POR1);
+	if (sysmgr_hs_read(SYSMGR_SOC64_BOOT_SCRATCH_POR1, &reg)) {
+		debug("%s: sysmgr POR1 read failed; assuming workaround not required\n",
+		      __func__);
+		return false;
+	}
 	debug("%s: SYSMGR_SOC64_BOOT_SCRATCH_POR1: 0x%x\n", __func__, reg);
 
 	status = FIELD_GET(ALT_SYSMGR_SCRATCH_REG_POR_1_REVA_WORKAROUND_MASK, reg);
@@ -150,19 +168,50 @@ bool is_agilex5_reva_workaround_required(void)
 }
 #endif
 
-/* Return 1 if FPGA is ready otherwise return 0 */
+/*
+ * Return 1 if FPGA is ready otherwise return 0.
+ *
+ * The function returns a boolean, so a sysmgr access failure must be
+ * mapped onto the safe-default value 0 ("not ready") to keep callers
+ * (notably do_bridge_reset) from poking hardware when access is broken.
+ * Surface such failures via pr_warn() so they cannot be confused with a
+ * genuine "FPGA not configured" result in production builds.
+ */
 int is_fpga_config_ready(void)
 {
+	u32 reg = 0;
+	int ret;
+
 #if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5)
 	if (is_agilex5_reva_workaround_required()) {
-		return (readl(socfpga_get_sysmgr_addr() +
-				SYSMGR_SOC64_BOOT_SCRATCH_POR1) &
-				ALT_SYSMGR_SCRATCH_REG_POR_1_REVA_WORKAROUND_USER_MODE_MASK);
+		/*
+		 * Boot scratch POR registers sit in the High-Speed Core
+		 * sysmgr block on AGILEX72; on every other SoC64 (including
+		 * Agilex5) there is a single sysmgr block and the
+		 * per-region helper falls back to it automatically.
+		 */
+		ret = sysmgr_hs_read(SYSMGR_SOC64_BOOT_SCRATCH_POR1, &reg);
+		if (ret) {
+			pr_warn("%s: sysmgr POR1 read failed (%d); treating FPGA as not ready\n",
+				__func__, ret);
+			return 0;
+		}
+		return reg & POR1_USER_MODE_MASK;
 	}
 #endif
 
-	return (readl(socfpga_get_sysmgr_addr() + SYSMGR_SOC64_FPGA_CONFIG) &
-		SYSMGR_FPGACONFIG_READY_MASK) == SYSMGR_FPGACONFIG_READY_MASK;
+	/*
+	 * FPGA mgr control registers live in the Low-Speed Core sysmgr
+	 * block on AGILEX72; the fallback covers every other SoC64.
+	 */
+	ret = sysmgr_ls_read(SYSMGR_SOC64_FPGA_CONFIG, &reg);
+	if (ret) {
+		pr_warn("%s: sysmgr FPGA_CONFIG read failed (%d); treating FPGA as not ready\n",
+			__func__, ret);
+		return 0;
+	}
+	return (reg & SYSMGR_FPGACONFIG_READY_MASK) ==
+		SYSMGR_FPGACONFIG_READY_MASK;
 }
 
 void do_bridge_reset(int enable, unsigned int mask)
