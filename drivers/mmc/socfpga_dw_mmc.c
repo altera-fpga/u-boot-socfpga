@@ -5,7 +5,6 @@
 
 #include <log.h>
 #include <asm/arch/clock_manager.h>
-#include <asm/arch/secure_reg_helper.h>
 #include <asm/arch/system_manager.h>
 #include <clk.h>
 #include <dm.h>
@@ -14,7 +13,6 @@
 #include <fdtdec.h>
 #include <asm/global_data.h>
 #include <dm/device_compat.h>
-#include <linux/intel-smc.h>
 #include <linux/libfdt.h>
 #include <linux/err.h>
 #include <malloc.h>
@@ -81,19 +79,32 @@ static int socfpga_dwmci_clksel(struct dwmci_host *host)
 	debug("%s: drvsel %d smplsel %d\n", __func__,
 	      priv->drvsel, priv->smplsel);
 
-#if !defined(CONFIG_XPL_BUILD) && defined(CONFIG_SPL_ATF)
-	ret = socfpga_secure_reg_write32(SOCFPGA_SECURE_REG_SYSMGR_SOC64_SDMMC,
-					 sdmmc_mask);
-	if (ret) {
-		printf("DWMMC: Failed to set clksel via SMC call");
-		return ret;
-	}
+	/*
+	 * SPL and U-Boot proper on Gen5/Arria10 always run at the highest
+	 * privilege the platform exposes, so the SDMMC clock-select register
+	 * is reachable via direct MMIO. SoC64 U-Boot proper threads the
+	 * write through the EL-aware sysmgr_hs_write() helper, which drops
+	 * to INTEL_SIP_SMC_REG_* when ATF has taken EL3. The #if guard is
+	 * required because SYSMGR_SOC64_* symbols and sysmgr_hs_write() are
+	 * declared only for SoC64 targets.
+	 */
+	if (IS_ENABLED(CONFIG_XPL_BUILD)) {
+		writel(sdmmc_mask, socfpga_get_sysmgr_addr() + SYSMGR_SDMMC);
+		debug("%s: SYSMGR_SDMMCGRP_CTRL_REG = 0x%x\n", __func__,
+		      readl(socfpga_get_sysmgr_addr() + SYSMGR_SDMMC));
+	} else {
+#if defined(CONFIG_ARCH_SOCFPGA_SOC64)
+		ret = sysmgr_hs_write(SYSMGR_SOC64_SDMMC, sdmmc_mask);
+		if (ret) {
+			printf("DWMMC: Failed to set clksel: %d\n", ret);
+			return ret;
+		}
 #else
-	writel(sdmmc_mask, socfpga_get_sysmgr_addr() + SYSMGR_SDMMC);
-
-	debug("%s: SYSMGR_SDMMCGRP_CTRL_REG = 0x%x\n", __func__,
-		readl(socfpga_get_sysmgr_addr() + SYSMGR_SDMMC));
+		writel(sdmmc_mask, socfpga_get_sysmgr_addr() + SYSMGR_SDMMC);
+		debug("%s: SYSMGR_SDMMCGRP_CTRL_REG = 0x%x\n", __func__,
+		      readl(socfpga_get_sysmgr_addr() + SYSMGR_SDMMC));
 #endif
+	}
 
 	if (!IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX) &&
 	    !IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX7M)) {

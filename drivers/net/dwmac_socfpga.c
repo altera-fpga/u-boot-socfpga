@@ -5,17 +5,13 @@
  * Altera SoCFPGA EMAC extras
  */
 
-#include <asm/arch/secure_reg_helper.h>
 #include <clk.h>
 #include <dm.h>
 #include <fdt_support.h>
 #include <phy.h>
-#include <regmap.h>
 #include <reset.h>
-#include <syscon.h>
 #include <asm/arch/misc.h>
 #include <asm/arch/reset_manager.h>
-#include <asm/arch/secure_reg_helper.h>
 #include <asm/arch/system_manager.h>
 #include <asm/io.h>
 #include <dm/device_compat.h>
@@ -27,7 +23,8 @@
 
 struct dwmac_socfpga_plat {
 	struct dw_eth_pdata	dw_eth_pdata;
-	void			*phy_intf;
+	struct udevice		*sysmgr;
+	u32			sysmgr_offset;
 	u32			reg_shift;
 	struct tse_pcs		pcs;
 };
@@ -142,9 +139,7 @@ static int socfpga_dw_tse_pcs_init(struct udevice *dev)
 static int dwmac_socfpga_ofdata_to_platdata(struct udevice *dev)
 {
 	struct dwmac_socfpga_plat *pdata = dev_get_plat(dev);
-	struct regmap *regmap;
 	struct ofnode_phandle_args args;
-	void *range;
 	int ret;
 
 	ret = dev_read_phandle_with_args(dev, "altr,sysmgr-syscon", NULL,
@@ -159,21 +154,24 @@ static int dwmac_socfpga_ofdata_to_platdata(struct udevice *dev)
 		return -EINVAL;
 	}
 
-	regmap = syscon_node_to_regmap(args.node);
-	if (IS_ERR(regmap)) {
-		ret = PTR_ERR(regmap);
-		dev_err(dev, "Failed to get regmap: %d\n", ret);
+	pdata->sysmgr_offset = args.args[0];
+	pdata->reg_shift = args.args[1];
+
+	/*
+	 * Resolve the System Manager phandle target to a UCLASS_SYSCON
+	 * device so PHY-mode writes dispatch through sysmgr_dev_update()
+	 * against the exact instance referenced by DT. On single-instance
+	 * SoCs the only altr,sys-mgr node is bound; on multi-instance AGILEX72
+	 * each EMAC's phandle points directly at the HS region. The driver
+	 * does not assume a single-instance hierarchy, so a future hardware
+	 * revision that needs another region only has to update DT.
+	 */
+	ret = uclass_get_device_by_ofnode(UCLASS_SYSCON, args.node,
+					  &pdata->sysmgr);
+	if (ret) {
+		dev_err(dev, "Failed to bind sysmgr device: %d\n", ret);
 		return ret;
 	}
-
-	range = regmap_get_range(regmap, 0);
-	if (!range) {
-		dev_err(dev, "Failed to get regmap range\n");
-		return -ENOMEM;
-	}
-
-	pdata->phy_intf = range + args.args[0];
-	pdata->reg_shift = args.args[1];
 
 	return designware_eth_of_to_plat(dev);
 }
@@ -183,22 +181,46 @@ static int dwmac_socfpga_do_setphy(struct udevice *dev, u32 modereg)
 	struct dwmac_socfpga_plat *pdata = dev_get_plat(dev);
 	u32 modemask = SYSMGR_EMACGRP_CTRL_PHYSEL_MASK << pdata->reg_shift;
 
-#if !defined(CONFIG_XPL_BUILD) && defined(CONFIG_SPL_ATF)
-	u32 index = ((u64)pdata->phy_intf - socfpga_get_sysmgr_addr() -
-		     SYSMGR_SOC64_EMAC0) >> 2;
+	/*
+	 * Gen5/Arria10 boot to EL3 (or equivalent) and never have an EL3
+	 * firmware mediating sysmgr access, so a direct MMIO write to the
+	 * EMAC PHY-select register is always safe and matches the pre-DM
+	 * regmap-translated behaviour the driver replaced. Only SoC64
+	 * platforms need the EL-aware sysmgr_dev_update() dispatcher,
+	 * which selects between direct MMIO and INTEL_SIP_SMC_REG_UPDATE
+	 * based on current EL and CONFIG_SPL_ATF.
+	 *
+	 * The branch is gated with #if (not IS_ENABLED) because
+	 * sysmgr_dev_update() is only declared for SoC64 targets.
+	 */
+#if defined(CONFIG_ARCH_SOCFPGA_SOC64)
+	int ret;
 
-	u32 id = SOCFPGA_SECURE_REG_SYSMGR_SOC64_EMAC0 + index;
-
-	int ret = socfpga_secure_reg_update32(id,
-					     modemask,
-					     modereg << pdata->reg_shift);
+	/*
+	 * Dispatch through sysmgr_dev_update() so the write targets the
+	 * exact System Manager instance referenced by the EMAC's
+	 * "altr,sysmgr-syscon" phandle. On multi-instance AGILEX72 this picks
+	 * the HS region; on every other SoC64 it picks the lone block.
+	 *
+	 *   - In SPL the helper expands to clrsetbits_le32() against the
+	 *     absolute sysmgr address resolved at platform init.
+	 *
+	 *   - In U-Boot proper after the transition to a lower EL, the
+	 *     helper dispatches via INTEL_SIP_SMC_REG_UPDATE using the
+	 *     exact byte offset taken from the phandle. This avoids the
+	 *     previous index-based SMC ID derivation which silently
+	 *     produced wrong IDs on platforms whose EMAC offsets are not
+	 *     4-byte spaced.
+	 */
+	ret = sysmgr_dev_update(pdata->sysmgr, pdata->sysmgr_offset, modemask,
+				modereg << pdata->reg_shift);
 	if (ret) {
-		dev_err(dev, "Failed to set PHY register via SMC call\n");
+		dev_err(dev, "Failed to set PHY register: %d\n", ret);
 		return ret;
 	}
 #else
-	clrsetbits_le32(pdata->phy_intf, modemask,
-			modereg << pdata->reg_shift);
+	clrsetbits_le32(socfpga_get_sysmgr_addr() + pdata->sysmgr_offset,
+			modemask, modereg << pdata->reg_shift);
 #endif
 
 	return 0;

@@ -274,7 +274,8 @@ struct xgmac_priv {
 	struct mii_dev *mii;
 	struct phy_device *phy;
 	ofnode phy_of_node;
-	void *syscon_phy;
+	struct udevice *sysmgr;
+	u32 syscon_phy_offset;
 	u32 syscon_phy_regshift;
 	u32 max_speed;
 	void *tx_descs;

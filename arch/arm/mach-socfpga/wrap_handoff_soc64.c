@@ -168,6 +168,7 @@ int socfpga_handoff_read(void *handoff_address, void *table, u32 table_len)
 static void populate_sysmgr_fpgaintf_module(void)
 {
 	u32 handoff_val = 0;
+	int ret;
 
 	/* Enable the signal for those HPS peripherals that use FPGA. */
 	if (readl(SOCFPGA_PINMUX_DEDICATED_IO_ADDRESS + SOC64_NAND_USEFPGA) ==
@@ -182,8 +183,9 @@ static void populate_sysmgr_fpgaintf_module(void)
 	if (readl(SOCFPGA_PINMUX_DEDICATED_IO_ADDRESS + SOC64_SPIM1_USEFPGA) ==
 	    HANDOFF_FPGAINTF_USEFPGA)
 		handoff_val |= HANDOFF_FPGAINTF_SPIM1;
-	writel(handoff_val,
-	       socfpga_get_sysmgr_addr() + SYSMGR_SOC64_FPGAINTF_EN2);
+	ret = sysmgr_write(SYSMGR_SOC64_FPGAINTF_EN2, handoff_val);
+	if (ret)
+		pr_warn("%s: FPGAINTF_EN2 write failed (%d)\n", __func__, ret);
 
 	handoff_val = 0;
 	if (readl(SOCFPGA_PINMUX_DEDICATED_IO_ADDRESS + SOC64_EMAC0_USEFPGA) ==
@@ -195,8 +197,9 @@ static void populate_sysmgr_fpgaintf_module(void)
 	if (readl(SOCFPGA_PINMUX_DEDICATED_IO_ADDRESS + SOC64_EMAC2_USEFPGA) ==
 	    HANDOFF_FPGAINTF_USEFPGA)
 		handoff_val |= HANDOFF_FPGAINTF_EMAC2;
-	writel(handoff_val,
-	       socfpga_get_sysmgr_addr() + SYSMGR_SOC64_FPGAINTF_EN3);
+	ret = sysmgr_write(SYSMGR_SOC64_FPGAINTF_EN3, handoff_val);
+	if (ret)
+		pr_warn("%s: FPGAINTF_EN3 write failed (%d)\n", __func__, ret);
 }
 
 /*

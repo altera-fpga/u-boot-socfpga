@@ -16,10 +16,7 @@
 #include <phy.h>
 #include <reset.h>
 #include <wait_bit.h>
-#include <asm/arch/secure_reg_helper.h>
 #include <asm/arch/system_manager.h>
-#include <regmap.h>
-#include <syscon.h>
 #include <asm/cache.h>
 #include <asm/gpio.h>
 #include <asm/io.h>
@@ -49,28 +46,26 @@ phy_interface_t dwxgmac_of_get_mac_mode(struct udevice *dev)
 static int dwxgmac_socfpga_do_setphy(struct udevice *dev, u32 modereg)
 {
 	struct xgmac_priv *xgmac = dev_get_priv(dev);
-	int ret;
-
 	u32 modemask = SYSMGR_EMACGRP_CTRL_PHYSEL_MASK <<
 		       xgmac->syscon_phy_regshift;
+	int ret;
 
-	if (!(IS_ENABLED(CONFIG_XPL_BUILD)) && IS_ENABLED(CONFIG_SPL_ATF)) {
-		u32 index = ((u64)xgmac->syscon_phy - socfpga_get_sysmgr_addr() -
-			     SYSMGR_SOC64_EMAC0) >> 2;
-
-		u32 id = SOCFPGA_SECURE_REG_SYSMGR_SOC64_EMAC0 + index;
-
-		ret = socfpga_secure_reg_update32(id,
-						  modemask,
-						  modereg <<
-						  xgmac->syscon_phy_regshift);
-		if (ret) {
-			dev_err(dev, "Failed to set PHY register via SMC call\n");
-			return ret;
-		}
-
-	} else {
-		clrsetbits_le32(xgmac->phy, modemask, modereg);
+	/*
+	 * Dispatch through sysmgr_dev_update() so the write targets the
+	 * exact System Manager instance referenced by the XGMAC's
+	 * "altr,sysmgr-syscon" phandle. See the matching comment in
+	 * dwmac_socfpga_do_setphy() for the rationale; in short, this
+	 * collapses the SPL direct-MMIO and U-Boot proper SMC paths into
+	 * a single call site and lets the multi-instance AGILEX72 topology work
+	 * with the same 2-cell phandle binding the upstream community
+	 * already uses.
+	 */
+	ret = sysmgr_dev_update(xgmac->sysmgr, xgmac->syscon_phy_offset,
+				modemask,
+				modereg << xgmac->syscon_phy_regshift);
+	if (ret) {
+		dev_err(dev, "Failed to set PHY register: %d\n", ret);
+		return ret;
 	}
 
 	return 0;
@@ -79,9 +74,7 @@ static int dwxgmac_socfpga_do_setphy(struct udevice *dev, u32 modereg)
 static int xgmac_probe_resources_socfpga(struct udevice *dev)
 {
 	struct xgmac_priv *xgmac = dev_get_priv(dev);
-	struct regmap *reg_map;
 	struct ofnode_phandle_args args;
-	void *range;
 	phy_interface_t interface;
 	phy_interface_t mac_mode;
 	int ret;
@@ -125,21 +118,22 @@ static int xgmac_probe_resources_socfpga(struct udevice *dev)
 		return -EINVAL;
 	}
 
-	reg_map = syscon_node_to_regmap(args.node);
-	if (IS_ERR(reg_map)) {
-		ret = PTR_ERR(reg_map);
-		dev_err(dev, "Failed to get reg_map: %d\n", ret);
+	xgmac->syscon_phy_offset = args.args[0];
+	xgmac->syscon_phy_regshift = args.args[1];
+
+	/*
+	 * Resolve the System Manager phandle target to a UCLASS_SYSCON
+	 * device so PHY-mode writes dispatch through sysmgr_dev_update()
+	 * against the exact instance referenced by DT. The driver does
+	 * not assume a single-instance topology -- multi-instance AGILEX72
+	 * works with the same code path.
+	 */
+	ret = uclass_get_device_by_ofnode(UCLASS_SYSCON, args.node,
+					  &xgmac->sysmgr);
+	if (ret) {
+		dev_err(dev, "Failed to bind sysmgr device: %d\n", ret);
 		return ret;
 	}
-
-	range = regmap_get_range(reg_map, 0);
-	if (!range) {
-		dev_err(dev, "Failed to get reg_map: %d\n", ret);
-		return -ENOMEM;
-	}
-
-	xgmac->syscon_phy = range + args.args[0];
-	xgmac->syscon_phy_regshift = args.args[1];
 
 	/* Get Reset Bulk */
 	ret = reset_get_bulk(dev, &xgmac->reset_bulk);
