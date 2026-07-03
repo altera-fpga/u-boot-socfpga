@@ -5,6 +5,7 @@
 
 #include <dm.h>
 #include <errno.h>
+#include <wait_bit.h>
 #include <asm/io.h>
 #include <linux/sizes.h>
 
@@ -15,7 +16,7 @@ static int socfpga_dtreg_probe(struct udevice *dev)
 	const fdt32_t *list;
 	fdt_addr_t offset, base;
 	fdt_val_t val, read_val, mask, set_mask;
-	int size, i;
+	int size, i, ret;
 	u32 blk_sz, reg;
 	ofnode node;
 	const char *name = NULL;
@@ -95,6 +96,60 @@ static int socfpga_dtreg_probe(struct udevice *dev)
 			/* Reads out the register, masked value and the read value */
 			debug("%s(reg 0x%x = wr : 0x%llx  rd : 0x%llx)\n",
 			      __func__, reg, set_mask, read_val);
+		}
+
+		/*
+		 * Optional: after the write phase, poll one or more
+		 * status registers until the specified bits assert.
+		 *
+		 *   intel,poll-settings = <offset mask timeout_ms>, ... ;
+		 *
+		 * Each triple is processed in order using
+		 * wait_for_bit_le32(); probe fails (-ETIMEDOUT) if any
+		 * entry does not complete within the timeout.
+		 */
+		list = ofnode_read_prop(node, "intel,poll-settings", &size);
+		if (!list)
+			continue;
+
+		debug("%s(intel,poll-settings property size=%x)\n", __func__,
+		      size);
+		size /= sizeof(*list) * NUMBER_OF_ELEMENTS;
+
+		/*
+		 * Each poll-settings triple is <reg-offset, bits-to-poll,
+		 * timeout-in-ms> — same element count as offset-settings but
+		 * different field layout (no "value"; mask is the poll target).
+		 */
+		for (i = 0; i < size; i++) {
+			u32 poll_offset, poll_mask, poll_timeout_ms;
+
+			poll_offset     = fdt32_to_cpu(*list++);
+			poll_mask       = fdt32_to_cpu(*list++);
+			poll_timeout_ms = fdt32_to_cpu(*list++);
+
+			debug("%s(intel,poll-settings 0x%x : 0x%x : %u ms)\n",
+			      __func__, poll_offset, poll_mask, poll_timeout_ms);
+
+			if (blk_sz < poll_offset + SZ_4) {
+				printf("%s: poll offset 0x%x is outside block size 0x%x\n",
+				       __func__, poll_offset, blk_sz);
+				return -EINVAL;
+			}
+
+			if (!poll_mask)
+				continue;
+
+			reg = base + poll_offset;
+
+			ret = wait_for_bit_le32((const void *)(uintptr_t)reg,
+						poll_mask, true,
+						poll_timeout_ms, false);
+			if (ret) {
+				printf("%s: %s: timeout waiting for bits 0x%x at 0x%x\n",
+				       __func__, name, poll_mask, reg);
+				return ret;
+			}
 		}
 	}
 
