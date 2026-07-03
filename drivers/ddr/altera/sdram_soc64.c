@@ -32,7 +32,8 @@
 #define SINGLE_RANK_CLAMSHELL	0xc3c3
 #define DUAL_RANK_CLAMSHELL	0xa5a5
 
-#if !IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5) && !IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX7M)
+#if !IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5) && !IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX7M) && \
+	!IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72)
 u32 hmc_readl(struct altera_sdram_plat *plat, u32 reg)
 {
 	return readl(plat->iomhc + reg);
@@ -106,7 +107,8 @@ int emif_reset(struct altera_sdram_plat *plat)
 }
 #endif
 
-#if !(IS_ENABLED(CONFIG_ARCH_SOCFPGA_N5X) || IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5))
+#if !(IS_ENABLED(CONFIG_ARCH_SOCFPGA_N5X) || IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5) || \
+	IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72))
 int poll_hmc_clock_status(void)
 {
 	return wait_for_bit_le32((const void *)(socfpga_get_sysmgr_addr() +
@@ -285,6 +287,7 @@ phys_size_t sdram_calculate_size(struct altera_sdram_plat *plat)
 	return size;
 }
 
+#if !IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72)
 static void sdram_set_firewall_non_f2sdram(struct bd_info *bd)
 {
 	u32 i;
@@ -401,16 +404,16 @@ void sdram_set_firewall(struct bd_info *bd)
 	sdram_set_firewall_f2sdram(bd);
 #endif
 }
-
+#endif /* !IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72) */
 static int altera_sdram_of_to_plat(struct udevice *dev)
 {
 #if !IS_ENABLED(CONFIG_ARCH_SOCFPGA_N5X)
-	struct altera_sdram_plat *plat = dev_get_plat(dev);
-	fdt_addr_t addr;
+	struct altera_sdram_plat __maybe_unused *plat = dev_get_plat(dev);
+	fdt_addr_t __maybe_unused addr;
 #endif
 
 	/* These regs info are part of DDR handoff in bitstream */
-#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_N5X)
+#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_N5X) || IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72)
 	return 0;
 #elif IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5) || IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX7M)
 	addr = dev_read_addr_index(dev, 0);
@@ -442,8 +445,16 @@ static int altera_sdram_probe(struct udevice *dev)
 	int ret;
 	struct altera_sdram_priv *priv = dev_get_priv(dev);
 
+	/*
+	 * A "resets" property is optional. On some platforms (e.g.
+	 * Agilex72) the reset manager exposes no HPS-side DDR reset - the
+	 * DDR subsystem is released by the SDM before U-Boot runs - so a
+	 * missing "resets" property (-ENOENT) is not an error. Any other
+	 * failure is fatal.
+	 */
 	ret = reset_get_bulk(dev, &priv->resets);
-	if (ret) {
+	if (ret &&
+	    !(IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72) && ret == -ENOENT)) {
 		dev_err(dev, "Can't get reset: %d\n", ret);
 		return -ENODEV;
 	}
@@ -482,6 +493,7 @@ static const struct udevice_id altera_sdram_ids[] = {
 	{ .compatible = "intel,sdr-ctl-n5x" },
 	{ .compatible = "intel,sdr-ctl-agilex5" },
 	{ .compatible = "intel,sdr-ctl-agilex7m" },
+	{ .compatible = "altr,sdr-ctl-agilex72" },
 	{ /* sentinel */ }
 };
 
