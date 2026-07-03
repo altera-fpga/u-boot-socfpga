@@ -9,7 +9,9 @@
 
 #include <linux/bitops.h>
 
-#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5)
+#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72)
+#include <asm/arch/system_manager_soc64_agilex72.h>
+#elif IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5)
 #include <asm/arch/system_manager_soc64_agilex5.h>
 #else
 #include <asm/arch/system_manager_soc64_platform_families.h>
@@ -44,8 +46,6 @@
 #define ALT_SYSMGR_SCRATCH_REG_8_IO96B_HPS_MASK		GENMASK(28, 27)
 #define SYSMGR_SCRATCH_REG_8_ACF_DDR_RATE_MASK	BIT(18)
 #define SYSMGR_SCRATCH_REG_8_ACF_DDR_RATE_SHIFT 18
-
-#define SYSMGR_SDMMC				SYSMGR_SOC64_SDMMC
 
 #define SYSMGR_ROMCODEGRP_CTRL_WARMRSTCFGPINMUX	BIT(0)
 #define SYSMGR_ROMCODEGRP_CTRL_WARMRSTCFGIO	BIT(1)

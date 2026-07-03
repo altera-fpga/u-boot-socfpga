@@ -75,6 +75,99 @@ static struct mm_region socfpga_agilex5_mem_map[] = {
 
 struct mm_region *mem_map = socfpga_agilex5_mem_map;
 
+#elif IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72)
+static struct mm_region socfpga_agilex72_mem_map[] = {
+	{
+		/* OCRAM 512KB */
+		.virt	= 0x00000000UL,
+		.phys	= 0x00000000UL,
+		.size	= 0x00080000UL,
+		.attrs	= PTE_BLOCK_MEMTYPE(MT_DEVICE_NGNRNE) |
+				PTE_BLOCK_NON_SHARE,
+	}, {
+		/* LSP NOC (oSPI Target) */
+		.virt	= 0x04000000UL,
+		.phys	= 0x04000000UL,
+		.size	= 0x02000000UL,
+		.attrs	= PTE_BLOCK_MEMTYPE(MT_DEVICE_NGNRNE) |
+				PTE_BLOCK_NON_SHARE |
+				PTE_BLOCK_PXN | PTE_BLOCK_UXN,
+	}, {
+		/* CCU */
+		.virt	= 0x06000000UL,
+		.phys	= 0x06000000UL,
+		.size	= 0x01200000UL,
+		.attrs	= PTE_BLOCK_MEMTYPE(MT_DEVICE_NGNRNE) |
+				PTE_BLOCK_NON_SHARE |
+				PTE_BLOCK_PXN | PTE_BLOCK_UXN,
+	}, {
+		/* LSP, APU, HSP NOC */
+		.virt	= 0x08000000UL,
+		.phys	= 0x08000000UL,
+		.size	= 0x38000000UL,
+		.attrs	= PTE_BLOCK_MEMTYPE(MT_DEVICE_NGNRNE) |
+				PTE_BLOCK_NON_SHARE |
+				PTE_BLOCK_PXN | PTE_BLOCK_UXN,
+	}, {
+		/* SOC2NOC 1GB*/
+		.virt	= 0x40000000UL,
+		.phys	= 0x40000000UL,
+		.size	= 0x40000000UL,
+		.attrs	= PTE_BLOCK_MEMTYPE(MT_DEVICE_NGNRNE) |
+				PTE_BLOCK_NON_SHARE |
+				PTE_BLOCK_PXN | PTE_BLOCK_UXN,
+	}, {
+		/* HPS NOC */
+		.virt	= 0x100000000UL,
+		.phys	= 0x100000000UL,
+		.size	= 0x0C0000000UL,
+		.attrs	= PTE_BLOCK_MEMTYPE(MT_DEVICE_NGNRNE) |
+				PTE_BLOCK_NON_SHARE |
+				PTE_BLOCK_PXN | PTE_BLOCK_UXN,
+	}, {
+		/* SOC2NOC 15GB */
+		.virt	= 0x440000000UL,
+		.phys	= 0x440000000UL,
+		.size	= 0x3C0000000UL,
+		.attrs	= PTE_BLOCK_MEMTYPE(MT_DEVICE_NGNRNE) |
+				PTE_BLOCK_NON_SHARE |
+				PTE_BLOCK_PXN | PTE_BLOCK_UXN,
+	}, {
+		/* SOC2NOC 240GB */
+		.virt	= 0x4400000000UL,
+		.phys	= 0x4400000000UL,
+		.size	= 0x3C00000000UL,
+		.attrs	= PTE_BLOCK_MEMTYPE(MT_DEVICE_NGNRNE) |
+				PTE_BLOCK_NON_SHARE |
+				PTE_BLOCK_PXN | PTE_BLOCK_UXN,
+	}, {
+		/* MEM 2GB */
+		.virt	= 0x80000000UL,
+		.phys	= 0x80000000UL,
+		.size	= 0x80000000UL,
+		.attrs	= PTE_BLOCK_MEMTYPE(MT_NORMAL) |
+				PTE_BLOCK_INNER_SHARE,
+	}, {
+		/* MEM 30GB */
+		.virt	= 0x880000000UL,
+		.phys	= 0x880000000UL,
+		.size	= 0x780000000UL,
+		.attrs	= PTE_BLOCK_MEMTYPE(MT_NORMAL) |
+				PTE_BLOCK_INNER_SHARE,
+	}, {
+		/* MEM 480GB */
+		.virt	= 0x8800000000UL,
+		.phys	= 0x8800000000UL,
+		.size	= 0x7800000000UL,
+		.attrs	= PTE_BLOCK_MEMTYPE(MT_NORMAL) |
+				PTE_BLOCK_INNER_SHARE,
+	}, {
+		/* List terminator */
+	},
+};
+
+struct mm_region *mem_map = socfpga_agilex72_mem_map;
+
 #else
 static struct mm_region socfpga_stratix10_mem_map[] = {
 	{
