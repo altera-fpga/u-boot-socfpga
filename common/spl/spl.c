@@ -695,7 +695,9 @@ void board_init_r(gd_t *dummy1, ulong dummy2)
 		if (spl_init())
 			hang();
 	}
+#if !(IS_ENABLED(CONFIG_TARGET_SOCFPGA_EMU) && IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72))
 	timer_init();
+#endif
 	if (CONFIG_IS_ENABLED(BLOBLIST)) {
 		ret = bloblist_init();
 		if (ret) {

@@ -91,13 +91,28 @@ void board_init_f(ulong dummy)
 	socfpga_get_sys_mgr_addr();
 	socfpga_get_managers_addr();
 
+	/*
+	 * TODO ubootAgilex72 (KMDM-2456): fpga_config_comp (bit0)
+	 * secure-manager workaround.
+	 */
+	writel(0x00000001, 0x09152068);
+
+	/* TODO ubootAgilex72 */
+	// socfpga_pinmux_init();
+
 	if (!IS_ENABLED(CONFIG_TARGET_SOCFPGA_EMU)) {
 		/* Ensure watchdog is paused when debugging is happening */
 		writel(SYSMGR_WDDBG_PAUSE_ALL_CPU,
 		       socfpga_get_sysmgr_addr() + SYSMGR_SOC64_WDDBG);
 	}
 
+#if !(IS_ENABLED(CONFIG_TARGET_SOCFPGA_EMU) && IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72))
 	timer_init();
+#endif
+	/* TODO ubootAgilex72 */
+	// mbox_init();
+	/* TODO ubootAgilex72 */
+	// mbox_hps_stage_notify(HPS_EXECUTION_STATE_FSBL);
 
 	/*
 	 * Agilex 72 CLKMGR bring-up dispatch (first match wins):
@@ -161,4 +176,39 @@ void board_init_f(ulong dummy)
 			hang();
 		}
 	}
+
+#if 0
+	ret = uclass_get_device_by_name(UCLASS_NOP, "socfpga-firewall-config", &dev);
+	if (ret) {
+		printf("HPS firewall settings init failed: %d\n", ret);
+		hang();
+	}
+
+	ret = uclass_get_device(UCLASS_POWER_DOMAIN, 0, &dev);
+	if (ret) {
+		debug("PSS SRAM power-off failed: %d\n", ret);
+		hang();
+	}
+
+	/*
+	 * Set secure transaction for mmc, so ATF image from mmc can be loaded
+	 * to secure region reserved for ATF in DDR.
+	 */
+	if (IS_ENABLED(CONFIG_SPL_MMC))
+		writel(SECURE_TRANS_SET, SECURE_TRANS_REG);
+
+	if (IS_ENABLED(CONFIG_SPL_MMC_HS400_SUPPORT)) {
+		/* Below configuration for the data strobe pull down need to be removed
+		 * once eMMC GHRD is updated.
+		 */
+		printf("%s %d Set data strobe 20k ohm pull down\n", __func__, __LINE__);
+		writel(0x94, 0x10D1322C);
+	}
+
+	if (IS_ENABLED(CONFIG_CADENCE_QSPI))
+		mbox_qspi_open();
+
+	/* Enable non secure access to ocram */
+	clrbits_le32(SOCFPGA_OCRAM_FIREWALL_ADDRESS + 0x18, BIT(0));
+#endif
 }

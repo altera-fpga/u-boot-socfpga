@@ -143,6 +143,7 @@ u32 spl_boot_mode(const u32 boot_device)
 /* board specific function prior loading SSBL / U-Boot */
 void spl_perform_arch_fixups(struct spl_image_info *spl_image)
 {
+#if !IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72)/* TODO ubootAgilex72 */
 	int ret;
 	struct udevice *dev;
 
@@ -151,6 +152,7 @@ void spl_perform_arch_fixups(struct spl_image_info *spl_image)
 		printf("HPS SMMU secure settings init failed: %d\n", ret);
 		hang();
 	}
+#endif
 
 #if !IS_ENABLED(CONFIG_TARGET_SOCFPGA_EMU)
 	mbox_hps_stage_notify(HPS_EXECUTION_STATE_SSBL);

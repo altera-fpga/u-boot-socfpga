@@ -285,8 +285,10 @@ void do_qspi_ownership_quirk(void)
 
 void arch_preboot_os(void)
 {
+#if !(IS_ENABLED(CONFIG_TARGET_SOCFPGA_EMU))
 	do_qspi_ownership_quirk();
 	mbox_hps_stage_notify(HPS_EXECUTION_STATE_OS);
+#endif
 }
 
 int misc_init_r(void)

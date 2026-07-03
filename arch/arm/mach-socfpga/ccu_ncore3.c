@@ -3,13 +3,14 @@
  * Copyright (C) 2025 Altera Corporation <www.altera.com>
  *
  */
+#include <log.h>
 #include <wait_bit.h>
 #include <asm/arch/base_addr_soc64.h>
 #include <linux/bitfield.h>
 
-#define CCU_DMI0_DMIUSMCTCR				SOCFPGA_CCU_ADDRESS + 0x7300
-#define CCU_DMI0_DMIUSMCMCR				SOCFPGA_CCU_ADDRESS + 0x7340
-#define CCU_DMI0_DMIUSMCMAR				SOCFPGA_CCU_ADDRESS + 0x7344
+#define CCU_DMI0_DMIUSMCTCR				(SOCFPGA_CCU_ADDRESS + 0x7300)
+#define CCU_DMI0_DMIUSMCMCR				(SOCFPGA_CCU_ADDRESS + 0x7340)
+#define CCU_DMI0_DMIUSMCMAR				(SOCFPGA_CCU_ADDRESS + 0x7344)
 #define CCU_DMI0_DMIUSMCMCR_MNTOP		GENMASK(3, 0)
 #define MAX_DISTRIBUTED_MEM_INTERFACE	2
 #define FLUSH_ALL_ENTRIES				0x4
@@ -21,6 +22,11 @@
 
 int __asm_flush_l3_dcache(void)
 {
+#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72)
+	/* TODO ubootAgilex72 */
+	debug("AGILEX72 >> skip l3_dcache flush\n");
+	return 0;
+#else
 	int i;
 	int ret = 0;
 
@@ -61,4 +67,5 @@ int __asm_flush_l3_dcache(void)
 	}
 
 	return ret;
+#endif
 }
