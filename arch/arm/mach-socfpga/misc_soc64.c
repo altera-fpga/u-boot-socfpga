@@ -107,11 +107,52 @@ void save_boot_params(unsigned long r0, unsigned long r1, unsigned long r2,
  * Print CPU information
  */
 #if defined(CONFIG_DISPLAY_CPUINFO)
+static const char *socfpga_cpu_name(void)
+{
+	if (IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72) ||
+	    IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5)) {
+		u64 midr;
+		u32 part;
+
+		asm volatile("mrs %0, midr_el1" : "=r" (midr));
+		part = (midr >> 4) & 0xfff;
+
+		switch (part) {
+		case 0xD80:
+			return "A520";  /* AGILEX72 LITTLE */
+		case 0xD81:
+			return "A720";  /* AGILEX72 big    */
+		case 0xD05:
+			return "A55";   /* Agilex5 LITTLE */
+		case 0xD0B:
+			return "A76";   /* Agilex5 big    */
+		default:
+			break;
+		}
+	}
+
+	if (IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72))
+		return "A520/A720";
+	if (IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5))
+		return "A55/A76";
+	return "A53";
+}
+
 int print_cpuinfo(void)
 {
-	printf("CPU: Altera FPGA SoCFPGA Platform (ARMv8 64bit Cortex-%s)\n",
-	       IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5) ? "A55/A76" : "A53");
+	const char *arch;
 
+	/*
+	 * AGILEX72 runs Cortex-A520/A720 (ARMv9.2-A); all other socfpga64 platforms
+	 * (Stratix10, Agilex, Agilex5, N5X) run A53/A55/A76 (ARMv8.x-A).
+	 */
+	if (IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72))
+		arch = "ARMv9";
+	else
+		arch = "ARMv8";
+
+	printf("CPU: Altera FPGA SoCFPGA Platform (%s 64bit Cortex-%s)\n",
+	       arch, socfpga_cpu_name());
 	return 0;
 }
 #endif
