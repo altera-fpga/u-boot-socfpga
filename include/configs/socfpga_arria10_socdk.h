@@ -42,7 +42,6 @@
 	"scriptaddr=0x02100000\0" \
 	"pxefile_addr_r=0x02200000\0" \
 	"ramdisk_addr_r=0x02300000\0" \
-	"socfpga_legacy_reset_compat=1\0" \
 	"kernelfit_addr=0x1200000\0" \
 	"fitimagesize=0x5F0000\0" \
 	"qspiroot=/dev/mtdblock1\0" \

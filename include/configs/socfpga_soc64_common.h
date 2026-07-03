@@ -163,7 +163,6 @@
 	"scriptaddr=0x81000000\0" \
 	"scriptfile=boot.scr\0" \
 	"nandroot=ubi0:rootfs\0" \
-	"socfpga_legacy_reset_compat=1\0" \
 	"rsu_status=rsu dtb; rsu display_dcmf_version; "\
 		"rsu display_dcmf_status; rsu display_max_retry\0" \
 	"smc_fid_rd=0xC2000007\0" \
@@ -198,7 +197,6 @@
 	"scriptaddr=0x05FF0000\0" \
 	"scriptfile=boot.scr\0" \
 	"nandroot=ubi0:rootfs\0" \
-	"socfpga_legacy_reset_compat=1\0" \
 	"rsu_status=rsu dtb; rsu display_dcmf_version; "\
 		"rsu display_dcmf_status; rsu display_max_retry\0" \
 	"smc_fid_rd=0xC2000007\0" \
@@ -265,7 +263,6 @@
 			" root=${nandroot} rw rootwait rootfstype=ubifs ubi.mtd=1; " \
 			"bootm ${loadaddr}\0" \
 	"nandfitload=ubi part root; ubi readvol ${loadaddr} kernel\0" \
-	"socfpga_legacy_reset_compat=1\0" \
 	"rsu_status=rsu dtb; rsu display_dcmf_version; "\
 		"rsu display_dcmf_status; rsu display_max_retry\0" \
 	"smc_fid_rd=0xC2000007\0" \
@@ -322,7 +319,6 @@
 			" root=${nandroot} rw rootwait rootfstype=ubifs ubi.mtd=1; " \
 			"bootm ${loadaddr}\0" \
 	"nandfitload=ubi part root; ubi readvol ${loadaddr} kernel\0" \
-	"socfpga_legacy_reset_compat=1\0" \
 	"rsu_status=rsu dtb; rsu display_dcmf_version; "\
 		"rsu display_dcmf_status; rsu display_max_retry\0" \
 	"smc_fid_rd=0xC2000007\0" \
