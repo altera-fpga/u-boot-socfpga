@@ -1,0 +1,11 @@
+SOCFPGA BOARD
+M:	Tien Fong Chee <tien.fong.chee@altera.com>
+M:	Chen Huei Lok <chen.huei.lok@altera.com>
+M:	Alif Zakuan Yuslaimi <alif.zakuan.yuslaimi@altera.com>
+M:	Boon Khai Ng <boon.khai.ng@altera.com>
+M:	Dinesh Maniyam <dinesh.maniyam@altera.com>
+S:	Maintained
+F:	board/altera/agilex72-socdk/
+F:	include/configs/socfpga_agilex72_socdk.h
+F:	configs/socfpga_agilex72_defconfig
+F:	configs/socfpga_agilex72_emmc_defconfig
