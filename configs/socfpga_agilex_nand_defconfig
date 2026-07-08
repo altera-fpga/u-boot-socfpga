@@ -1,0 +1,4 @@
+#include <configs/socfpga_agilex_defconfig>
+
+CONFIG_DEFAULT_DEVICE_TREE="intel/socfpga_agilex_socdk_nand"
+CONFIG_OF_LIST="intel/socfpga_agilex_socdk_nand"
