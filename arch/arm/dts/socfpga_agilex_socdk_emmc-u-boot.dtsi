@@ -5,7 +5,58 @@
  * Copyright (C) 2026 Altera Corporation <www.altera.com>
  */
 
-#include "socfpga_agilex_socdk-u-boot.dtsi"
+#include "socfpga_agilex-u-boot.dtsi"
+
+/{
+	chosen {
+		stdout-path = "serial0:115200n8";
+		u-boot,spl-boot-order = &mmc,&flash0,&nand;
+	};
+
+	memory@0 {
+		/* 8GB */
+		reg = <0 0x00000000 0 0x80000000>,
+		      <2 0x80000000 1 0x80000000>;
+	};
+};
+
+&qspi {
+	status = "okay";
+};
+
+&nand {
+	status = "okay";
+	nand-bus-width = <16>;
+	bootph-all;
+};
+
+&mmc {
+	drvsel = <3>;
+	smplsel = <0>;
+	bootph-all;
+};
+
+&qspi {
+	/delete-property/ clocks;
+};
+
+&flash0 {
+	reg = <0>;
+	spi-tx-bus-width = <4>;
+	spi-rx-bus-width = <4>;
+	spi-max-frequency = <100000000>;
+	bootph-all;
+
+	m25p,fast-read;
+	cdns,page-size = <256>;
+	cdns,block-size = <16>;
+	cdns,read-delay = <1>;
+	cdns,tshsl-ns = <50>;
+	cdns,tsd2d-ns = <50>;
+	cdns,tchsh-ns = <4>;
+	cdns,tslch-ns = <4>;
+	/delete-property/ cdns,read-delay;
+};
 
 &gmac0 {
 	status = "disabled";

@@ -6,6 +6,7 @@ F:	board/intel/agilex-socdk/
 F:	include/configs/socfpga_agilex_socdk.h
 F:	configs/socfpga_agilex_atf_defconfig
 F:	configs/socfpga_agilex_defconfig
+F:	configs/socfpga_agilex_emmc_defconfig
 
 SOCFPGA BOARD WITH VAB
 M:	Siew Chin Lim <elly.siew.chin.lim@intel.com>
