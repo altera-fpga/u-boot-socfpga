@@ -19,6 +19,8 @@
 #define DW_APB_LOAD_VAL		0x0
 #define DW_APB_CURR_VAL		0x4
 #define DW_APB_CTRL		0x8
+#define DW_APB_CTRL_ENABLE	BIT(0)
+#define DW_APB_CTRL_MODE	BIT(1)
 
 struct dw_apb_timer_priv {
 	uintptr_t regs;
@@ -76,9 +78,10 @@ static int dw_apb_timer_probe(struct udevice *dev)
 	}
 
 	/* init timer */
+	writel(0x0, priv->regs + DW_APB_CTRL);
 	writel(0xffffffff, priv->regs + DW_APB_LOAD_VAL);
-	writel(0xffffffff, priv->regs + DW_APB_CURR_VAL);
-	setbits_le32(priv->regs + DW_APB_CTRL, 0x3);
+	setbits_le32(priv->regs + DW_APB_CTRL, DW_APB_CTRL_MODE);
+	setbits_le32(priv->regs + DW_APB_CTRL, DW_APB_CTRL_ENABLE);
 
 	return 0;
 }
