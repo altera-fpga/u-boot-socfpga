@@ -43,9 +43,7 @@ bool is_regular_boot_valid(void);
 int qspi_flash_software_reset(void);
 #endif
 
-#if defined(CONFIG_ARCH_SOCFPGA_STRATIX10) || \
-	defined(CONFIG_ARCH_SOCFPGA_AGILEX) || \
-	defined(CONFIG_ARCH_SOCFPGA_AGILEX7M)
+#if defined(CONFIG_ARCH_SOCFPGA_SOC64)
 int is_fpga_config_ready(void);
 #endif
 

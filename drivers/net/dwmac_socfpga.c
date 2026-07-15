@@ -58,6 +58,13 @@ static int socfpga_dw_tse_pcs_init(struct udevice *dev)
 	offset = fdtdec_lookup_phandle(gd->fdt_blob, dev_of_offset(dev),
 				       "altr,gmii-to-sgmii-converter");
 	if (offset > 0) {
+#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_SOC64)
+		if (!is_fpga_config_ready()) {
+			dev_err(dev, "FPGA not ready, aborting SGMII init\n");
+			return -ENODEV;
+		}
+#endif
+
 		/* enable all HPS bridge */
 		do_bridge_reset(ENABLE_BRIDGE, ALL_BRIDGE_RELEASE_FROM_RESET_MASK);
 
@@ -119,6 +126,9 @@ static int socfpga_dw_tse_pcs_init(struct udevice *dev)
 			return -EINVAL;
 		}
 
+		pdata->pcs.tse_pcs_base = tse_pcs_base;
+		pdata->pcs.sgmii_adapter_base = sgmii_adapter_base;
+
 		if (eth_pdata->phy_interface == PHY_INTERFACE_MODE_SGMII) {
 			if (tse_pcs_init(tse_pcs_base, &pdata->pcs) != 0) {
 				debug("Unable to intiialize TSE PCS\n");
@@ -129,8 +139,6 @@ static int socfpga_dw_tse_pcs_init(struct udevice *dev)
 		/* Clear sgmii_adapter_base first */
 		writel(0, sgmii_adapter_base);
 
-		pdata->pcs.tse_pcs_base = tse_pcs_base;
-		pdata->pcs.sgmii_adapter_base = sgmii_adapter_base;
 		dw_pdata->pcs_adjust_link = socfpga_tse_pcs_adjust_link;
 	}
 	return ret;
@@ -270,7 +278,9 @@ static int dwmac_socfpga_probe(struct udevice *dev)
 
 	reset_release_bulk(&reset_bulk);
 
-	socfpga_dw_tse_pcs_init(dev);
+	ret = socfpga_dw_tse_pcs_init(dev);
+	if (ret)
+		return ret;
 
 	return designware_eth_probe(dev);
 }
