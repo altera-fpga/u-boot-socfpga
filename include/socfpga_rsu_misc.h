@@ -71,7 +71,7 @@ void swap_bits(char *data, int size);
 /*
  * RSU-scoped integer power. Named with the rsu_ prefix to avoid
  * colliding with libm's double pow(double, double) when this header
- * is consumed by host-native test harnesses (test_asan/rsu/...).
+ * is consumed by hosted builds (e.g. the sandbox ut socfpga suite).
  */
 int rsu_pow(u32 x, u32 y);
 

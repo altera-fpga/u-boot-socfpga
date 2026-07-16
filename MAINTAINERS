@@ -192,7 +192,6 @@ F:	include/socfpga_rsu_misc.h
 F:	include/socfpga_rsu_s10.h
 F:	include/test/socfpga.h
 F:	test/socfpga/
-F:	test_asan/rsu/
 
 ARM AMLOGIC SOC SUPPORT
 M:	Neil Armstrong <neil.armstrong@linaro.org>

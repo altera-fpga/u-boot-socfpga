@@ -263,6 +263,71 @@ No changes to ``cmd_ut.c``, ``test/Makefile``, ``test/Kconfig`` or
 declared and the linker section will absorb new ``SOCFPGA_TEST``
 entries automatically.
 
+Future expansion: RSU full-coverage roadmap
+-------------------------------------------
+
+This series (Phase 1) pulls 4 of 9 production RSU files into the
+sandbox build (``rsu.c``, ``rsu_misc.c``, ``rsu_s10.c``,
+``cmd/socfpga_rsu.c``). The goal is to extend that coverage to
+every production source in the RSU stack, one production file
+per commit, with shared sandbox fakes in their own prerequisite
+commits.
+
+**Convention** (mirrors how commits 4 and 5 of this series are
+shaped): each follow-up commit either
+
+- introduces *infrastructure* (a sandbox fake driver, layout
+  helpers, a Kconfig path) that subsequent file commits depend
+  on, or
+- pulls in *one* production ``.c`` file via a thin
+  ``drivers/misc/socfpga_<file>.c`` wrapper plus the tests it
+  unlocks under ``ut socfpga``.
+
+This keeps each commit independently revertible and bisect-
+friendly.
+
+============================================  =================  ================================================
+Phase                                          Production files   Sandbox infrastructure prerequisite
+============================================  =================  ================================================
+**1** (this series)                            ``rsu.c``,         ``rsu_ll_sandbox.c`` empty-SPT LL stub +
+                                               ``rsu_misc.c``,    ``-EOPNOTSUPP`` mailbox shims
+                                               ``rsu_s10.c``,
+                                               ``cmd/socfpga_rsu.c``
+
+**2** (interactive surface)                    ``drivers/misc/    Configurable sandbox mailbox fake +
+                                               socfpga_rsu.c``    SMC bridge recorder; retires the
+                                               (DM probe),        ``-EOPNOTSUPP`` shims from
+                                               ``mailbox_s10.c``, ``rsu_ll_sandbox.c``
+                                               ``smc_rsu_s10.c``
+
+**3** (QSPI backend)                           ``rsu_ll_qspi.c``  Sandbox SPI flash device + DT fixture +
+                                                                  SPT/CPB layout helpers
+                                                                  (``LAYOUT_VALID_3SLOTS``,
+                                                                  ``LAYOUT_CORRUPT_SPT0_VALID_SPT1``, ...);
+                                                                  retires ``rsu_ll_sandbox.c`` entirely
+
+**4** (SPL helpers, spike-gated)               ``rsu_spl.c``      Sandbox SPL build path *or* guard-relax
+                                                                  shim; viability confirmed by a 4-hour
+                                                                  spike before the phase is committed to
+============================================  =================  ================================================
+
+Each phase ships as its own PR. Phase 2 unlocks the
+populated-layout test set (``rsu_init`` / ``rsu_slot_*``
+happy-path, ``rsu_clear_error_status``,
+``rsu_reset_retry_counter``, ``rsu_dcmf_*``,
+``rsu_status_log_forward``, ``rsu_running_factory`` and the DM
+probe path). Phase 3 unlocks the QSPI backend behaviour
+(multi-flash stitched reads, erase round-up, partition
+rename/delete, SPT/CPB corruption variants, save/restore
+roundtrips). Phase 4 unlocks the SPL boot-time helpers; it is
+explicitly optional because upstream U-Boot has thin sandbox-SPL
+support.
+
+When Phase 3 lands, ``drivers/misc/rsu_ll_sandbox.c`` is removed
+in the same commit that compiles ``rsu_ll_qspi.c``: the
+production backend talking to a sandbox SPI flash supersedes the
+empty-SPT stub on every dimension.
+
 References
 ----------
 

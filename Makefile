@@ -2769,21 +2769,6 @@ qcheck:
 tcheck:
 	$(run_tests) tools
 
-#
-# SoCFPGA-specific native ASan/UBSan harness for the RSU driver
-# stack. Runs on the build host (not under sandbox) and does not
-# need a sandbox build, so it stays a focused add-on rather than a
-# replacement for `make tests`. CI / developers can run either:
-#
-#   make tests              -- full upstream test suite (set
-#                              RUN_SOCFPGA_RSU_ASAN=1 to also run the
-#                              RSU ASan harness inside test/run)
-#   make tests-socfpga-asan -- just the SoCFPGA RSU harness, fast
-#
-PHONY += tests-socfpga-asan
-tests-socfpga-asan:
-	$(Q)$(MAKE) -C $(srctree)/test_asan/rsu
-
 # Documentation targets
 # ---------------------------------------------------------------------------
 DOC_TARGETS := xmldocs latexdocs pdfdocs htmldocs epubdocs cleandocs \
