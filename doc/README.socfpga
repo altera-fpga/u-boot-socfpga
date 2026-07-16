@@ -17,6 +17,8 @@ Table of Contents
 	7. mkimage for Cyclone V, Arria V and Arria 10
 	8. SDRAM secure region in U-boot ATF flow
 	9. binman for U-boot ATF flow
+	10. FPGA full reconfig flow for SoC64 devices
+	11. Securing the boot script (boot.scr) on SoC64 devices
 
 
 1. Device Family Support vs Tested Intel Quartus
@@ -385,3 +387,85 @@ Table of Contents
 		1. bridge disable command (can be done in U-Boot script)
 		2. bootm, the bridge would be enabled automaticaly once FPGA is
 		is successfully programmed.
+
+11. Securing the boot script (boot.scr) on SoC64 devices
+---------------------------------------------------------------------
+	The default bootcmd runs a boot script with "source ${scriptaddr}"
+	in U-Boot proper, before the kernel FIT is loaded and verified. If
+	that script is an unsigned legacy uImage (mkimage -T script) or an
+	unsigned FIT, an attacker with write access to the boot media can
+	replace it and redirect the boot flow. This holds even when
+	CONFIG_SPL_FIT_SIGNATURE=y already verified u-boot.itb in SPL: that
+	check covers a different image at an earlier boot stage and gives
+	no protection to the script sourced later in U-Boot proper, upstream
+	of the kernel FIT's own signature check (CWE-494).
+
+	To close this, the 'source' path enforces authentication when a root
+	of trust is enabled. In image_locate_script() (boot/image-board.c),
+	when CONFIG_BOOTSCR_FIT_SIGNATURE=y (which depends on
+	CONFIG_FIT_SIGNATURE):
+		1. A legacy-format boot.scr is rejected, because a legacy
+		   uImage carries only a CRC and can never be signed. This
+		   holds even though CONFIG_LEGACY_IMAGE_FORMAT stays y (it is
+		   force-selected by CONFIG_DISTRO_DEFAULTS).
+		2. A FIT boot.scr must be sourced through a signed
+		   configuration; the hash-only fallback and the explicit
+		   ${addr}:<image> selection are refused so that
+		   fit_config_verify() always runs.
+		3. Verification is not gated by the 'verify' environment
+		   variable, so it cannot be disabled by a root user who
+		   rewrites the env partition.
+
+	On CONFIG_SOCFPGA_SECURE_VAB_AUTH_BOOTSCR builds, the 'source'
+	command also authenticates the script payload through the SDM (VAB)
+	via the board_boot_script_verify() hook (arch/arm/mach-socfpga/
+	board.c), mirroring board_fit_image_post_process() for FIT images.
+
+	Enforcement timing is identical for both roots of trust: each is
+	gated behind its own Kconfig, defaults to n, and is inert until a
+	follow-up enablement PR turns it on in lockstep with a build that
+	produces the corresponding signed boot.scr.
+		- RSA FIT path: CONFIG_BOOTSCR_FIT_SIGNATURE (depends on
+		  CONFIG_FIT_SIGNATURE) flips on once a GSRD/Yocto build
+		  produces a signed FIT boot.scr and embeds the public key
+		  as 'required' in the control device tree.
+		- VAB path: CONFIG_SOCFPGA_SECURE_VAB_AUTH_BOOTSCR (depends
+		  on CONFIG_SOCFPGA_SECURE_VAB_AUTH) flips on once the boot
+		  media's boot.scr is packaged with a VAB certificate.
+		  Enabling CONFIG_SOCFPGA_SECURE_VAB_AUTH alone (as already
+		  done by every *_vab_defconfig) does NOT enable this check,
+		  so existing unsigned boot.scr payloads keep booting;
+		  turning CONFIG_SOCFPGA_SECURE_VAB_AUTH_BOOTSCR on without a
+		  VAB-certified boot.scr makes 'source' fail-close (hang).
+		  Before enabling it, confirm on real packaging output that
+		  the VAB certificate lands inside the FIT "script" node's
+		  own data (the same convention board_fit_image_post_process()
+		  relies on for kernel/fdt nodes), not only appended to the
+		  outer FIT container, and smoke-test
+		  "source ${scriptaddr}[:script]" against that production
+		  boot.scr on a *_vab_defconfig board before shipping.
+
+	When CONFIG_BOOTSCR_FIT_SIGNATURE is later enabled, env helpers that
+	source a FIT subimage by name (for example SoC64 fatscript's
+	"source ${scriptaddr}:script") must be updated to source through a
+	signed configuration instead; that path only runs fit_image_verify()
+	and is refused under BOOTSCR_FIT_SIGNATURE. Track that env update in
+	the BOOTSCR enablement / meta integration PR.
+
+	Turning RSA FIT enforcement on is a lockstep change with the
+	GSRD / Yocto build: the meta-layer must switch from the legacy
+	mkimage -T script boot.scr to a signed FIT boot.scr (with a
+	'configurations' node and the public key injected as 'required'
+	into the control device tree embedded in U-Boot proper) at the
+	same time, or the board stops booting. See
+	doc/usage/fit/signature.rst for the FIT signing flow.
+
+	The non-secure defconfigs deliberately keep RSA FIT protection OFF
+	for bring-up and emulation and must NOT be used for shipping
+	firmware:
+		- socfpga_stratix10_legacy_defconfig (no CONFIG_FIT;
+		  non-ATF legacy flow, no image authentication)
+		- socfpga_agilex_legacy_defconfig (no CONFIG_FIT;
+		  non-ATF legacy flow, no image authentication)
+		- socfpga_agilex5_debug2_defconfig (CONFIG_SPL_FIT_SIGNATURE=n)
+		- socfpga_agilex5_emu_defconfig (CONFIG_SPL_FIT_SIGNATURE=n)

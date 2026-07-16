@@ -986,8 +986,22 @@ int image_locate_script(void *buf, int size, const char *fit_uname,
 
 	verify = env_get_yesno("verify");
 
+	/*
+	 * When boot-script FIT signature enforcement is enabled, the script
+	 * signature check is mandatory and must not be defeatable via the
+	 * "verify" environment variable, which an attacker with write access
+	 * to the env partition could clear. Force verification on regardless
+	 * of the env setting.
+	 */
+	if (CONFIG_IS_ENABLED(BOOTSCR_FIT_SIGNATURE))
+		verify = 1;
+
 	switch (genimg_get_format(buf)) {
 	case IMAGE_FORMAT_LEGACY:
+		if (CONFIG_IS_ENABLED(BOOTSCR_FIT_SIGNATURE)) {
+			puts("Legacy boot script rejected: signed FIT required\n");
+			return -EPERM;
+		}
 		if (!IS_ENABLED(CONFIG_LEGACY_IMAGE_FORMAT)) {
 			goto exit_image_format;
 		} else {
@@ -1070,6 +1084,21 @@ int image_locate_script(void *buf, int size, const char *fit_uname,
 				}
 			} else {
 fallback:
+				/*
+				 * This path selects a script subimage directly
+				 * and only checks its hash via fit_image_verify()
+				 * below; it never runs fit_config_verify(), so a
+				 * required signature is not enforced. Refuse it
+				 * when BOOTSCR_FIT_SIGNATURE is enabled so a script
+				 * can only be sourced through a verified
+				 * configuration.
+				 */
+				if (CONFIG_IS_ENABLED(BOOTSCR_FIT_SIGNATURE)) {
+					puts("FIT script needs a signed config; ");
+					puts("use 'source <addr>#[<config>]'\n");
+					return -EPERM;
+				}
+
 				if (!fit_uname || !*fit_uname)
 					fit_uname = get_default_image(fit_hdr);
 				if (!fit_uname) {

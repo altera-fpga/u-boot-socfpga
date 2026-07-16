@@ -2095,6 +2095,24 @@ int board_fit_config_name_match(const char *name);
 void board_fit_image_post_process(const void *fit, int node, void **p_image,
 				  size_t *p_size);
 
+/**
+ * board_boot_script_verify() - authenticate a boot script before execution
+ *
+ * Board/arch hook invoked by the "source" command on the located script
+ * payload before it is executed, so a platform can enforce its own root of
+ * trust (e.g. SoCFPGA VAB authentication via the SDM) on the boot script.
+ * The default implementation is a no-op.
+ *
+ * @p_data: pointer to the script data pointer; may be updated, and an
+ *          appended authentication certificate (if any) excluded
+ * @p_len:  pointer to the script length; may be reduced to strip a trailing
+ *          authentication certificate
+ * Return: 0 if the script is authentic or no authentication is required,
+ *         non-zero error code on authentication failure. Board code may
+ *         also fail-closed by never returning (e.g. hang()) on failure.
+ */
+int board_boot_script_verify(void **p_data, uint *p_len);
+
 #define FDT_ERROR	((ulong)(-1))
 
 ulong fdt_getprop_u32(const void *fdt, int node, const char *prop);

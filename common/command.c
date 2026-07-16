@@ -657,10 +657,16 @@ int cmd_process_error(struct cmd_tbl *cmdtp, int err)
 	return CMD_RET_SUCCESS;
 }
 
+__weak int board_boot_script_verify(void **p_data, uint *p_len)
+{
+	return 0;
+}
+
 int cmd_source_script(ulong addr, const char *fit_uname, const char *confname)
 {
 	char *data;
 	void *buf;
+	void *script;
 	uint len;
 	int ret;
 
@@ -670,6 +676,15 @@ int cmd_source_script(ulong addr, const char *fit_uname, const char *confname)
 	if (ret)
 		return CMD_RET_FAILURE;
 
-	debug("** Script length: %d\n", len);
+	debug("** Script length: %u\n", len);
+
+	script = data;
+	ret = board_boot_script_verify(&script, &len);
+	if (ret) {
+		printf("Boot script authentication failed (err %d)\n", ret);
+		return CMD_RET_FAILURE;
+	}
+	data = script;
+
 	return run_command_list(data, len, 0);
 }

@@ -124,6 +124,28 @@ config FIT_SIGNATURE
 	  format support in this case, enable it using
 	  CONFIG_LEGACY_IMAGE_FORMAT.
 
+config BOOTSCR_FIT_SIGNATURE
+	bool "Require a signed FIT for boot scripts sourced via 'source'"
+	depends on FIT_SIGNATURE
+	help
+	  The 'source' command runs a boot script (typically boot.scr)
+	  before the kernel is loaded. Without this option a legacy uImage
+	  or an unsigned/hash-only FIT script is accepted even when
+	  FIT_SIGNATURE is enabled, letting an attacker with write access to
+	  the boot media redirect the boot flow and bypass FIT signature
+	  verification (CWE-494).
+
+	  When enabled, 'source' rejects a legacy-format script and requires
+	  a FIT script to be verified through a signed configuration node.
+	  The check is mandatory and cannot be disabled via the "verify"
+	  environment variable.
+
+	  This requires the boot script to be packaged as a signed FIT with
+	  the public key embedded (as 'required') in the control device tree
+	  of U-Boot proper. It must be enabled in lockstep with the build
+	  that produces the signed boot script, or the board stops booting.
+	  If unsure, say N.
+
 config FIT_SIGNATURE_MAX_SIZE
 	hex "Max size of signed FIT structures"
 	depends on FIT_SIGNATURE

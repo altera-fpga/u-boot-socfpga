@@ -173,6 +173,27 @@ void board_fit_image_post_process(const void *fit, int node, void **p_image,
 }
 #endif
 
+#if !IS_ENABLED(CONFIG_XPL_BUILD) && IS_ENABLED(CONFIG_SOCFPGA_SECURE_VAB_AUTH_BOOTSCR)
+int board_boot_script_verify(void **p_data, uint *p_len)
+{
+	size_t sz = *p_len;
+
+	/*
+	 * Authenticate the boot script through the SDM (VAB) before it runs.
+	 * The script payload carries an appended VAB certificate; on success
+	 * socfpga_vendor_authentication() reduces the size to the script body.
+	 * Halt on failure so an unauthenticated script never executes, mirroring
+	 * board_fit_image_post_process().
+	 */
+	if (socfpga_vendor_authentication(p_data, &sz))
+		hang();
+
+	*p_len = sz;
+
+	return 0;
+}
+#endif
+
 #if !IS_ENABLED(CONFIG_XPL_BUILD) && IS_ENABLED(CONFIG_FIT)
 void board_prep_linux(struct bootm_headers *images)
 {

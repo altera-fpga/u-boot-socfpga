@@ -60,6 +60,21 @@ config SOCFPGA_SECURE_VAB_AUTH_ALLOW_NON_FIT_IMAGE
 	bool "Allow non-FIT VAB signed images"
 	depends on SOCFPGA_SECURE_VAB_AUTH
 
+config SOCFPGA_SECURE_VAB_AUTH_BOOTSCR
+	bool "Require VAB authentication of the boot script (boot.scr)"
+	depends on SOCFPGA_SECURE_VAB_AUTH
+	help
+	 Authenticate the boot script sourced by the 'source' command
+	 through the SDM (VAB) via the board_boot_script_verify() hook,
+	 mirroring the VAB authentication already applied to FIT images.
+
+	 This is independent from, and defaults to n like,
+	 CONFIG_BOOTSCR_FIT_SIGNATURE: enabling CONFIG_SOCFPGA_SECURE_VAB_AUTH
+	 alone must not change 'source' behaviour, since existing
+	 *_vab_defconfig boards boot an unsigned boot.scr today. Enable this
+	 only in lockstep with a build that packages a VAB-signed boot.scr,
+	 or 'source' will hang() on every unsigned script. If unsure, say N.
+
 config SPL_SIZE_LIMIT
 	default 0x10000 if ARCH_SOCFPGA_GEN5
 
