@@ -11,6 +11,7 @@
 #include <spl.h>
 #include <dm/device.h>
 #include <dm/uclass.h>
+#include <linux/errno.h>
 
 #define MMC_0 0
 #define MMC_1 1
@@ -148,7 +149,15 @@ void spl_perform_arch_fixups(struct spl_image_info *spl_image)
 	struct udevice *dev;
 
 	ret = uclass_get_device_by_name(UCLASS_NOP, "socfpga-smmu-secure-config", &dev);
-	if (ret) {
+	if (ret == -ENODEV) {
+		/*
+		 * No socfpga-smmu-secure-config node: nothing for U-Boot to
+		 * program (e.g. parts where ATF/BL31 owns the System-Manager
+		 * TBU stream-ID / secure-SID setup, or where the reset default
+		 * already suffices). Skip instead of failing.
+		 */
+		debug("HPS SMMU secure settings: no DT node, skipping\n");
+	} else if (ret) {
 		printf("HPS SMMU secure settings init failed: %d\n", ret);
 		hang();
 	}
