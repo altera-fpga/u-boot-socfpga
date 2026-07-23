@@ -633,6 +633,15 @@
 			status = "disabled";
 		};
 
+		watchdog4: watchdog@908d000 {
+			compatible = "snps,dw-wdt";
+			reg = <0x908d000 0x100>;
+			interrupts = <0 127 4>;
+			resets = <&rst WATCHDOG4_RESET>;
+			clocks = <&clkmgr AGILEX72_LSP_SYS_FREE_CLK>;
+			status = "disabled";
+		};
+
 		sdr: sdr@a968000 {
 			compatible = "altr,sdr-ctl", "syscon";
 			reg = <0xa968000 0xc0>;
