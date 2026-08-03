@@ -400,7 +400,7 @@ err:
  * negative error code from wait_for_bit_le32() for the first instance that
  * times out.
  */
-static int wait_for_io96b_mb_ready(struct io96b_info *io96b_ctrl)
+static int __maybe_unused wait_for_io96b_mb_ready(struct io96b_info *io96b_ctrl)
 {
 	unsigned long start;
 	int i, ret;
@@ -450,9 +450,11 @@ void io96b_mb_init(struct io96b_info *io96b_ctrl)
 	int i, j;
 	u32 mem_intf_info_0, mem_intf_info_1;
 
-	if (wait_for_io96b_mb_ready(io96b_ctrl)) {
-		printf("DDR: IOSSM mailbox not ready\n");
-		hang();
+	if (IS_ENABLED(CONFIG_IO96B_MB_READY)) {
+		if (wait_for_io96b_mb_ready(io96b_ctrl)) {
+			printf("DDR: IOSSM mailbox not ready\n");
+			hang();
+		}
 	}
 
 	if (!is_mailbox_spec_compatible(io96b_ctrl)) {
