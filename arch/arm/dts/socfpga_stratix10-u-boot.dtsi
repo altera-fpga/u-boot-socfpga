@@ -8,6 +8,17 @@
 #include "socfpga_soc64_u-boot.dtsi"
 #include "socfpga_soc64_fit-u-boot.dtsi"
 
+/{
+	aliases {
+		sysmgr = &sysmgr;
+	};
+};
+
+&sysmgr {
+	compatible = "altr,sys-mgr", "syscon";
+	bootph-all;
+};
+
 &socfpga_l3interconnect_firewall {
 	i_ccu_noc_registers@f7000000 {
 		reg = <0xf7000000 0x00049e60>;
