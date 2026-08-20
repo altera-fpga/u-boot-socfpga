@@ -260,7 +260,14 @@ static int cdns_xspi_send_stig_command(struct cdns_xspi_plat *cdns_xspi,
 
 		cdns_xspi_trigger_command(cdns_xspi, cmd_regs);
 
-		cdns_xspi_wait_for_sdma_complete(cdns_xspi);
+		ret = cdns_xspi_wait_for_sdma_complete(cdns_xspi);
+		if (ret == -ETIMEDOUT) {
+			cdns_xspi->set_interrupts_handler(cdns_xspi, false);
+			dev_err(cdns_xspi->dev,
+				"SDMA wait failed (%d) - controller did not raise SDMA_TRIGGER\n",
+				ret);
+			return ret;
+		}
 
 		if (cdns_xspi->sdma_error) {
 			cdns_xspi->set_interrupts_handler(cdns_xspi, false);
@@ -269,7 +276,14 @@ static int cdns_xspi_send_stig_command(struct cdns_xspi_plat *cdns_xspi,
 		cdns_xspi_sdma_handle(cdns_xspi);
 	}
 
-	cdns_xspi_wait_for_cmd_complete(cdns_xspi);
+	ret = cdns_xspi_wait_for_cmd_complete(cdns_xspi);
+	if (ret) {
+		cdns_xspi->set_interrupts_handler(cdns_xspi, false);
+		dev_err(cdns_xspi->dev,
+			"STIG_DONE wait failed (%d) - controller did not raise STIG_DONE\n",
+			ret);
+		return ret;
+	}
 	ret = cdns_xspi_check_command_status(cdns_xspi);
 	if (ret)
 		return ret;
