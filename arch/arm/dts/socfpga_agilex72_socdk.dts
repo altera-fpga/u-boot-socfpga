@@ -228,7 +228,7 @@
 	hps_flash0: hps_flash@0 {
 		#address-cells = <1>;
 		#size-cells = <1>;
-		compatible = "m25p16";
+		compatible = "jedec,spi-nor";
 		reg = <0>;
 		spi-max-frequency = <100000000>;
 
@@ -248,12 +248,12 @@
 
 			qspi_boot: partition@0 {
 				label = "u-boot";
-				reg = <0x0 0x04200000>;
+				reg = <0x0 0x02000000>;
 			};
 
-			root: partition@4200000 {
+			root: partition@2000000 {
 				label = "root";
-				reg = <0x04200000 0x0BE00000>;
+				reg = <0x02000000 0x02000000>;
 			};
 		};
 	};
@@ -263,7 +263,7 @@
 	sdm_flash0: sdm_flash@0 {
 		#address-cells = <1>;
 		#size-cells = <1>;
-		compatible = "m25p16";
+		compatible = "jedec,spi-nor";
 		reg = <0>;
 		spi-max-frequency = <100000000>;
 
