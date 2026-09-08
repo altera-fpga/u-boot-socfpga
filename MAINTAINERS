@@ -169,6 +169,7 @@ S:	Maintained
 T:	git https://source.denx.de/u-boot/custodians/u-boot-socfpga.git
 F:	arch/arm/dts/socfpga_*
 F:	arch/arm/mach-socfpga/
+F:	arch/arm/mach-socfpga/include/mach/socfpga_prov_status.h
 F:	board/altera/stratix10-socdk/
 F:	board/intel/agilex-socdk/
 F:	cmd/socfpga_rsu.c

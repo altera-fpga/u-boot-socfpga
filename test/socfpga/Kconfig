@@ -4,8 +4,8 @@ config UT_SOCFPGA
 	default y
 	help
 	  This enables the 'ut socfpga' command, which runs sandbox unit
-	  tests covering Altera SoC FPGA drivers. RSU is the first driver
-	  to ship under this suite (test/socfpga/rsu.c); FPGA manager, SDM
+	  tests covering Altera SoC FPGA drivers. RSU and GET_PROVISION
+	  ownership decode ship under this suite; FPGA manager, SDM
 	  mailbox, sysmgr and similar drivers are expected to add their
 	  own test/socfpga/<driver>.c files as they get sandbox-ported,
 	  with no further sandbox-harness plumbing required.

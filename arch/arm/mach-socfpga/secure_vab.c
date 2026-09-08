@@ -8,6 +8,7 @@
 #include <malloc.h>
 #include <asm/arch/mailbox_s10.h>
 #include <asm/arch/secure_vab.h>
+#include <asm/arch/socfpga_prov_status.h>
 #include <asm/arch/smc_api.h>
 #include <asm/unaligned.h>
 #include <linux/delay.h>
@@ -15,6 +16,40 @@
 #include <linux/intel-smc.h>
 
 #define CHUNKSZ_PER_WD_RESET		(256 * SZ_1K)
+
+/*
+ * Query device ownership via MBOX_FCS_GET_PROVISION (0x7B).
+ *
+ * NON_OWNED when SDM returns 0x85 for this command (not owned, QS-580661 /
+ * VAB_SDOS), or when a successful blob has secure-state 0, hash-count
+ * 0xFF (no programmed hash), or an all-zero first owner root hash.
+ * Word 0 is this-POR provision-flow status, not OWNED — do not gate on it.
+ * Word 2 [15:8] == 0 means one hash (value + 1), not an empty list.
+ *
+ * Trust boundary: same HPS↔SDM mailbox path as VAB; does not address MITM
+ * on mailbox responses (ES-14722). 0x85 on 0x7B is still a generic denial
+ * if SDM ever emits it on an OWNED device.
+ */
+int socfpga_query_prov_status(void)
+{
+	u32 prov_data[FCS_PROV_DATA_WORD_SIZE];
+	u32 resp_len = FCS_PROV_DATA_WORD_SIZE;
+	int ret;
+
+	memset(prov_data, 0, sizeof(prov_data));
+
+	if (!IS_ENABLED(CONFIG_XPL_BUILD) && IS_ENABLED(CONFIG_SPL_ATF)) {
+		ret = smc_send_mailbox(MBOX_FCS_GET_PROVISION, 0, NULL, 0,
+				       &resp_len, prov_data);
+	} else {
+		ret = mbox_send_cmd(MBOX_ID_UBOOT, MBOX_FCS_GET_PROVISION,
+				    MBOX_CMD_DIRECT, 0, NULL, 0, &resp_len,
+				    prov_data);
+	}
+
+	return socfpga_prov_state_from_mbox_ret(ret, prov_data, resp_len,
+			MBOX_RESP_NOT_ALLOWED_UNDER_SECURITY_SETTINGS);
+}
 
 /*
  * Read the length of the VAB certificate from the end of image
@@ -49,8 +84,10 @@ static size_t get_img_size(u8 *img_buf, size_t img_buf_sz)
  * before sending the VAB certificate to SDM for authentication.
  *
  * RETURN
- * 0 if authentication success or
- *   if authentication is not required and bypassed on a non-secure device
+ * 0 if authentication success, or if SDM returns 0x85 and
+ *   MBOX_FCS_GET_PROVISION confirms NON_OWNED (0x85 on 0x7B,
+ *   secure-state 0, hash-count 0xFF, or all-zero first owner
+ *   root hash)
  * negative error code if authentication fail
  */
 int socfpga_vendor_authentication(void **p_image, size_t *p_size)
@@ -151,15 +188,27 @@ int socfpga_vendor_authentication(void **p_image, size_t *p_size)
 
 	if (ret) {
 		/*
-		 * Unsupported mailbox command or device not in the
-		 * owned/secure state
+		 * 0x85 = MBOX_RESP_NOT_ALLOWED_UNDER_SECURITY_SETTINGS — a
+		 * generic SDM denial, not a verified "unprovisioned" oracle.
+		 * Gate bypass on GET_PROVISION (0x7B): allow only NON_OWNED.
+		 * Fail closed if the query fails or the device is OWNED.
+		 * Does not address MITM on mailbox responses (ES-14722).
 		 */
 		if (ret == MBOX_RESP_NOT_ALLOWED_UNDER_SECURITY_SETTINGS) {
-			/* SDM bypass authentication */
-			printf("%s 0x%016llx (%ld bytes)\n",
-			       "Image Authentication bypassed at address",
-			       img_addr, img_sz);
-			return 0;
+			int prov = socfpga_query_prov_status();
+
+			if (prov == SOCFPGA_PROV_NON_OWNED) {
+				printf("SDM VAB skipped (non-OWNED) at 0x%016llx (%ld bytes)\n",
+				       img_addr, img_sz);
+				return 0;
+			}
+
+			puts("VAB certificate authentication failed in SDM");
+			puts(" (not allowed under security settings");
+			if (prov == SOCFPGA_PROV_QUERY_ERROR)
+				puts(", prov_status query failed");
+			puts(")\n");
+			return -EKEYREJECTED;
 		}
 		puts("VAB certificate authentication failed in SDM");
 		if (ret == MBOX_RESP_DEVICE_BUSY) {

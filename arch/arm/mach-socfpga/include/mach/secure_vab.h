@@ -7,6 +7,7 @@
 #ifndef	_SECURE_VAB_H_
 #define	_SECURE_VAB_H_
 
+#include <asm/arch/socfpga_prov_status.h>
 #include <linux/sizes.h>
 #include <linux/stddef.h>
 #include <u-boot/sha512.h>
@@ -58,6 +59,7 @@ struct fcs_hps_vab_certificate_header {
 					(struct fcs_hps_vab_certificate_data, \
 					 fcs_sha384[0])
 
+int socfpga_query_prov_status(void);
 int socfpga_vendor_authentication(void **p_image, size_t *p_size);
 
 #endif /* _SECURE_VAB_H_ */
