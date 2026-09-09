@@ -16,6 +16,7 @@
 #include <linux/errno.h>
 #include <linux/kconfig.h>
 #include <linux/types.h>
+#include <spi.h>
 #include <spi_flash.h>
 
 #if CONFIG_IS_ENABLED(DM_SPI_FLASH)
@@ -49,7 +50,23 @@ static inline int rsu_mtd_erase(struct udevice *dev, u32 off, size_t len)
 static inline int rsu_mtd_probe(unsigned int bus, unsigned int cs,
 				struct udevice **devp)
 {
-	return spi_flash_probe_bus_cs(bus, cs, devp);
+	struct udevice *spi_bus;
+	struct spi_slave *slave;
+	int ret;
+
+	/*
+	 * spi_flash_probe_bus_cs() does not apply CONFIG_SF_DEFAULT_SPEED
+	 * or CONFIG_SF_DEFAULT_MODE, so the bus stays at DT
+	 * spi-max-frequency. _spi_get_bus_and_cs() sets both.
+	 */
+	ret = _spi_get_bus_and_cs(bus, cs, CONFIG_SF_DEFAULT_SPEED,
+				  CONFIG_SF_DEFAULT_MODE, "jedec_spi_nor",
+				  "spi_flash", &spi_bus, &slave);
+	if (ret)
+		return ret;
+
+	*devp = slave->dev;
+	return 0;
 }
 
 static inline void rsu_mtd_unclaim(struct udevice *dev)
