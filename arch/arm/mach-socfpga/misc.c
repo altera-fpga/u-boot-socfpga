@@ -273,7 +273,7 @@ void socfpga_get_managers_addr(void)
 	if (!IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX) &&
 	    !IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX7M) &&
 	    !IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5) &&
-	    !IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72) &&
+	    !IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX27) &&
 	    !IS_ENABLED(CONFIG_ARCH_SOCFPGA_STRATIX10)) {
 		ret = socfpga_get_base_addr("altr,sys-mgr",
 					    &socfpga_sysmgr_base[SYS_MGR_ROOT]);
@@ -287,7 +287,7 @@ void socfpga_get_managers_addr(void)
 	else if (!IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX) &&
 		 !IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX7M) &&
 		 !IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5) &&
-		 !IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72))
+		 !IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX27))
 		ret = socfpga_get_base_addr("altr,clk-mgr",
 					    &socfpga_clkmgr_base);
 
@@ -338,7 +338,7 @@ void socfpga_get_sys_mgr_addr(void)
 
 	/*
 	 * Probe per-region aliases. Platforms with a split System Manager
-	 * (e.g. AGILEX72) define "sysmgr-ls/hs/apu" aliases; single-instance
+	 * (e.g. AGILEX27) define "sysmgr-ls/hs/apu" aliases; single-instance
 	 * platforms define only "sysmgr". Bind whichever aliases are present
 	 * and fall back to the legacy "sysmgr" alias when the root region
 	 * (SYS_MGR_ROOT / SYS_MGR_LS_CORE) was not bound.

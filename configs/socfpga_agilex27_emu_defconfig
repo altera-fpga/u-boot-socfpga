@@ -1,0 +1,39 @@
+#include <configs/socfpga_agilex27_defconfig>
+
+# Pick the SoCFPGA emulator target.
+CONFIG_TARGET_SOCFPGA_EMU=y
+
+# Base enables Simics embed handoff; EMU uses VP minimal init (GPLLs
+# pre-locked, no SDM) — see spl_agilex27.c spl_agilex27_clkmgr_vp_minimal().
+# CONFIG_AGILEX27_CLKMGR_HANDOFF_EMBED_DEMO is not set
+
+# Boot immediately on the emulator (no interactive interrupt window).
+CONFIG_BOOTDELAY=0
+
+# Quieter logs on the emulator (base sets 6).
+CONFIG_LOGLEVEL=4
+CONFIG_SPL_LOGLEVEL=4
+
+# SPL pre-console buffer not needed on the emulator (base enables it).
+# CONFIG_SPL_PRE_CONSOLE_BUFFER is not set
+
+# Regulator framework / GPIO regulator are not modelled on the emulator.
+# CONFIG_SPL_DM_REGULATOR is not set
+# CONFIG_DM_REGULATOR is not set
+# CONFIG_SPL_DM_REGULATOR_FIXED is not set
+# CONFIG_DM_REGULATOR_FIXED is not set
+# CONFIG_SPL_DM_REGULATOR_GPIO is not set
+# CONFIG_DM_REGULATOR_GPIO is not set
+
+# Watchdog / wdt command not present on the emulator model.
+# CONFIG_CMD_WDT is not set
+# CONFIG_DESIGNWARE_WATCHDOG is not set
+# CONFIG_WDT is not set
+
+# Networking is not modelled on the emulator.
+# CONFIG_NET is not set
+# CONFIG_DM_ETH is not set
+# CONFIG_MII is not set
+# CONFIG_PHYLIB is not set
+# CONFIG_DWC_ETH_XGMAC is not set
+# CONFIG_DWC_ETH_XGMAC_SOCFPGA is not set

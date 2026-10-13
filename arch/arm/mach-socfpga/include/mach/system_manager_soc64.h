@@ -9,8 +9,8 @@
 
 #include <linux/bitops.h>
 
-#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72)
-#include <asm/arch/system_manager_soc64_agilex72.h>
+#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX27)
+#include <asm/arch/system_manager_soc64_agilex27.h>
 #elif IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5)
 #include <asm/arch/system_manager_soc64_agilex5.h>
 #else

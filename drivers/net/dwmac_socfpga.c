@@ -169,7 +169,7 @@ static int dwmac_socfpga_ofdata_to_platdata(struct udevice *dev)
 	 * Resolve the System Manager phandle target to a UCLASS_SYSCON
 	 * device so PHY-mode writes dispatch through sysmgr_dev_update()
 	 * against the exact instance referenced by DT. On single-instance
-	 * SoCs the only altr,sys-mgr node is bound; on multi-instance AGILEX72
+	 * SoCs the only altr,sys-mgr node is bound; on multi-instance AGILEX27
 	 * each EMAC's phandle points directly at the HS region. The driver
 	 * does not assume a single-instance hierarchy, so a future hardware
 	 * revision that needs another region only has to update DT.
@@ -207,7 +207,7 @@ static int dwmac_socfpga_do_setphy(struct udevice *dev, u32 modereg)
 	/*
 	 * Dispatch through sysmgr_dev_update() so the write targets the
 	 * exact System Manager instance referenced by the EMAC's
-	 * "altr,sysmgr-syscon" phandle. On multi-instance AGILEX72 this picks
+	 * "altr,sysmgr-syscon" phandle. On multi-instance AGILEX27 this picks
 	 * the HS region; on every other SoC64 it picks the lone block.
 	 *
 	 *   - In SPL the helper expands to clrsetbits_le32() against the

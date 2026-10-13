@@ -29,7 +29,7 @@
 					arch = "arm64";
 					compression = "none";
 				#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5) || \
-					IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72)
+					IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX27)
 					load = <0x80200000>;
 				#else
 					load = <0x00200000>;
@@ -49,7 +49,7 @@
 					arch = "arm64";
 					compression = "none";
 				#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5) || \
-					IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72)
+					IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX27)
 					load = <0x80000000>;
 					entry = <0x80000000>;
 				#else
@@ -109,7 +109,7 @@
 					os = "linux";
 					compression = "none";
 				#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5) || \
-					IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72)
+					IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX27)
 					load = <0x86000000>;
 					entry = <0x86000000>;
 				#else

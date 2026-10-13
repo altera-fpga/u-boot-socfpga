@@ -22,9 +22,9 @@
 
 int __asm_flush_l3_dcache(void)
 {
-#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72)
-	/* TODO ubootAgilex72 */
-	debug("AGILEX72 >> skip l3_dcache flush\n");
+#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX27)
+	/* TODO ubootAgilex27 */
+	debug("AGILEX27 >> skip l3_dcache flush\n");
 	return 0;
 #else
 	int i;

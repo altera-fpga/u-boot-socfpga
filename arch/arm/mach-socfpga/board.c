@@ -116,7 +116,7 @@ u8 socfpga_get_board_id(void)
 	u8 board_id = 0;
 	u32 __maybe_unused jtag_usercode;
 	int __maybe_unused err;
-#if !IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72)  /* TODO ubootAgilex72 no SDM mailbox */
+#if !IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX27)  /* TODO ubootAgilex27 no SDM mailbox */
 #if !IS_ENABLED(CONFIG_XPL_BUILD) && IS_ENABLED(CONFIG_SPL_ATF)
 	err = smc_get_usercode(&jtag_usercode);
 #else
@@ -141,7 +141,7 @@ u8 socfpga_get_board_id(void)
 	} else {
 		puts("Board ID is not in range 0 to 255\n");
 	}
-#endif	/* !IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72) */
+#endif	/* !IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX27) */
 	return board_id;
 }
 

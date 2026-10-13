@@ -56,7 +56,7 @@ static int dwxgmac_socfpga_do_setphy(struct udevice *dev, u32 modereg)
 	 * "altr,sysmgr-syscon" phandle. See the matching comment in
 	 * dwmac_socfpga_do_setphy() for the rationale; in short, this
 	 * collapses the SPL direct-MMIO and U-Boot proper SMC paths into
-	 * a single call site and lets the multi-instance AGILEX72 topology work
+	 * a single call site and lets the multi-instance AGILEX27 topology work
 	 * with the same 2-cell phandle binding the upstream community
 	 * already uses.
 	 */
@@ -125,7 +125,7 @@ static int xgmac_probe_resources_socfpga(struct udevice *dev)
 	 * Resolve the System Manager phandle target to a UCLASS_SYSCON
 	 * device so PHY-mode writes dispatch through sysmgr_dev_update()
 	 * against the exact instance referenced by DT. The driver does
-	 * not assume a single-instance topology -- multi-instance AGILEX72
+	 * not assume a single-instance topology -- multi-instance AGILEX27
 	 * works with the same code path.
 	 */
 	ret = uclass_get_device_by_ofnode(UCLASS_SYSCON, args.node,

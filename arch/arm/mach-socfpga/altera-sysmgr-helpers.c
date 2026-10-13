@@ -24,7 +24,7 @@
 #include <linux/errno.h>
 
 /*
- * Resolve a sysmgr instance by alias. AGILEX72 has three ("sysmgr-{ls,hs,apu}"),
+ * Resolve a sysmgr instance by alias. AGILEX27 has three ("sysmgr-{ls,hs,apu}"),
  * other SoC64s have one ("sysmgr"). Lookup walks DT every call to avoid
  * a function-static cache lifecycle invariant. Driver identity is
  * verified because UCLASS_SYSCON is generic.
@@ -100,7 +100,7 @@ int sysmgr_dev_update(struct udevice *dev, u32 offset, u32 mask, u32 value)
 }
 
 /*
- * Per-region resolver. AGILEX72 has per-region aliases; on single-instance
+ * Per-region resolver. AGILEX27 has per-region aliases; on single-instance
  * SoCs we transparently fall back to "sysmgr" so callers can use
  * sysmgr_{ls,hs,apu}_*() uniformly. Per-register offsets differ per
  * platform via system_manager_soc64*.h, so the fallback never

@@ -451,7 +451,7 @@ Table of Contents
 	scriptfile=boot.scr and sources through the FIT default signed
 	configuration ("source ${scriptaddr}"), not "source ${scriptaddr}:script".
 	The latter only runs fit_image_verify() and is refused under
-	BOOTSCR_FIT_SIGNATURE. Deferred boards (agilex72, N5X, …) keep
+	BOOTSCR_FIT_SIGNATURE. Deferred boards (agilex27, N5X, …) keep
 	scriptfile=u-boot.scr and the legacy :script path because common.h
 	selects fatscript strings at compile time via the
 	SOCFPGA_SOC64_FATSCRIPT_ENV helper macro
@@ -476,7 +476,7 @@ Table of Contents
 		socfpga_agilex5_oobe2_defconfig    yes (BOOTSCR_FIT_SIGNATURE=y)
 		socfpga_agilex_vab_defconfig       yes (inherits agilex base)
 		socfpga_agilex5_vab_defconfig      yes (inherits agilex5 base)
-		socfpga_agilex72_defconfig         NO  - deferred (KM Yocto
+		socfpga_agilex27_defconfig         NO  - deferred (KM Yocto
 		                                       signing follow-on;
 		                                       intentional ES-14537 Q3
 		                                       scope — not a gap in

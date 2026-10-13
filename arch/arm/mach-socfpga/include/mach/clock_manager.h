@@ -14,7 +14,7 @@ phys_addr_t socfpga_get_clkmgr_addr(void);
 void cm_wait_for_lock(u32 mask);
 int cm_wait_for_fsm(void);
 void cm_print_clock_quick_summary(void);
-#if IS_ENABLED(CONFIG_AGILEX72_CLKMGR_RUNTIME_AUDIT)
+#if IS_ENABLED(CONFIG_AGILEX27_CLKMGR_RUNTIME_AUDIT)
 void cm_print_runtime_clock_tree(void);
 int cm_audit_consumer_clock_rates(void);
 int cm_audit_runtime_clock_trees(void);
@@ -32,38 +32,38 @@ int cm_set_qspi_controller_clk_hz(u32 clk_hz);
 #endif
 
 /*
- * Agilex 72 Simics / CONFIG_TARGET_SOCFPGA_EMU: skip full GPPLL preset MMIO
- * (hangs the VP) and only unlock + exit boot mode. See spl_agilex72.c.
+ * Agilex 27 Simics / CONFIG_TARGET_SOCFPGA_EMU: skip full GPPLL preset MMIO
+ * (hangs the VP) and only unlock + exit boot mode. See spl_agilex27.c.
  */
-#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72)
+#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX27)
 /*
  * Production handoff path (embedded demo blob or non-VP-minimal EMU): not the
  * Simics VP shortcut that skips full GPPLL preset programming.
  */
-static inline bool agilex72_clkmgr_production_handoff_path(void)
+static inline bool agilex27_clkmgr_production_handoff_path(void)
 {
-	if (IS_ENABLED(CONFIG_AGILEX72_CLKMGR_HANDOFF_EMBED_DEMO))
+	if (IS_ENABLED(CONFIG_AGILEX27_CLKMGR_HANDOFF_EMBED_DEMO))
 		return true;
 
 	return !(IS_ENABLED(CONFIG_TARGET_SOCFPGA_EMU) &&
-		 IS_ENABLED(CONFIG_TARGET_SOCFPGA_AGILEX72_SOCDK));
+		 IS_ENABLED(CONFIG_TARGET_SOCFPGA_AGILEX27_SOCDK));
 }
 
-void agilex72_clkmgr_virtual_platform_minimal_init(void);
-int agilex72_clkmgr_refresh_rates_from_csr_if_locked(void);
-void agilex72_clkmgr_print_rate_state(void);
-void agilex72_clkmgr_secure_unlock(void);
+void agilex27_clkmgr_virtual_platform_minimal_init(void);
+int agilex27_clkmgr_refresh_rates_from_csr_if_locked(void);
+void agilex27_clkmgr_print_rate_state(void);
+void agilex27_clkmgr_secure_unlock(void);
 #else
-static inline void agilex72_clkmgr_virtual_platform_minimal_init(void)
+static inline void agilex27_clkmgr_virtual_platform_minimal_init(void)
 {
 }
 
-static inline int agilex72_clkmgr_refresh_rates_from_csr_if_locked(void)
+static inline int agilex27_clkmgr_refresh_rates_from_csr_if_locked(void)
 {
 	return 0;
 }
 
-static inline void agilex72_clkmgr_print_rate_state(void)
+static inline void agilex27_clkmgr_print_rate_state(void)
 {
 }
 #endif
@@ -79,8 +79,8 @@ static inline void agilex72_clkmgr_print_rate_state(void)
 #include <asm/arch/clock_manager_agilex.h>
 #elif IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5)
 #include <asm/arch/clock_manager_agilex5.h>
-#elif IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72)
-#include <asm/arch/clock_manager_agilex72.h>
+#elif IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX27)
+#include <asm/arch/clock_manager_agilex27.h>
 #elif IS_ENABLED(CONFIG_ARCH_SOCFPGA_N5X)
 #include <asm/arch/clock_manager_n5x.h>
 #endif

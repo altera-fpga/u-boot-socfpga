@@ -74,7 +74,7 @@ u32 socfpga_get_jtag_id(void)
 
 	/*
 	 * JTAG ID is stashed in BOOT_SCRATCH_COLD4, which lives in the
-	 * High-Speed Core sysmgr block on AGILEX72 and in the single sysmgr
+	 * High-Speed Core sysmgr block on AGILEX27 and in the single sysmgr
 	 * block on every other SoC64; the fallback handles both.
 	 */
 	if (sysmgr_hs_read(SYSMGR_SOC64_BOOT_SCRATCH_COLD4, &jtag_id))
@@ -109,7 +109,7 @@ void save_boot_params(unsigned long r0, unsigned long r1, unsigned long r2,
 #if defined(CONFIG_DISPLAY_CPUINFO)
 static const char *socfpga_cpu_name(void)
 {
-	if (IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72) ||
+	if (IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX27) ||
 	    IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5)) {
 		u64 midr;
 		u32 part;
@@ -119,9 +119,9 @@ static const char *socfpga_cpu_name(void)
 
 		switch (part) {
 		case 0xD80:
-			return "A520";  /* AGILEX72 LITTLE */
+			return "A520";  /* AGILEX27 LITTLE */
 		case 0xD81:
-			return "A720";  /* AGILEX72 big    */
+			return "A720";  /* AGILEX27 big    */
 		case 0xD05:
 			return "A55";   /* Agilex5 LITTLE */
 		case 0xD0B:
@@ -131,7 +131,7 @@ static const char *socfpga_cpu_name(void)
 		}
 	}
 
-	if (IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72))
+	if (IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX27))
 		return "A520/A720";
 	if (IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX5))
 		return "A55/A76";
@@ -143,10 +143,10 @@ int print_cpuinfo(void)
 	const char *arch;
 
 	/*
-	 * AGILEX72 runs Cortex-A520/A720 (ARMv9.2-A); all other socfpga64 platforms
+	 * AGILEX27 runs Cortex-A520/A720 (ARMv9.2-A); all other socfpga64 platforms
 	 * (Stratix10, Agilex, Agilex5, N5X) run A53/A55/A76 (ARMv8.x-A).
 	 */
-	if (IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72))
+	if (IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX27))
 		arch = "ARMv9";
 	else
 		arch = "ARMv8";
@@ -227,7 +227,7 @@ int is_fpga_config_ready(void)
 	if (is_agilex5_reva_workaround_required()) {
 		/*
 		 * Boot scratch POR registers sit in the High-Speed Core
-		 * sysmgr block on AGILEX72; on every other SoC64 (including
+		 * sysmgr block on AGILEX27; on every other SoC64 (including
 		 * Agilex5) there is a single sysmgr block and the
 		 * per-region helper falls back to it automatically.
 		 */
@@ -243,7 +243,7 @@ int is_fpga_config_ready(void)
 
 	/*
 	 * FPGA mgr control registers live in the Low-Speed Core sysmgr
-	 * block on AGILEX72; the fallback covers every other SoC64.
+	 * block on AGILEX27; the fallback covers every other SoC64.
 	 */
 	ret = sysmgr_ls_read(SYSMGR_SOC64_FPGA_CONFIG, &reg);
 	if (ret) {
@@ -298,9 +298,9 @@ int misc_init_r(void)
 		return smmu_sdm_init();
 #endif
 
-#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72) && \
-	IS_ENABLED(CONFIG_AGILEX72_CLKMGR_RUNTIME_AUDIT)
-	if (agilex72_clkmgr_production_handoff_path())
+#if IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX27) && \
+	IS_ENABLED(CONFIG_AGILEX27_CLKMGR_RUNTIME_AUDIT)
+	if (agilex27_clkmgr_production_handoff_path())
 		cm_audit_runtime_clock_trees();
 #endif
 

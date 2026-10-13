@@ -91,7 +91,7 @@ int cm_set_qspi_controller_clk_hz(u32 clk_hz)
 
 	/*
 	 * Boot scratch registers sit in the High-Speed Core sysmgr block
-	 * on AGILEX72; the per-region helper transparently falls back to the
+	 * on AGILEX27; the per-region helper transparently falls back to the
 	 * single sysmgr instance on every other SoC64.
 	 */
 	if (sysmgr_hs_read(SYSMGR_SOC64_BOOT_SCRATCH_COLD0, &reg)) {

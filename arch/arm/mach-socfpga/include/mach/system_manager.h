@@ -58,10 +58,10 @@ phys_addr_t socfpga_get_sysmgr_addr_region(enum socfpga_sysmgr_region region);
  *      walking `altr,sysmgr-syscon`).
  *   4. Region-agnostic sysmgr_{read,write,update}() trampolines that
  *      resolve the "sysmgr" device-tree alias. Retained for back-compat
- *      with single-region SoC64 callers. On the multi-region AGILEX72 family
+ *      with single-region SoC64 callers. On the multi-region AGILEX27 family
  *      they target whichever node owns the "sysmgr" alias (LS-core in
- *      the current AGILEX72 Device Tree), which is the right default but is
- *      a foot-gun for HS- or APU-region work; new AGILEX72-capable code
+ *      the current AGILEX27 Device Tree), which is the right default but is
+ *      a foot-gun for HS- or APU-region work; new AGILEX27-capable code
  *      should call (2) or (3) with an explicit region/device instead.
  *
  * In SPL (CONFIG_XPL_BUILD) every helper compiles to direct MMIO using
@@ -97,7 +97,7 @@ static inline int sysmgr_update(u32 offset, u32 mask, u32 value)
 
 /*
  * Mirror the U-Boot-proper fall-back: when the requested region is not
- * present in the platform (every SoC except AGILEX72 has region count 1),
+ * present in the platform (every SoC except AGILEX27 has region count 1),
  * resolve to the single sysmgr block. socfpga_get_sysmgr_addr_region()
  * returns 0 for an out-of-range index, which we use as the cue.
  */

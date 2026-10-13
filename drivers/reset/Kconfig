@@ -156,7 +156,7 @@ config SOCFPGA_RESET_LEGACY_COMPAT
 	  into the OS. This is required for systems running Linux kernels that
 	  lack proper peripheral reset driver support (typically gen5 and
 	  Arria10 platforms, Stratix10, Agilex, Agilex5, Agilex7m, N5X).
-	  Disable for AGILEX72 and future platforms whose kernels have full
+	  Disable for AGILEX27 and future platforms whose kernels have full
 	  peripheral reset driver support.
 
 config RESET_MEDIATEK

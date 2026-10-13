@@ -85,13 +85,13 @@ obj-$(CONFIG_ARMV8_PSCI) += smc_rsu_s10.o
 endif
 endif
 
-ifdef CONFIG_ARCH_SOCFPGA_AGILEX72
-obj-y	+= clock_manager_agilex72.o
-obj-y	+= mailbox_agilex72.o
+ifdef CONFIG_ARCH_SOCFPGA_AGILEX27
+obj-y	+= clock_manager_agilex27.o
+obj-y	+= mailbox_agilex27.o
 obj-y	+= misc_soc64.o
 obj-y	+= mmu-arm64_s10.o
 obj-y	+= reset_manager_soc64.o
-obj-y	+= reset_manager_soc64_agilex72.o
+obj-y	+= reset_manager_soc64_agilex27.o
 obj-y	+= ccu_ncore3.o
 obj-y	+= timer_s10.o
 obj-$(CONFIG_SOCFPGA_SECURE_VAB_AUTH)	+= secure_vab.o
@@ -223,8 +223,8 @@ ifdef CONFIG_ARCH_SOCFPGA_AGILEX7M
 obj-y	+= spl_agilex7m.o
 obj-y	+= spl_soc64.o
 endif
-ifdef CONFIG_ARCH_SOCFPGA_AGILEX72
-obj-y	+= spl_agilex72.o
+ifdef CONFIG_ARCH_SOCFPGA_AGILEX27
+obj-y	+= spl_agilex27.o
 obj-y	+= spl_soc64.o
 endif
 else

@@ -75,8 +75,8 @@ static struct mm_region socfpga_agilex5_mem_map[] = {
 
 struct mm_region *mem_map = socfpga_agilex5_mem_map;
 
-#elif IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX72)
-static struct mm_region socfpga_agilex72_mem_map[] = {
+#elif IS_ENABLED(CONFIG_ARCH_SOCFPGA_AGILEX27)
+static struct mm_region socfpga_agilex27_mem_map[] = {
 	{
 		/* OCRAM 512KB */
 		.virt	= 0x00000000UL,
@@ -166,7 +166,7 @@ static struct mm_region socfpga_agilex72_mem_map[] = {
 	},
 };
 
-struct mm_region *mem_map = socfpga_agilex72_mem_map;
+struct mm_region *mem_map = socfpga_agilex27_mem_map;
 
 #else
 static struct mm_region socfpga_stratix10_mem_map[] = {
